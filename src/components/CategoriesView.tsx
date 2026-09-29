@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Search, Plus, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Plus, Trash2, X, Layers } from 'lucide-react';
 import { Category, CategoryType } from '../data/categories';
 import { IconBadge, CATEGORY_ICON_CHOICES } from './AppIcon';
 import { IconPicker, COLOR_CHOICES } from './IconPicker';
+import { SelCheck } from './SelCheck';
 
 interface CategoriesViewProps {
   categories: Category[];
@@ -141,8 +142,16 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ categories, onBa
             setEditing(null);
           }}
           onSave={(cat) => {
-            if (editing) onUpdate(editing.id, cat);
-            else onAdd(cat);
+            if (editing) {
+              onUpdate(editing.id, cat);
+              // Une catégorie principale rangée dans une autre : ses sous-catégories la suivent
+              // (deux niveaux seulement) et prennent la couleur de leur nouveau parent
+              if (cat.parentId) {
+                for (const { id, ...child } of categories.filter((c) => c.parentId === editing.id)) {
+                  onUpdate(id, { ...child, parentId: cat.parentId, color: cat.color });
+                }
+              }
+            } else onAdd(cat);
             setShowNew(false);
             setEditing(null);
           }}
@@ -244,23 +253,43 @@ const CategorySheet: React.FC<{
               ))}
             </div>
           </>
-        ) : childCount > 0 ? (
-          <p className="text-xs text-slate-400 mb-4">Catégorie principale avec {childCount} sous-catégorie{childCount > 1 ? 's' : ''}.</p>
         ) : (
           <>
-            <label className="text-xs font-semibold text-slate-500">Ranger dans (facultatif)</label>
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              className="w-full mt-1 mb-4 px-4 py-3 rounded-2xl bg-slate-100 text-sm outline-none"
-            >
-              <option value="">Aucune, c'est une catégorie principale</option>
-              {parents.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <label className="text-xs font-semibold text-slate-500">Ranger dans</label>
+            <div className="grid grid-cols-3 gap-2 mt-1 mb-2">
+              {[null, ...parents].map((p) => {
+                const on = (p?.id ?? '') === parentId;
+                return (
+                  <button
+                    key={p?.id ?? 'none'}
+                    onClick={() => setParentId(p?.id ?? '')}
+                    aria-pressed={on}
+                    className={`relative flex flex-col items-center gap-1.5 px-1.5 py-2.5 rounded-2xl cursor-pointer transition ${on ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200'}`}
+                  >
+                    {p ? (
+                      <IconBadge icon={p.icon} image={p.image} color={p.color} size="sm" />
+                    ) : (
+                      <span className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-slate-400">
+                        <Layers className="w-4 h-4" />
+                      </span>
+                    )}
+                    <span className="text-[11px] font-semibold text-slate-700 leading-tight text-center line-clamp-2">
+                      {p ? p.name : 'Aucune (principale)'}
+                    </span>
+                    {on && <SelCheck />}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-slate-400 mb-4">
+              {parent
+                ? childCount > 0
+                  ? `Ses ${childCount} sous-catégorie${childCount > 1 ? 's' : ''} seront aussi rangées dans « ${parent.name} ».`
+                  : `Deviendra une sous-catégorie de « ${parent.name} ».`
+                : childCount > 0
+                  ? `Catégorie principale avec ${childCount} sous-catégorie${childCount > 1 ? 's' : ''}.`
+                  : 'Catégorie principale, sans parent.'}
+            </p>
           </>
         )}
 
