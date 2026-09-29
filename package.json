@@ -10,7 +10,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:db": "psql -v ON_ERROR_STOP=1 -d wallo_test -f supabase/tests/rls_test.sql",
-    "test:sync": "tsx scripts/sync.test.ts"
+    "test:sync": "tsx scripts/sync.test.ts",
+    "deploy": "vite build && npx -y firebase-tools deploy --only hosting"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
