@@ -135,6 +135,14 @@ select:focus-visible {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
 }
+@keyframes search-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes list-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-6px); }
@@ -152,6 +160,8 @@ select:focus-visible {
 .animate-shake { animation: shake 0.3s ease-in-out; }
 /* Barres de progression : elles se remplissent à l'affichage (transform seulement) */
 .animate-bar { transform-origin: left; animation: bar-grow 0.7s var(--ease-out) backwards; }
+.animate-search-in { animation: search-in 0.28s var(--ease-out) backwards; }
+.animate-list-in { animation: list-in 0.3s var(--ease-out) backwards; }
 .animate-donut { animation: donut-in 0.6s var(--ease-out) backwards; }
 /* Blocs d'un écran qui arrivent l'un après l'autre (décalage léger, 5 blocs maximum) */
 .stagger > * { animation: rise-in 0.4s var(--ease-out) backwards; }

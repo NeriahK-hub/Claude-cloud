@@ -209,7 +209,9 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
           <div className="max-w-2xl bg-slate-50 rounded-3xl border border-slate-100 overflow-hidden">
             {page === 'history' && (
               <TransactionHistoryView
-                transactions={transactions}
+                transactions={allTransactions}
+                wallets={wallets}
+                initialWalletId={p.activeWallet?.id ?? 'all'}
                 settings={settings}
                 onBack={() => onNavigate('home')}
                 onSelectTransaction={onSelectTransaction}

@@ -61,7 +61,9 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
 
         {page === 'history' && (
           <TransactionHistoryView
-            transactions={transactions}
+            transactions={allTransactions}
+            wallets={wallets}
+            initialWalletId={p.activeWallet?.id ?? 'all'}
             settings={settings}
             onBack={() => onNavigate('home')}
             onSelectTransaction={onSelectTransaction}
