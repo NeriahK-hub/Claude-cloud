@@ -67,10 +67,10 @@ export const IconBadge: React.FC<{
     <img src={image} alt="" className={`${BOX[size]} rounded-full object-cover shrink-0`} />
   ) : (
     <div
-      className={`${BOX[size]} rounded-full flex items-center justify-center shrink-0`}
-      style={{ backgroundColor: color + '22' }}
+      className={`${BOX[size]} rounded-full flex items-center justify-center shrink-0 tint`}
+      style={{ backgroundColor: color + '22', '--tint': color } as React.CSSProperties}
     >
-      <AppIcon name={icon} className={GLYPH[size]} style={{ color }} />
+      <AppIcon name={icon} className={GLYPH[size]} />
     </div>
   );
 

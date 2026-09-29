@@ -110,6 +110,12 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
             ))}
           </div>
 
+          {plan.nested > 0 && (
+            <Note>
+              {plan.nested} sous-catégories rangées sous leur catégorie parente (retrouvées grâce aux totaux Money Lover)
+              {plan.categoryUpdates.length > 0 ? `, dont ${plan.categoryUpdates.length} déjà dans l'app` : ''}.
+            </Note>
+          )}
           {plan.duplicates > 0 && <Note>{plan.duplicates} transactions déjà présentes dans l'app seront ignorées (pas de doublons).</Note>}
           {plan.invalid.length > 0 && (
             <Note warn>
@@ -137,14 +143,16 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
               Annuler
             </button>
             <button
-              disabled={plan.transactions.length === 0}
+              disabled={plan.transactions.length === 0 && plan.categoryUpdates.length === 0}
               onClick={() => {
                 onImport(plan, replace);
                 setRead(null);
               }}
               className="flex-[2] py-3 rounded-2xl bg-[#D8FB52] text-slate-900 text-sm font-bold cursor-pointer disabled:opacity-40"
             >
-              Importer {plan.transactions.length} transactions
+              {plan.transactions.length > 0 || plan.categoryUpdates.length === 0
+                ? `Importer ${plan.transactions.length} transactions`
+                : `Ranger ${plan.categoryUpdates.length} catégories`}
             </button>
           </div>
         </Sheet>

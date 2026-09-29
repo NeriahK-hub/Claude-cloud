@@ -24,6 +24,13 @@ export interface RawRow {
 export interface ReadResult {
   rows: RawRow[];
   invalid: number[]; // lignes ignorées (date ou montant illisible)
+  summaries?: Summary[]; // onglets « Revenu » / « Dépense » de Money Lover (totaux par catégorie parente)
+}
+
+export interface Summary {
+  side: 'income' | 'expense';
+  currency: string; // devise des totaux
+  totals: { name: string; amount: number }[];
 }
 
 type Cell = string | number | boolean | Date | null | undefined;
@@ -46,15 +53,31 @@ const COLUMNS: Record<keyof Omit<RawRow, 'line'>, string[]> = {
 
 export async function readImportFile(file: File): Promise<ReadResult> {
   const name = file.name.toLowerCase();
-  let table: Cell[][];
-  if (name.endsWith('.csv') || name.endsWith('.txt')) {
-    table = parseCsv(await file.text());
-  } else {
-    // Chargé seulement quand on importe (garde l'app légère)
-    const { readSheet } = await import('read-excel-file/browser');
-    table = (await readSheet(file)) as Cell[][];
-  }
-  return toRows(table);
+  if (name.endsWith('.csv') || name.endsWith('.txt')) return toRows(parseCsv(await file.text()));
+  // Chargé seulement quand on importe (garde l'app légère)
+  const { default: readXlsxFile } = await import('read-excel-file/browser');
+  return fromSheets((await readXlsxFile(file)) as { sheet: string; data: Cell[][] }[]);
+}
+
+// Classeur : l'onglet des transactions (celui qui a une colonne Portefeuille) + les onglets de totaux
+export function fromSheets(sheets: { sheet: string; data: Cell[][] }[]): ReadResult {
+  const headerOf = (t: Cell[][]) => (t.find((r) => r.some((c) => typeof c === 'string' && COLUMNS.amount.includes(norm(c)))) ?? []).map((c) => (typeof c === 'string' ? norm(c) : ''));
+  const main = sheets.find((s) => headerOf(s.data).some((h) => COLUMNS.wallet.includes(h))) ?? sheets[0];
+  const result = toRows(main.data);
+  result.summaries = sheets.filter((s) => s !== main).flatMap((s) => {
+    const n = norm(s.sheet);
+    const side = /revenu|income/.test(n) ? 'income' : /depense|expense/.test(n) ? 'expense' : null;
+    const header = headerOf(s.data);
+    const [ci, ai, di] = [COLUMNS.category, COLUMNS.amount, COLUMNS.currency].map((names) => header.findIndex((h) => names.includes(h)));
+    if (!side || ci < 0 || ai < 0) return [];
+    const rows = s.data.slice(s.data.findIndex((r) => r.some((c) => typeof c === 'string' && COLUMNS.amount.includes(norm(c)))) + 1);
+    const totals = rows
+      .map((r) => ({ name: String(r[ci] ?? '').trim(), amount: parseAmount(r[ai]) ?? NaN }))
+      .filter((t) => t.name && Number.isFinite(t.amount));
+    const currency = String(rows.find((r) => di >= 0 && r[di])?.[di] ?? '').toUpperCase();
+    return totals.length && currency ? [{ side, currency, totals } as Summary] : [];
+  });
+  return result;
 }
 
 export function toRows(table: Cell[][]): ReadResult {
@@ -173,6 +196,8 @@ export interface ImportPlan {
   transfers: number;
   adjustments: number;
   missingRates: string[]; // devises sans taux de change
+  categoryUpdates: { id: string; parentId: string; color: string }[]; // catégories déjà là, rangées sous leur parent
+  nested: number; // sous-catégories rangées sous leur parent (nouvelles + existantes)
 }
 
 const PALETTE = ['#F97316', '#3B82F6', '#EC4899', '#14B8A6', '#8B5CF6', '#EAB308', '#EF4444', '#0EA5E9', '#059669', '#64748B'];
@@ -235,6 +260,114 @@ const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 const fingerprint = (t: Pick<Transaction, 'createdAt' | 'walletId' | 'amount' | 'category' | 'title'>) =>
   [dayKey(new Date(t.createdAt)), t.walletId, Math.round(t.amount * 100), norm(t.category), norm(t.title)].join('|');
 
+// ---------- Catégories parentes (Money Lover) ----------
+// L'onglet des transactions ne dit pas qui est la sous-catégorie de qui, mais les onglets
+// « Revenu » / « Dépense » donnent le total de chaque catégorie PARENTE (ses propres opérations
+// + celles de ses sous-catégories, converties au taux de Money Lover). On retrouve donc :
+// 1. le taux utilisé (les parents sans sous-catégorie donnent tous le même),
+// 2. quelles sous-catégories, additionnées au parent, tombent pile sur son total.
+// Si rien ne colle exactement, on n'invente rien : les catégories restent à plat.
+export function inferParents(read: ReadResult): Map<string, string> {
+  const result = new Map<string, string>(); // "income|apple music" -> "Business"
+  const skip = (n: string) => TRANSFER_NAMES.includes(n) || ADJUST_NAMES.includes(n);
+  for (const sum of read.summaries ?? []) {
+    const sign = sum.side === 'income' ? 1 : -1;
+    const main = sum.currency;
+    // Montants par catégorie et par devise (valeur absolue)
+    const byCat = new Map<string, { name: string; cur: Map<string, number> }>();
+    for (const r of read.rows) {
+      const n = norm(r.category);
+      if (Math.sign(r.amount) !== sign || skip(n)) continue;
+      const e = byCat.get(n) ?? { name: r.category, cur: new Map() };
+      const c = r.currency || main;
+      e.cur.set(c, (e.cur.get(c) ?? 0) + Math.abs(r.amount));
+      byCat.set(n, e);
+    }
+    const parents = sum.totals.filter((t) => !skip(norm(t.name)));
+    const parentNames = new Set(parents.map((t) => norm(t.name)));
+    const children = [...byCat.entries()].filter(([n]) => !parentNames.has(n));
+    if (children.length === 0) continue;
+
+    // 1. Taux de chaque autre devise
+    const rates = new Map([[main, 1]]);
+    const foreign = new Set([...byCat.values()].flatMap((e) => [...e.cur.keys()]).filter((c) => c !== main));
+    for (const f of foreign) {
+      const candidates = parents.flatMap((p) => {
+        const own = byCat.get(norm(p.name))?.cur;
+        if (!own?.get(f) || [...own.keys()].some((c) => c !== main && c !== f)) return [];
+        return [(p.amount - (own.get(main) ?? 0)) / own.get(f)!];
+      });
+      const close = (a: number, b: number) => Math.abs(a - b) <= Math.abs(b) * 1e-6;
+      const best = candidates
+        .map((r) => ({ r, n: candidates.filter((o) => close(o, r)).length }))
+        .sort((a, b) => b.n - a.n)[0];
+      if (!best || best.n < 2) return new Map(); // taux introuvable : on abandonne
+      rates.set(f, best.r);
+    }
+    const value = (cur: Map<string, number> | undefined) =>
+      [...(cur ?? new Map<string, number>()).entries()].reduce((s, [c, v]) => s + v * (rates.get(c) ?? NaN), 0);
+
+    // 2. Ce qui manque à chaque parent = ses sous-catégories
+    const left = parents.map((p) => p.amount - value(byCat.get(norm(p.name))?.cur));
+    const tol = parents.map((p) => Math.max(0.5, Math.abs(p.amount) * 1e-6));
+    const kids: { n: string | null; v: number }[] = children.map(([n, e]) => ({ n, v: value(e.cur) }));
+    if (kids.some((k) => !Number.isFinite(k.v))) continue;
+    // Un parent qui a PLUS que son total : une sous-catégorie ailleurs porte le même nom
+    // (ex. « Factures › Facture d'Internet » et « Facture d'Internet »). L'export mélange leurs
+    // opérations : on ne peut pas les séparer, mais ce surplus aide à placer les autres.
+    left.forEach((l, j) => {
+      if (l < -tol[j]) {
+        kids.push({ n: null, v: -l });
+        left[j] = 0;
+      }
+    });
+    kids.sort((a, b) => b.v - a.v);
+
+    // Tout placer d'un coup (chaque sous-catégorie dans exactement un parent)…
+    const pick: number[] = [];
+    let steps = 0;
+    const solve = (i: number): boolean => {
+      if (++steps > 200_000) return false;
+      if (i === kids.length) return left.every((l, j) => Math.abs(l) <= tol[j]);
+      for (let j = 0; j < parents.length; j++) {
+        if (left[j] < kids[i].v - tol[j]) continue;
+        left[j] -= kids[i].v;
+        pick[i] = j;
+        if (solve(i + 1)) return true;
+        left[j] += kids[i].v;
+      }
+      return false;
+    };
+    const save = (k: { n: string | null }, j: number) => k.n && result.set(`${sum.side}|${k.n}`, parents[j].name);
+    if (solve(0)) {
+      kids.forEach((k, i) => save(k, pick[i]));
+      continue;
+    }
+
+    // … sinon, parent par parent : seulement ceux dont le total tombe pile
+    const free = new Set(kids.map((_, i) => i));
+    parents
+      .map((p, j) => j)
+      .filter((j) => left[j] > tol[j])
+      .sort((a, b) => left[b] - left[a])
+      .forEach((j) => {
+        const pool = [...free];
+        const chosen: number[] = [];
+        let n = 0;
+        const find = (k: number, rest: number): boolean => {
+          if (Math.abs(rest) <= tol[j]) return true;
+          if (k === pool.length || rest < -tol[j] || ++n > 100_000) return false;
+          chosen.push(pool[k]);
+          if (find(k + 1, rest - kids[pool[k]].v)) return true;
+          chosen.pop();
+          return find(k + 1, rest);
+        };
+        if (find(0, left[j])) chosen.forEach((i) => (free.delete(i), save(kids[i], j)));
+      });
+  }
+  return result;
+}
+
 export function planImport(
   read: ReadResult,
   current: { wallets: Wallet[]; categories: Category[]; transactions: Transaction[]; settings: Settings },
@@ -271,22 +404,44 @@ export function planImport(
   const fits = (c: Category, sign: number) =>
     sign < 0 ? c.type === 'expense' || (c.type === 'debt' && c.direction === 'out') : c.type === 'income' || (c.type === 'debt' && c.direction === 'in');
   const sameName = (a: string, b: string) => a === b || a.replace(/s$/, '') === b.replace(/s$/, '');
+  const parentOf = inferParents(read);
+  const categoryUpdates: ImportPlan['categoryUpdates'] = [];
+  const nestedIds = new Set<string>();
   const resolveCategory = (name: string, sign: number): Category => {
     const n = norm(name);
     const alias = ALIASES[n];
     const aliasId = typeof alias === 'function' ? alias(sign) : alias;
     const byAlias = aliasId && allCats.find((c) => c.id === aliasId);
     if (byAlias) return byAlias;
+    // Catégorie parente d'après les totaux Money Lover (un seul niveau de sous-catégories)
+    const parentName = parentOf.get(`${sign < 0 ? 'expense' : 'income'}|${n}`);
+    const candidate = parentName ? resolveCategory(parentName, sign) : undefined;
+    const parent = candidate && !candidate.parentId ? candidate : undefined;
     const found = allCats.find((c) => fits(c, sign) && sameName(norm(c.name), n));
-    if (found) return found;
+    if (found) {
+      // Catégorie créée par un import précédent, restée à plat : on la range sous son parent
+      if (parent && found.custom && !found.parentId && found.id !== parent.id && !allCats.some((c) => c.parentId === found.id)) {
+        const moved = { ...found, parentId: parent.id, color: parent.color };
+        allCats[allCats.indexOf(found)] = moved;
+        const inNew = newCategories.indexOf(found);
+        if (inNew >= 0) newCategories[inNew] = moved;
+        else categoryUpdates.push({ id: found.id, parentId: parent.id, color: parent.color });
+        nestedIds.add(found.id);
+        return moved;
+      }
+      return found;
+    }
     const cat: Category = {
       id: `imp-${stamp}-${newCategories.length}`,
       name,
       type: sign < 0 ? 'expense' : 'income',
       icon: guessIcon(name, sign),
-      color: PALETTE[newCategories.length % PALETTE.length],
+      // Une sous-catégorie prend la couleur de son parent (comme dans le reste de l'app)
+      color: parent?.color ?? PALETTE[newCategories.length % PALETTE.length],
+      parentId: parent?.id,
       custom: true,
     };
+    if (parent) nestedIds.add(cat.id);
     allCats.push(cat);
     newCategories.push(cat);
     return cat;
@@ -367,7 +522,9 @@ export function planImport(
   pairTransfers(transactions);
 
   // Catégories créées mais finalement inutilisées (lignes en double) : on ne les garde pas
+  // (on garde aussi un parent sans opération propre, ex. « Salaire » qui ne contient que des sous-catégories)
   const used = new Set(transactions.map((t) => t.categoryId));
+  newCategories.forEach((c) => c.parentId && used.has(c.id) && used.add(c.parentId));
   const keptCategories = newCategories.filter((c) => used.has(c.id));
   const usedWallets = new Set(transactions.map((t) => t.walletId));
   const keptWallets = newWallets.filter((w) => usedWallets.has(w.id));
@@ -389,6 +546,8 @@ export function planImport(
     transfers,
     adjustments,
     missingRates: [...currencies].filter((c) => rateToMain(c, current.settings) === null),
+    categoryUpdates,
+    nested: [...nestedIds].filter((id) => used.has(id) || categoryUpdates.some((u) => u.id === id)).length,
   };
 }
 
@@ -478,7 +637,7 @@ export async function exportExcel(data: { wallets: Wallet[]; transactions: Trans
     },
     { sheet: 'Revenu', data: totals(1), columns: [{ width: 28 }, { width: 16 }, { width: 10 }] },
     { sheet: 'Dépense', data: totals(-1), columns: [{ width: 28 }, { width: 16 }, { width: 10 }] },
-  ] as never).toFile(`AetherPay_${fileStamp()}.xlsx`);
+  ] as never).toFile(`Wallo_${fileStamp()}.xlsx`);
 }
 
 // ---------- Sauvegarde complète (JSON) ----------
@@ -496,7 +655,7 @@ export interface Backup {
 
 export function exportBackup(data: Omit<Backup, 'app' | 'version' | 'exportedAt' | 'customIcons'>) {
   const backup: Backup = { app: 'aetherpay', version: 1, exportedAt: new Date().toISOString(), ...data, customIcons: getAllCustomIcons() };
-  download(new Blob([JSON.stringify(backup)], { type: 'application/json' }), `AetherPay_sauvegarde_${fileStamp()}.json`);
+  download(new Blob([JSON.stringify(backup)], { type: 'application/json' }), `Wallo_sauvegarde_${fileStamp()}.json`);
 }
 
 export async function readBackup(file: File): Promise<Backup> {
@@ -507,7 +666,7 @@ export async function readBackup(file: File): Promise<Backup> {
     throw new Error("Ce fichier JSON est illisible.");
   }
   if (data?.app !== 'aetherpay' || !Array.isArray(data.wallets) || !Array.isArray(data.transactions) || !Array.isArray(data.categories) || !data.settings) {
-    throw new Error("Ce n'est pas une sauvegarde AetherPay.");
+    throw new Error("Ce n'est pas une sauvegarde Wallo.");
   }
   return data as Backup;
 }

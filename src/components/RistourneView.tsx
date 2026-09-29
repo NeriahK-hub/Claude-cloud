@@ -85,7 +85,7 @@ export const RistourneView: React.FC<{ onBack: () => void; currency: string }> =
           {formatMoney(collected, currency)} <span className="text-lg text-slate-400 font-bold">/ {formatMoney(total, currency)}</span>
         </div>
         <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden my-3">
-          <div className="h-full bg-[#D8FB52] rounded-full transition-all" style={{ width: `${progress}%` }} />
+          <div className="h-full bg-[#D8FB52] rounded-full animate-bar" style={{ width: `${progress}%` }} />
         </div>
         <p className="text-sm text-slate-700">
           Ce tour, la cagnotte part chez <strong>{beneficiary.name}</strong>.

@@ -10,7 +10,7 @@ import { WalletsView, HomeWalletCard } from './WalletsView';
 import { isShared } from './Members';
 import { SettingsView } from './SettingsView';
 import { ProfileView } from './ProfileView';
-import { RistourneView, RistourneSummaryCard } from './RistourneView';
+import { RistourneView } from './RistourneView';
 import { CategoriesView } from './CategoriesView';
 
 // Interface TÉLÉPHONE : plein écran, barre d'onglets en bas
@@ -54,7 +54,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         )}
 
         {page === 'home' && (
-          <>
+          <div className="stagger">
             <Header
               title="Mon compte"
               unreadCount={unreadCount}
@@ -73,15 +73,12 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               </div>
             )}
-            <div className="px-5 mb-2">
-              <RistourneSummaryCard onOpen={() => onNavigate('ristourne')} />
-            </div>
             <TransactionList
               transactions={transactions}
               onSelectTransaction={onSelectTransaction}
               onViewAll={() => onNavigate('history')}
             />
-          </>
+          </div>
         )}
 
         {page === 'statistic' && (

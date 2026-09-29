@@ -70,7 +70,7 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
   return (
     <div className="w-full min-h-screen bg-slate-50 pb-24">
       {/* Top Bar */}
-      <div className="px-5 pt-3 pb-2 flex items-center justify-between sticky top-0 bg-slate-50/90 backdrop-blur-md z-30">
+      <div className="px-5 pt-3 pb-2 flex items-center justify-between sticky top-0 bg-slate-50 z-30">
         <button
           onClick={onBack}
           aria-label="Retour"
@@ -165,7 +165,7 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
           </div>
         ) : (
           Object.entries(groupedTransactions).map(([dateGroup, items]) => (
-            <div key={dateGroup}>
+            <div key={dateGroup} className="cv-auto">
               {/* Date Group Heading */}
               <div className="text-[11px] font-bold text-slate-400 tracking-wider uppercase mb-2 px-1">
                 {dateGroup}

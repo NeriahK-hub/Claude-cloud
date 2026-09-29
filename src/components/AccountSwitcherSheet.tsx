@@ -38,7 +38,7 @@ export const AccountSwitcherSheet: React.FC<AccountSwitcherSheetProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 animate-fade-in" onClick={onClose}>
       <div className="w-full sm:max-w-md max-h-[90dvh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slide-up" onClick={(e) => e.stopPropagation()}>
         <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-4 sm:hidden"></div>
 

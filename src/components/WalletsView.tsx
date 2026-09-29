@@ -300,7 +300,7 @@ const WalletProgress: React.FC<{ wallet: Wallet; balance: number }> = ({ wallet:
   return (
     <div className="mt-1.5">
       <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-        <div className={`h-full rounded-full ${bar}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
+        <div className={`h-full rounded-full animate-bar ${bar}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
       </div>
       <div className="text-[11px] leading-snug text-slate-500 mt-1">{label}</div>
     </div>
@@ -643,7 +643,7 @@ export const WalletKindSummary: React.FC<{ wallet: Wallet; balance: number }> = 
         </div>
         <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
           <div
-            className={`h-full rounded-full ${ratio >= 0.9 ? 'bg-red-500' : ratio >= 0.7 ? 'bg-amber-500' : 'bg-pink-500'}`}
+            className={`h-full rounded-full animate-bar ${ratio >= 0.9 ? 'bg-red-500' : ratio >= 0.7 ? 'bg-amber-500' : 'bg-pink-500'}`}
             style={{ width: `${Math.min(100, ratio * 100)}%` }}
           />
         </div>
@@ -675,7 +675,7 @@ export const WalletKindSummary: React.FC<{ wallet: Wallet; balance: number }> = 
           <Stat label="Objectif" value={money(w.goalAmount)} />
         </div>
         <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-          <div className={`h-full rounded-full ${ratio >= 1 ? 'bg-emerald-500' : 'bg-red-400'}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
+          <div className={`h-full rounded-full animate-bar ${ratio >= 1 ? 'bg-emerald-500' : 'bg-red-400'}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
         </div>
         <p className="text-xs text-slate-500 mt-2">
           {ratio >= 1 ? 'Objectif atteint 🎉' : `${Math.round(ratio * 100)} % de l'objectif.`} {pace}
@@ -777,6 +777,8 @@ const WalletDetail: React.FC<{
   const monthIn = month.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const monthOut = month.filter((t) => t.amount < 0).reduce((s, t) => s - t.amount, 0);
   const sorted = [...transactions].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Par paquets de 50 : un portefeuille importé peut avoir des milliers d'opérations
+  const [limit, setLimit] = useState(50);
 
   const kindBlock = <WalletKindSummary wallet={w} balance={balance} />;
 
@@ -833,11 +835,21 @@ const WalletDetail: React.FC<{
       {sorted.length === 0 ? (
         <p className="text-center text-sm text-slate-400 py-6">Aucune transaction dans ce portefeuille.</p>
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-100 px-3 py-1">
-          {sorted.map((t) => (
-            <TransactionItem key={t.id} transaction={t} onClick={onSelectTransaction} />
-          ))}
-        </div>
+        <>
+          <div className="bg-white rounded-3xl border border-slate-100 px-3 py-1">
+            {sorted.slice(0, limit).map((t) => (
+              <TransactionItem key={t.id} transaction={t} onClick={onSelectTransaction} />
+            ))}
+          </div>
+          {sorted.length > limit && (
+            <button
+              onClick={() => setLimit((l) => l + 50)}
+              className="w-full mt-3 py-3 rounded-2xl bg-white border border-slate-100 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              Voir plus ({sorted.length - limit} restantes)
+            </button>
+          )}
+        </>
       )}
     </div>
   );

@@ -20,7 +20,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-black/50 backdrop-blur-xs animate-fade-in">
+    <div className="fixed inset-0 z-50 flex bg-black/50 animate-fade-in">
       <div className="w-[80%] max-w-xs bg-white h-full shadow-2xl p-6 flex flex-col justify-between overflow-y-auto animate-slide-right">
         {/* Top user profile header */}
         <div>
@@ -137,7 +137,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
         {/* Footer */}
         <div className="pt-6 border-t border-slate-100">
           <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-            <span>AetherPay iOS v3.4</span>
+            <span>Wallo</span>
             <span className="text-[#65A30D] font-bold">Secure</span>
           </div>
           <button

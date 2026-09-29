@@ -12,7 +12,7 @@ import { TransactionItem } from './TransactionItem';
 import { TransactionHistoryView } from './TransactionHistoryView';
 import { StatisticView } from './StatisticView';
 import { ProfileView } from './ProfileView';
-import { RistourneView, RistourneSummaryCard } from './RistourneView';
+import { RistourneView } from './RistourneView';
 import { CategoriesView } from './CategoriesView';
 
 // Interface ORDINATEUR : menu à gauche, contenu en grille à droite
@@ -50,8 +50,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
       {/* Menu de gauche */}
       <aside className="w-64 shrink-0 bg-white border-r border-slate-200/70 p-5 flex flex-col sticky top-0 h-dvh">
         <div className="flex items-center gap-2.5 mb-8 px-2">
-          <div className="w-9 h-9 rounded-xl bg-[#D8FB52] font-black flex items-center justify-center text-sm">AP</div>
-          <span className="text-base font-extrabold tracking-tight">AetherPay</span>
+          <img src="/icons/wallo.svg" alt="" className="w-9 h-9" />
+          <span className="text-base font-extrabold tracking-tight">Wallo</span>
         </div>
 
         <nav className="flex flex-col gap-1">
@@ -163,8 +163,6 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
 
             {/* Colonne droite (1/3) */}
             <div className="space-y-6">
-              <RistourneSummaryCard onOpen={() => onNavigate('ristourne')} />
-
               <div className="bg-white rounded-3xl p-6 border border-slate-100">
                 <h2 className="text-base font-bold mb-4">Ce mois-ci</h2>
                 <div className="flex justify-between text-sm mb-2">

@@ -27,6 +27,7 @@ interface Slice {
   image?: string;
   amount: number;
   txs: Transaction[];
+  subs: Slice[]; // sous-catégories (la catégorie parente elle-même compte comme une ligne si elle a ses propres opérations)
 }
 
 // Rapport : solde d'ouverture / de fin, revenu net, et répartition par catégorie sur une période
@@ -62,28 +63,37 @@ export const StatisticView: React.FC<StatisticViewProps> = ({
     const counted = inRange.filter(countsInStats);
 
     // Regroupe par catégorie principale (les sous-catégories comptent dans leur parent)
+    const slice = (key: string, cat: Category | undefined, t: Transaction): Slice => ({
+      key,
+      name: cat?.name ?? t.category,
+      color: cat?.color ?? t.color,
+      icon: cat?.icon ?? (t.avatarType === 'icon' ? t.avatarValue : ''),
+      image: cat ? cat.image : t.avatarType === 'image' ? t.avatarValue : undefined,
+      amount: 0,
+      txs: [],
+      subs: [],
+    });
     const group = (list: Transaction[], sign: 1 | -1): Slice[] => {
       const map = new Map<string, Slice>();
       for (const t of list) {
         const cat = categories.find((c) => c.id === t.categoryId);
         const top = cat?.parentId ? categories.find((c) => c.id === cat.parentId) ?? cat : cat;
         const key = top?.id ?? t.category;
-        const cur =
-          map.get(key) ??
-          ({
-            key,
-            name: top?.name ?? t.category,
-            color: top?.color ?? t.color,
-            icon: top?.icon ?? (t.avatarType === 'icon' ? t.avatarValue : ''),
-            image: top ? top.image : t.avatarType === 'image' ? t.avatarValue : undefined,
-            amount: 0,
-            txs: [],
-          } as Slice);
-        cur.amount += sign * inMain(t);
+        const cur = map.get(key) ?? slice(key, top, t);
+        const v = sign * inMain(t);
+        cur.amount += v;
         cur.txs.push(t);
+        // Ligne de la sous-catégorie (ou du parent lui-même)
+        const subKey = cat && cat !== top ? cat.id : `${key}:self`;
+        let sub = cur.subs.find((x) => x.key === subKey);
+        if (!sub) cur.subs.push((sub = slice(subKey, cat && cat !== top ? cat : top, t)));
+        sub.amount += v;
+        sub.txs.push(t);
         map.set(key, cur);
       }
-      return [...map.values()].sort((a, b) => b.amount - a.amount);
+      const sorted = [...map.values()].sort((a, b) => b.amount - a.amount);
+      sorted.forEach((x) => x.subs.sort((a, b) => b.amount - a.amount));
+      return sorted;
     };
     const incomeSlices = group(counted.filter((t) => t.amount > 0), 1);
     const expenseSlices = group(counted.filter((t) => t.amount < 0), -1);
@@ -155,7 +165,7 @@ export const StatisticView: React.FC<StatisticViewProps> = ({
               <span className="font-bold tabular-nums text-slate-900">{money(v)}</span>
             </div>
             <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
-              <div className={`h-full rounded-full ${bar}`} style={{ width: `${(v / maxBar) * 100}%` }} />
+              <div className={`h-full rounded-full animate-bar ${bar}`} style={{ width: `${(v / maxBar) * 100}%` }} />
             </div>
           </div>
         ))}
@@ -216,7 +226,7 @@ const CategoryDonut: React.FC<{
   return (
     <>
       <div className="flex justify-center mb-4">
-        <svg viewBox="0 0 120 120" className="w-44 h-44 -rotate-90" role="img" aria-label="Répartition par catégorie">
+        <svg viewBox="0 0 120 120" className="w-44 h-44 -rotate-90 animate-donut" role="img" aria-label="Répartition par catégorie">
           {slices.map((s) => {
             const len = (s.amount / total) * C;
             const offset = -acc;
@@ -234,7 +244,7 @@ const CategoryDonut: React.FC<{
                 strokeDasharray={`${Math.max(0.5, len - GAP)} ${C}`}
                 strokeDashoffset={offset}
                 opacity={active && !isActive ? 0.35 : 1}
-                className="cursor-pointer transition-all"
+                className="cursor-pointer transition-[stroke-width,opacity] duration-200"
                 onMouseEnter={() => setActive(s.key)}
                 onMouseLeave={() => setActive(null)}
                 onClick={() => setActive(isActive ? null : s.key)}
@@ -267,6 +277,7 @@ const CategoryDonut: React.FC<{
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-slate-900 truncate">{s.name}</div>
                 <div className="text-[11px] text-slate-500">
+                  {hasSubs(s) && `${s.subs.length} sous-catégories · `}
                   {s.txs.length} transaction{s.txs.length > 1 ? 's' : ''}
                 </div>
               </div>
@@ -278,16 +289,76 @@ const CategoryDonut: React.FC<{
             </button>
             {open === s.key && (
               <div className="pl-2 pb-2 animate-fade-in">
-                {[...s.txs]
-                  .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-                  .map((t) => (
-                    <TransactionItem key={t.id} transaction={t} onClick={onSelectTransaction} />
-                  ))}
+                {hasSubs(s) ? (
+                  <SubList parent={s} money={money} onSelectTransaction={onSelectTransaction} />
+                ) : (
+                  <TxList txs={s.txs} onSelectTransaction={onSelectTransaction} />
+                )}
               </div>
             )}
           </div>
         ))}
       </div>
     </>
+  );
+};
+
+// Une catégorie a des sous-catégories à montrer si ses opérations ne sont pas toutes « à elle »
+const hasSubs = (s: Slice) => s.subs.length > 1 || (s.subs.length === 1 && !s.subs[0].key.endsWith(':self'));
+
+const TxList: React.FC<{ txs: Transaction[]; onSelectTransaction: (tx: Transaction) => void }> = ({ txs, onSelectTransaction }) => (
+  <>
+    {[...txs]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((t) => (
+        <TransactionItem key={t.id} transaction={t} onClick={onSelectTransaction} />
+      ))}
+  </>
+);
+
+// Sous-catégories d'un parent : part de chacune (barre) ; on touche pour voir ses transactions
+const SubList: React.FC<{ parent: Slice; money: (v: number) => string; onSelectTransaction: (tx: Transaction) => void }> = ({
+  parent,
+  money,
+  onSelectTransaction,
+}) => {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <div className="border-l-2 pl-2 ml-3.5 space-y-0.5" style={{ borderColor: parent.color + '55' }}>
+      {parent.subs.map((sub) => {
+        const share = parent.amount > 0 ? (sub.amount / parent.amount) * 100 : 0;
+        return (
+          <div key={sub.key}>
+            <button
+              onClick={() => setOpen(open === sub.key ? null : sub.key)}
+              aria-expanded={open === sub.key}
+              className="w-full flex items-center gap-2.5 py-2 text-left cursor-pointer rounded-xl hover:bg-slate-50"
+            >
+              <IconBadge icon={sub.icon} image={sub.image} color={sub.color} size="xs" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[13px] font-semibold text-slate-800 truncate">{sub.name}</span>
+                  <span className="text-[13px] font-bold tabular-nums text-slate-900 shrink-0">{money(sub.amount)}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full animate-bar tint-bg" style={{ width: `${share}%`, '--tint': parent.color } as React.CSSProperties} />
+                  </div>
+                  <span className="text-[11px] tabular-nums text-slate-500 w-20 text-right shrink-0">
+                    {share.toFixed(0)} % · {sub.txs.length}
+                  </span>
+                </div>
+              </div>
+              <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open === sub.key ? 'rotate-90' : ''}`} />
+            </button>
+            {open === sub.key && (
+              <div className="pb-1 animate-fade-in">
+                <TxList txs={sub.txs} onSelectTransaction={onSelectTransaction} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 };

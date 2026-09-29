@@ -18,7 +18,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onOpenScanPay,
 }) => {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-white/95 backdrop-blur-md border-t border-slate-100 px-6 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-lg">
+    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-white border-t border-slate-100 px-6 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-lg">
       <div className="flex items-center justify-between">
         {/* Home */}
         <button

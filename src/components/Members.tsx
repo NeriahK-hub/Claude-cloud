@@ -134,7 +134,7 @@ export const SharingBlock: React.FC<{ wallet: Wallet; transactions: Transaction[
 
       {/* Part de chacun dans ce qui a été mis */}
       {totalPut > 0 && (
-        <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 mb-3">
+        <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 mb-3 animate-bar">
           {stats.map((p) => (p.put > 0 ? <div key={p.id} style={{ width: `${(p.put / totalPut) * 100}%`, backgroundColor: p.color }} /> : null))}
         </div>
       )}

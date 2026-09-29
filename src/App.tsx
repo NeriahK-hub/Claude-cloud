@@ -326,10 +326,20 @@ export default function App() {
 
   // Import d'un fichier (Money Lover, Excel, CSV) : déjà vérifié dans l'aperçu
   const handleImport = (plan: ImportPlan, replace: boolean) => {
+    // Catégories déjà là que le fichier range sous un parent (elles prennent sa couleur)
+    const moved = new Map(plan.categoryUpdates.map((u) => [u.id, u]));
+    const recolor = (t: Transaction) => (t.categoryId && moved.has(t.categoryId) ? { ...t, color: moved.get(t.categoryId)!.color } : t);
     setWallets((prev) => [...prev, ...plan.newWallets]);
-    setCategories((prev) => [...prev, ...plan.newCategories]);
-    setTransactions((prev) => (replace ? plan.transactions : [...plan.transactions, ...prev]));
-    showToast(`${plan.transactions.length} transactions importées`);
+    setCategories((prev) => [
+      ...prev.map((c) => (moved.has(c.id) ? { ...c, parentId: moved.get(c.id)!.parentId, color: moved.get(c.id)!.color } : c)),
+      ...plan.newCategories,
+    ]);
+    setTransactions((prev) => (replace ? plan.transactions : [...plan.transactions, ...prev]).map(recolor));
+    showToast(
+      plan.transactions.length > 0
+        ? `${plan.transactions.length} transactions importées`
+        : `${plan.categoryUpdates.length} catégories rangées sous leur parent`
+    );
   };
 
   // Restauration d'une sauvegarde complète
