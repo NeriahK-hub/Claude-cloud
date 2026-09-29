@@ -10,6 +10,7 @@ import { Category, DEFAULT_CATEGORIES } from './data/categories';
 import { Backup, ImportPlan } from './lib/importExport';
 import { replaceCustomIcons } from './lib/customIcons';
 import { budgetStatus } from './lib/budgets';
+import { uuid } from './lib/ids';
 
 // Les deux interfaces
 import { MobileApp } from './components/MobileApp';
@@ -119,7 +120,7 @@ export default function App() {
     const differs = currency !== wallet.currency;
 
     const newTx: Transaction = {
-      id: `tx-${Date.now()}`,
+      id: uuid(),
       title: note || category.name,
       createdAt: new Date().toISOString(),
       amount: signed,
@@ -152,7 +153,6 @@ export default function App() {
     const from = wallets.find((w) => w.id === fromId);
     const to = wallets.find((w) => w.id === toId);
     if (!from || !to || fromAmount <= 0 || toAmount <= 0) return;
-    const stamp = Date.now();
     const base = {
       createdAt: new Date().toISOString(),
       type: 'transfer' as const,
@@ -160,12 +160,12 @@ export default function App() {
       avatarType: 'icon' as const,
       avatarValue: 'ArrowLeftRight',
       color: '#64748B',
-      transferId: `tr-${stamp}`,
+      transferId: uuid(),
       status: 'completed' as const,
     };
     const out: Transaction = {
       ...base,
-      id: `tx-${stamp}-out`,
+      id: uuid(),
       title: note || `Vers ${to.name}`,
       amount: -fromAmount,
       currency: from.currency,
@@ -174,7 +174,7 @@ export default function App() {
     };
     const inn: Transaction = {
       ...base,
-      id: `tx-${stamp}-in`,
+      id: uuid(),
       title: note || `Depuis ${from.name}`,
       amount: toAmount,
       currency: to.currency,
@@ -186,7 +186,7 @@ export default function App() {
       fee > 0
         ? [
             {
-              id: `tx-${stamp}-fee`,
+              id: uuid(),
               title: `Frais de transfert vers ${to.name}`,
               createdAt: base.createdAt,
               amount: -fee,
@@ -215,7 +215,7 @@ export default function App() {
     const diff = Math.round((newBalance - walletBalance(wallet, transactions)) * 100) / 100;
     if (diff === 0) return;
     const adj: Transaction = {
-      id: `tx-${Date.now()}`,
+      id: uuid(),
       title: 'Ajustement du solde',
       createdAt: new Date().toISOString(),
       amount: diff,
@@ -234,7 +234,7 @@ export default function App() {
 
   // Portefeuilles : ajouter / modifier / supprimer
   const handleAddWallet = (w: Omit<Wallet, 'id' | 'archived'>) => {
-    setWallets((prev) => [...prev, { ...w, id: `wallet-${Date.now()}`, archived: false }]);
+    setWallets((prev) => [...prev, { ...w, id: uuid(), archived: false }]);
     showToast(`Portefeuille « ${w.name} » créé`);
   };
   const handleUpdateWallet = (id: string, changes: Partial<Wallet>) => {
@@ -285,12 +285,11 @@ export default function App() {
   };
 
   const handleDuplicateTransaction = (tx: Transaction) => {
-    const stamp = Date.now();
     const now = new Date().toISOString();
-    const newTransferId = tx.transferId ? `tr-${stamp}` : undefined;
-    const copies = groupOf(tx).map((t, i) => ({
+    const newTransferId = tx.transferId ? uuid() : undefined;
+    const copies = groupOf(tx).map((t) => ({
       ...t,
-      id: `tx-${stamp}-${i}`,
+      id: uuid(),
       createdAt: now,
       transferId: newTransferId,
       referenceNumber: t.referenceNumber ? `MN-${Math.floor(10000 + Math.random() * 90000)}` : undefined,
@@ -325,7 +324,7 @@ export default function App() {
   };
   // Budgets
   const handleAddBudget = (b: Omit<Budget, 'id' | 'createdAt'>) => {
-    setBudgets((prev) => [...prev, { ...b, id: `budget-${Date.now()}`, createdAt: new Date().toISOString() }]);
+    setBudgets((prev) => [...prev, { ...b, id: uuid(), createdAt: new Date().toISOString() }]);
     showToast('Budget créé');
   };
   const handleUpdateBudget = (id: string, changes: Partial<Budget>) => {

@@ -21,3 +21,9 @@ psql -v ON_ERROR_STOP=1 -d wallo_test -f supabase/tests/rls_test.sql
 ```
 
 `local_auth_stub.sql` imite la partie « comptes » de Supabase : ne l'exécute jamais sur Supabase.
+
+Test de la synchro (plusieurs appareils et comptes simulés, avec un export Money Lover) :
+
+```bash
+DATABASE_URL=postgres://postgres:motdepasse@127.0.0.1:5432/wallo_test npm run test:sync
+```

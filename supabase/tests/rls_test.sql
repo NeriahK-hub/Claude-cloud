@@ -94,6 +94,18 @@ update wallets set deleted_at = now() where id = 'aaaaaaaa-0000-0000-0000-000000
 select pg_temp.check((select deleted_at is not null from wallets where id = 'aaaaaaaa-0000-0000-0000-000000000001'), 'le propriétaire supprime (deleted_at rempli)');
 select pg_temp.check((select updated_at > now() - interval '1 minute' from wallets where id = 'aaaaaaaa-0000-0000-0000-000000000001'), 'updated_at mis à jour par la base (synchro)');
 
+-- ===== Carol est invitée sur le portefeuille partagé, puis le quitte =====
+insert into wallets (id, name, currency) values ('aaaaaaaa-0000-0000-0000-000000000003', 'Vacances', 'USD');
+insert into wallet_members (wallet_id, email, name, status) values ('aaaaaaaa-0000-0000-0000-000000000003', 'carol@test.cd', 'Carol', 'invited');
+select pg_temp.login(:'carol', 'carol@test.cd');
+select pg_temp.check(accept_invites() = 1, 'Carol accepte l''invitation à « Vacances »');
+select pg_temp.check((select count(*) from wallets) = 1, 'Carol voit « Vacances »');
+select leave_wallet('aaaaaaaa-0000-0000-0000-000000000003');
+select pg_temp.check((select count(*) from wallets) = 0, 'Carol quitte « Vacances » et ne le voit plus');
+select pg_temp.login(:'alice', 'alice@test.cd');
+select leave_wallet('aaaaaaaa-0000-0000-0000-000000000003');
+select pg_temp.check((select count(*) from wallets where id = 'aaaaaaaa-0000-0000-0000-000000000003') = 1, 'la propriétaire ne peut pas « quitter » son propre portefeuille');
+
 -- ===== Ristourne =====
 insert into ristournes (id, name, contribution, currency, start_date) values ('bbbbbbbb-0000-0000-0000-000000000001', 'Ristourne des amis', 50, 'USD', current_date);
 insert into ristourne_members (id, ristourne_id, name, turn) values ('cccccccc-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000001', 'Alice', 1);

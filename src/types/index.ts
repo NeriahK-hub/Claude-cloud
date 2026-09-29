@@ -41,6 +41,8 @@ export interface Wallet {
   goalAmount?: number; // seulement 'goal'
   goalDate?: string; // seulement 'goal', format AAAA-MM-JJ
   members?: WalletMember[]; // portefeuille partagé : les autres personnes (moi n'y figure pas)
+  ownerId?: string; // compte en ligne : propriétaire (absent = moi, portefeuille créé ici)
+  myMemberId?: string; // compte en ligne : ma ligne de membre dans ce portefeuille
 }
 
 // Une personne avec qui on partage un portefeuille (ex. son conjoint)
@@ -50,6 +52,9 @@ export interface WalletMember {
   color: string;
   contact?: string; // téléphone ou e-mail, pour l'inviter plus tard
   removed?: boolean; // retiré du partage : on garde son nom sur ses anciennes opérations
+  userId?: string; // compte en ligne de cette personne (elle a rejoint le portefeuille)
+  invited?: boolean; // invitation envoyée par e-mail, pas encore acceptée
+  owner?: boolean; // propriétaire du portefeuille (vu depuis le téléphone d'un autre membre)
 }
 
 export type WalletKind = 'basic' | 'credit' | 'goal';

@@ -316,6 +316,13 @@ begin
   return n;
 end $$;
 
+-- Quitter un portefeuille partagé (un membre qui n'en est pas le propriétaire)
+create or replace function public.leave_wallet(w uuid) returns void
+language sql security definer set search_path = public as $$
+  update wallet_members set status = 'removed'
+   where wallet_id = w and user_id = auth.uid() and role <> 'owner';
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Règles d'accès (Row Level Security)
 -- Pas de règle DELETE : l'app supprime en remplissant deleted_at.
@@ -385,6 +392,7 @@ create policy "ristourne paiements : l'auteur ou le propriétaire corrige" on pu
 revoke all on all tables in schema public from anon;
 grant select, insert, update on all tables in schema public to authenticated;
 grant execute on function public.accept_invites() to authenticated;
+grant execute on function public.leave_wallet(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Temps réel : prévenir l'app quand un membre modifie un portefeuille partagé

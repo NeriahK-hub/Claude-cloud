@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Users, UserPlus, X, Info } from 'lucide-react';
 import { Transaction, Wallet, WalletMember } from '../types';
 import { formatMoney } from '../lib/money';
+import { uuid } from '../lib/ids';
 
 // Portefeuille partagé (ex. un couple qui économise ensemble).
 // « Moi » n'est pas dans wallet.members : c'est la personne qui utilise l'app.
@@ -175,7 +176,7 @@ export const MembersSheet: React.FC<{
     const n = name.trim();
     if (!n) return;
     const color = MEMBER_COLORS[members.length % MEMBER_COLORS.length];
-    setMembers((prev) => [...prev, { id: `m-${Date.now()}`, name: n, color, contact: contact.trim() || undefined }]);
+    setMembers((prev) => [...prev, { id: uuid(), name: n, color, contact: contact.trim() || undefined }]);
     setName('');
     setContact('');
   };
@@ -245,7 +246,7 @@ export const MembersSheet: React.FC<{
               // Un nom tapé mais pas encore ajouté compte aussi
               const n = name.trim();
               const color = MEMBER_COLORS[members.length % MEMBER_COLORS.length];
-              onSave(n ? [...members, { id: `m-${Date.now()}`, name: n, color, contact: contact.trim() || undefined }] : members);
+              onSave(n ? [...members, { id: uuid(), name: n, color, contact: contact.trim() || undefined }] : members);
             }}
             className="flex-[2] py-3 rounded-2xl bg-[#D8FB52] text-slate-900 text-sm font-bold cursor-pointer"
           >

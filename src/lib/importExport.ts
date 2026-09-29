@@ -6,6 +6,7 @@ import { Budget, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { convertBetween, countsInStats, rateToMain, toMain } from './money';
 import { CustomIcon, getAllCustomIcons } from './customIcons';
+import { uuid } from './ids';
 
 // ---------- Lecture du fichier ----------
 
@@ -384,7 +385,7 @@ export function planImport(
     counts.set(key, (counts.get(key) ?? 0) + 1);
     if (walletByName.has(key)) continue;
     const w: Wallet = {
-      id: `wallet-imp-${stamp}-${newWallets.length}`,
+      id: uuid(),
       name: r.wallet,
       icon: guessWalletIcon(r.wallet),
       color: PALETTE[(current.wallets.length + newWallets.length) % PALETTE.length],
@@ -466,7 +467,7 @@ export function planImport(
     const sign = Math.sign(amount);
     const catName = norm(r.category);
     const base = {
-      id: `tx-imp-${stamp}-${i}`,
+      id: uuid(),
       createdAt: r.date.toISOString(),
       amount,
       currency: wallet.currency,
@@ -492,7 +493,7 @@ export function planImport(
         avatarType: 'icon',
         avatarValue: 'ArrowLeftRight',
         color: '#64748B',
-        transferId: `tr-imp-${stamp}-${i}`,
+        transferId: uuid(),
       };
     } else {
       const cat = resolveCategory(r.category, sign);
