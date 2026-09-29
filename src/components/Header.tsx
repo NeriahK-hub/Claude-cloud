@@ -9,7 +9,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  title = 'My Account',
+  title = 'Mon compte',
   unreadCount = 2,
   onOpenMenu,
   onOpenNotifications,
@@ -19,7 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Left button */}
       <button
         onClick={onOpenMenu}
-        aria-label="Open navigation menu"
+        aria-label="Ouvrir le menu"
         className="w-11 h-11 rounded-full bg-white shadow-xs border border-slate-100 flex items-center justify-center text-slate-800 hover:bg-slate-50 active:scale-95 transition cursor-pointer"
       >
         <SlidersHorizontal className="w-4 h-4 text-slate-800" />

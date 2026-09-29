@@ -244,7 +244,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             {page === 'settings' && (
               <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
             )}
-            {page === 'profile' && <ProfileView onOpenSettings={() => onNavigate('settings')} />}
+            {page === 'profile' && <ProfileView onNavigate={onNavigate} />}
           </div>
         )}
       </main>

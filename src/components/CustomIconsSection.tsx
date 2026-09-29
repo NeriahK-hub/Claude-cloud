@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FileUp, Trash2 } from 'lucide-react';
 import { AppIcon } from './AppIcon';
-import { addCustomIcon, deleteCustomIcon, prepareSvg, useCustomIcons } from '../lib/customIcons';
+import { addCustomIcon, deleteCustomIcon, hasEmbeddedImage, isHeavySvg, prepareSvg, rasterizeIcon, svgToDataUrl, useCustomIcons } from '../lib/customIcons';
 
 // Paramètres > Mes icônes : importer ou coller une icône SVG
 export const CustomIconsSection: React.FC = () => {
@@ -12,17 +12,52 @@ export const CustomIconsSection: React.FC = () => {
   const [keepColors, setKeepColors] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
-  const result = code.trim() ? prepareSvg(code) : null;
-  const ok = result && 'dataUrl' in result ? result : null;
-  const error = result && 'error' in result ? result.error : '';
-  const notSquare = ok && Math.abs(ok.width - ok.height) > 0.5;
+  // Icône « image » : PNG / JPG, ou SVG qui contient une image (export Canva) -> petite image PNG
+  const [raster, setRaster] = useState<{ dataUrl: string; removedBackground: boolean } | null>(null);
+  const [rasterError, setRasterError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const needsRaster = !!code.trim() && (hasEmbeddedImage(code) || isHeavySvg(code));
+
+  const convert = async (src: string) => {
+    setBusy(true);
+    setRasterError('');
+    try {
+      setRaster(await rasterizeIcon(src));
+    } catch (err) {
+      setRaster(null);
+      setRasterError(err instanceof Error ? err.message : 'Image illisible');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // SVG collé ou importé trop lourd / avec une image dedans : conversion automatique
+  useEffect(() => {
+    if (needsRaster) convert(svgToDataUrl(code));
+    else if (code.trim()) setRaster(null); // SVG léger tapé / collé : utilisé tel quel
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+
+  const result = code.trim() && !needsRaster ? prepareSvg(code) : null;
+  const ok = raster ?? (result && 'dataUrl' in result ? result : null);
+  const error = rasterError || (result && 'error' in result ? result.error : '');
+  const notSquare = !raster && result && 'dataUrl' in result && Math.abs(result.width - result.height) > 0.5 ? result : null;
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    setCode(await file.text());
-    if (!name) setName(file.name.replace(/\.svg$/i, ''));
+    if (!name) setName(file.name.replace(/\.(svg|png|jpe?g|webp)$/i, ''));
+    setRaster(null);
+    if (/\.svg$/i.test(file.name) || file.type === 'image/svg+xml') {
+      setCode(await file.text());
+    } else {
+      // PNG / JPG : lu directement
+      setCode('');
+      const url = URL.createObjectURL(file);
+      await convert(url);
+      URL.revokeObjectURL(url);
+    }
   };
 
   const add = () => {
@@ -31,6 +66,7 @@ export const CustomIconsSection: React.FC = () => {
     setCode('');
     setName('');
     setKeepColors(false);
+    setRaster(null);
   };
 
   // Aperçu : image (couleurs d'origine) ou masque coloré, comme dans l'app
@@ -65,7 +101,11 @@ export const CustomIconsSection: React.FC = () => {
             <b>Fond transparent</b>, une seule couleur : l'app la remplace par la couleur de la catégorie. Coche « Garder mes couleurs » pour un logo multicolore.
           </li>
           <li>
-            Affichée à <b>16, 20 et 24 px</b> dans l'app. Fichier de <b>20 Ko maximum</b>. Texte à convertir en tracés.
+            Affichée à <b>16, 20 et 24 px</b> dans l'app. SVG de <b>20 Ko maximum</b>. Texte à convertir en tracés.
+          </li>
+          <li>
+            <b>Depuis Canva</b> : carré de <b>240 × 240 px</b>, un dessin d'une seule couleur, exporté en <b>PNG</b> (ou SVG).
+            Pas besoin de fond transparent : un fond uni est retiré automatiquement.
           </li>
         </ul>
       )}
@@ -88,12 +128,12 @@ export const CustomIconsSection: React.FC = () => {
         </div>
       )}
 
-      <input ref={fileInput} type="file" accept=".svg,image/svg+xml" onChange={onFile} className="hidden" />
+      <input ref={fileInput} type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" onChange={onFile} className="hidden" />
       <button
         onClick={() => fileInput.current?.click()}
         className="w-full py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer"
       >
-        <FileUp className="w-4 h-4" /> Importer un fichier .svg
+        <FileUp className="w-4 h-4" /> Importer une icône (SVG, PNG ou JPG)
       </button>
       <textarea
         value={code}
@@ -102,7 +142,13 @@ export const CustomIconsSection: React.FC = () => {
         rows={3}
         className="w-full mt-2 px-3 py-2 rounded-2xl bg-slate-100 text-xs font-mono outline-none focus:ring-2 focus:ring-[#D8FB52]"
       />
+      {busy && <p className="text-xs text-slate-500 mt-1">Préparation de l'icône…</p>}
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      {raster && (
+        <p className="text-xs text-slate-500 mt-1">
+          Image convertie en petite icône{raster.removedBackground ? ', fond uni retiré' : ''}. Vérifie l'aperçu ci-dessous.
+        </p>
+      )}
 
       {ok && (
         <div className="mt-3">
@@ -119,7 +165,7 @@ export const CustomIconsSection: React.FC = () => {
           </div>
           {notSquare && (
             <p className="text-xs text-amber-600 mt-1">
-              Ton SVG n'est pas carré ({ok.width} × {ok.height}) : il sera centré, mais un format 24 × 24 rend mieux.
+              Ton SVG n'est pas carré ({notSquare.width} × {notSquare.height}) : il sera centré, mais un format 24 × 24 rend mieux.
             </p>
           )}
           <input

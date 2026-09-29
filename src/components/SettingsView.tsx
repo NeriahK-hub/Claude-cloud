@@ -176,7 +176,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
           </div>
         )}
       </Section>
-      <Section title="Mes icônes" hint="Crée tes propres icônes SVG pour tes catégories et portefeuilles.">
+      <Section title="Mes icônes" hint="Ajoute tes propres icônes (SVG, PNG ou JPG) pour tes catégories et portefeuilles.">
         <CustomIconsSection />
       </Section>
     </div>

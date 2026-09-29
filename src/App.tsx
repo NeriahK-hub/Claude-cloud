@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { INITIAL_NOTIFICATIONS } from './data/mockData';
 import { Transaction, NotificationItem, Wallet, Settings } from './types';
 import { usePersistentState } from './hooks/usePersistentState';
 import { convertBetween, formatMoney, makeBalance, toMain, totalInMain, walletBalance } from './lib/money';
@@ -28,6 +27,10 @@ const DEFAULT_WALLETS: Wallet[] = [
   { id: 'wallet-momo', name: 'Mobile Money', icon: 'Smartphone', color: '#F97316', currency: 'USD', initialBalance: 0, includeInTotal: true, archived: false },
 ];
 
+const WELCOME: NotificationItem[] = [
+  { id: 'welcome', title: 'Bienvenue sur Wallo', message: 'Ajoute ta première dépense avec le bouton +, ou importe ton historique dans Paramètres › Mes données.', time: '', read: false, type: 'transaction' },
+];
+
 const DEFAULT_SETTINGS: Settings = { mainCurrency: 'USD', secondCurrency: null, rates: {} };
 
 export default function App() {
@@ -40,7 +43,7 @@ export default function App() {
   const [categories, setCategories] = usePersistentState<Category[]>('ap.categories', DEFAULT_CATEGORIES);
   const [storedSettings, setSettings] = usePersistentState<Settings>('ap.settings', DEFAULT_SETTINGS);
   const [activeWalletId, setActiveWalletId] = usePersistentState<string>('ap.activeWallet', 'all');
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = usePersistentState<NotificationItem[]>('ap.notifications', WELCOME);
 
   // Réglages : on complète avec les valeurs par défaut si la donnée sauvegardée est incomplète
   const settings: Settings = { ...DEFAULT_SETTINGS, ...storedSettings, rates: storedSettings.rates ?? {} };

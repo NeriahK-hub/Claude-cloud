@@ -61,46 +61,6 @@ export interface Settings {
   rates: Record<string, number>;
 }
 
-// Ancien type (fichiers de démonstration non utilisés)
-export interface BankAccount {
-  id: string;
-  name: string;
-  cardNumber: string; // e.g. "**** 3425"
-  fullNumber: string;
-  cardType: 'Visa' | 'Mastercard' | 'Apple Pay';
-  balance: number;
-  currency: string;
-  isDefault: boolean;
-  themeColor: string;
-  expiry: string;
-  cvv: string;
-  holder: string;
-}
-
-export interface MerchantOffer {
-  id: string;
-  title: string;
-  subtitle: string;
-  discount: string;
-  merchantName: string;
-  category: string;
-  bannerGradient: string;
-  accentColor: string;
-  badge: string;
-  code: string;
-  expiresIn: string;
-}
-
-export interface QuickContact {
-  id: string;
-  name: string;
-  handle: string;
-  avatar: string;
-  avatarBg: string;
-  initials: string;
-  recentAmount?: number;
-}
-
 export interface NotificationItem {
   id: string;
   title: string;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Home, BarChart2, CreditCard, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Settings, HelpCircle, Shield, LogOut, Tags } from 'lucide-react';
 import { Page } from './BottomNav';
+import { initialsOf, useProfile } from '../lib/profile';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   onOpenSend,
   onOpenHistory,
 }) => {
+  const { name } = useProfile();
   if (!isOpen) return null;
 
   return (
@@ -27,11 +29,11 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-[#16382F] text-white flex items-center justify-center font-bold text-base shadow-xs">
-                MB
+                {initialsOf(name) || <img src="/icons/wallo.svg" alt="" className="w-12 h-12" />}
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Mikel Borle</h3>
-                <span className="text-xs text-slate-400">Personal Banking</span>
+                <h3 className="text-sm font-bold text-slate-900">{name || 'Wallo'}</h3>
+                <span className="text-xs text-slate-400">Mon argent, en clair</span>
               </div>
             </div>
             <button
@@ -129,24 +131,14 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 transition cursor-pointer text-left"
             >
               <Settings className="w-4 h-4 text-slate-500" />
-              <span>Profil et sécurité</span>
+              <span>Profil</span>
             </button>
           </div>
         </div>
 
         {/* Footer */}
         <div className="pt-6 border-t border-slate-100">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-            <span>Wallo</span>
-            <span className="text-[#65A30D] font-bold">Secure</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <HelpCircle className="w-4 h-4" />
-            <span>Aide</span>
-          </button>
+          <div className="text-xs text-slate-400">Wallo</div>
         </div>
       </div>
     </div>

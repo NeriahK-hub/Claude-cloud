@@ -111,7 +111,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         {page === 'settings' && (
           <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
         )}
-        {page === 'profile' && <ProfileView onOpenSettings={() => onNavigate('settings')} />}
+        {page === 'profile' && <ProfileView onNavigate={onNavigate} />}
       </div>
 
       {isTab && (
