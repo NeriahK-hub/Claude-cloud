@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, Layers, Pencil, Trash2, PieChart } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, Layers, Pencil, Trash2, PieChart, Delete } from 'lucide-react';
 import { Budget, Settings, Transaction } from '../types';
 import { Category } from '../data/categories';
 import { IconBadge } from './AppIcon';
@@ -7,6 +7,7 @@ import { TransactionItem } from './TransactionItem';
 import { formatMoney } from '../lib/money';
 import { budgetStatus, budgetTone, BudgetStatus, monthRange, pastSpending, roundBudget } from '../lib/budgets';
 import { monthTitle } from '../lib/periods';
+import { haptic } from '../lib/haptics';
 
 interface BudgetsViewProps {
   budgets: Budget[];
@@ -289,7 +290,11 @@ const BudgetDetail: React.FC<{
   );
 };
 
-// Créer / modifier : choix de la catégorie + montant, avec une suggestion tirée des mois passés
+// Créer / modifier un budget, sur le modèle de l'ajout d'une dépense :
+// grand montant + clavier ; « Pour quoi ? » ouvre la liste complète des catégories à la place du clavier
+// (rien ne défile en cachette) ; les montants des mois passés se touchent pour remplir.
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
+
 const BudgetSheet: React.FC<{
   budget: Budget | null;
   taken: (string | null)[];
@@ -301,72 +306,165 @@ const BudgetSheet: React.FC<{
 }> = ({ budget, taken, categories, transactions, settings, onClose, onSave }) => {
   const [categoryId, setCategoryId] = useState<string | null | undefined>(budget ? budget.categoryId : undefined);
   const [amount, setAmount] = useState(budget ? String(budget.amount) : '');
+  const [picking, setPicking] = useState(!budget); // nouveau budget : on choisit d'abord la catégorie
   const currency = budget?.currency ?? settings.mainCurrency;
   // Catégories principales de dépenses pas encore budgétées (+ celle du budget modifié)
   const choices = categories.filter(
     (c) => !c.parentId && (c.type === 'expense' || (c.type === 'debt' && c.direction === 'out')) && (!taken.includes(c.id) || c.id === budget?.categoryId)
   );
   const globalFree = !taken.includes(null) || budget?.categoryId === null;
+  const cat = categories.find((c) => c.id === categoryId);
   const past = categoryId !== undefined ? pastSpending(categoryId, transactions, categories, settings) : null;
-  const suggestion = past ? roundBudget(past.average) : 0;
-  const value = parseFloat(amount.replace(/\s/g, '').replace(',', '.'));
+  const value = parseFloat(amount) || 0;
   const valid = categoryId !== undefined && value > 0;
 
+  const press = (k: string) => {
+    haptic();
+    setAmount((a) => {
+      if (k === 'del') return a.slice(0, -1);
+      if (k === '.' && a.includes('.')) return a;
+      if (a.includes('.') && a.split('.')[1].length >= 2) return a;
+      if (k === '.' && a === '') return '0.';
+      if (a.replace('.', '').length >= 12) return a;
+      return a === '0' && k !== '.' ? k : a + k;
+    });
+  };
+
+  // Clavier physique (ordinateur)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') return picking && budget ? setPicking(false) : onClose();
+      if (picking) return;
+      if (/^[0-9]$/.test(e.key)) press(e.key);
+      else if (e.key === '.' || e.key === ',') press('.');
+      else if (e.key === 'Backspace') press('del');
+      else if (e.key === 'Enter' && valid) onSave({ categoryId: categoryId ?? null, amount: value, currency });
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // Montant affiché avec des espaces entre les milliers (« 150 000 »)
+  const [int, dec] = amount.split('.');
+  const shown = amount ? `${Number(int || 0).toLocaleString('fr-FR')}${dec !== undefined ? `,${dec}` : ''}` : '0';
+
+  const pick = (id: string | null) => {
+    haptic();
+    setCategoryId(id);
+    setPicking(false);
+  };
   const tile = (id: string | null, label: string, icon: React.ReactNode) => (
     <button
       key={id ?? 'all'}
-      onClick={() => setCategoryId(id)}
-      className={`min-w-0 flex flex-col items-center gap-1 p-2 rounded-2xl border-2 cursor-pointer ${
+      onClick={() => pick(id)}
+      className={`min-w-0 flex flex-col items-center justify-center gap-1 px-1 py-2 rounded-2xl border-2 cursor-pointer transition ${
         categoryId === id ? 'border-slate-900 bg-[#D8FB52]/40' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
       }`}
     >
       {icon}
-      <span className="w-full text-center text-[11px] font-bold text-slate-900 leading-tight line-clamp-2 break-words hyphens-auto" lang="fr">{label}</span>
+      <span className="w-full text-center text-[11px] font-bold text-slate-900 leading-tight line-clamp-2 break-words hyphens-auto" lang="fr">
+        {label}
+      </span>
     </button>
   );
+  const suggestion = (label: string, v: number) =>
+    v > 0 && (
+      <button
+        onClick={() => {
+          haptic();
+          setAmount(String(roundBudget(v)));
+        }}
+        className="flex-1 min-w-0 px-3 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-left cursor-pointer"
+      >
+        <span className="block text-[10px] font-semibold text-slate-500">{label}</span>
+        <span className="block text-xs font-bold tabular-nums text-slate-900 truncate">{formatMoney(roundBudget(v), currency)}</span>
+      </button>
+    );
 
   return (
-    <Sheet title={budget ? 'Modifier le budget' : 'Nouveau budget'} onClose={onClose}>
-      {!budget && (
-        <>
-          <div className="text-xs font-semibold text-slate-500 mb-1.5">Pour quoi ?</div>
-          <div className="grid grid-cols-3 gap-1.5 mb-4 max-h-[40dvh] overflow-y-auto">
-            {globalFree && tile(null, 'Toutes les dépenses', <BudgetIcon size="sm" />)}
-            {choices.map((c) => tile(c.id, c.name, <IconBadge icon={c.icon} image={c.image} color={c.color} size="sm" />))}
-          </div>
-        </>
-      )}
+    <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-[420px] max-h-[100dvh] overflow-y-auto bg-white rounded-t-[28px] sm:rounded-[32px] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} aria-label="Fermer" className="w-10 h-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+          <h2 className="flex-1 text-base font-bold text-center pr-10">{budget ? 'Modifier le budget' : 'Nouveau budget'}</h2>
+        </div>
 
-      <label className="text-xs font-semibold text-slate-500">Limite par mois ({currency})</label>
-      <input
-        inputMode="decimal"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        placeholder="ex. 150000"
-        className="w-full mt-1 px-4 py-3 rounded-2xl bg-slate-100 text-lg font-bold tabular-nums outline-none focus:ring-2 focus:ring-[#D8FB52]"
-      />
-      {past && (past.last > 0 || past.average > 0) && (
-        <div className="flex items-center justify-between gap-2 mt-2 p-3 rounded-2xl bg-slate-100">
-          <span className="text-xs text-slate-600">
-            Mois dernier : <b className="tabular-nums">{formatMoney(past.last, currency)}</b>
-            <br />
-            Moyenne sur 3 mois : <b className="tabular-nums">{formatMoney(past.average, currency)}</b>
+        {/* Montant */}
+        <div className="flex flex-col items-center pt-3 pb-2">
+          <div className="flex items-baseline gap-2">
+            <span className={`text-[38px] leading-none font-extrabold tracking-tight tabular-nums ${amount ? 'text-slate-900' : 'text-slate-300'}`}>{shown}</span>
+            <span className="px-2.5 py-1 rounded-full bg-slate-100 text-sm font-bold text-slate-700">{currency}</span>
+          </div>
+          <p className="mt-1.5 text-xs text-slate-500">par mois</p>
+        </div>
+
+        {/* Pour quoi ? */}
+        <button
+          onClick={() => !budget && setPicking((x) => !x)}
+          disabled={!!budget}
+          className={`w-full flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-2xl text-left border-2 transition ${
+            picking ? 'border-slate-900 bg-white' : 'border-transparent bg-slate-100'
+          } ${budget ? 'cursor-default' : 'cursor-pointer hover:bg-slate-200/70'}`}
+        >
+          {categoryId === undefined ? <span className="w-9 h-9 rounded-full bg-slate-200 shrink-0" /> : <BudgetIcon cat={cat} size="sm" />}
+          <span className="flex-1 min-w-0">
+            <span className="block text-[10px] font-semibold text-slate-500">Pour quoi ?</span>
+            <span className={`block text-sm font-bold truncate ${categoryId === undefined ? 'text-slate-400' : 'text-slate-900'}`}>
+              {categoryId === undefined ? 'Choisis une catégorie' : cat?.name ?? 'Toutes les dépenses'}
+            </span>
           </span>
-          {suggestion > 0 && (
-            <button onClick={() => setAmount(String(suggestion))} className="shrink-0 px-3 py-2 rounded-xl bg-white text-xs font-bold cursor-pointer">
-              Utiliser {formatMoney(suggestion, currency)}
-            </button>
+          {!budget && <ChevronDown className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${picking ? 'rotate-180' : ''}`} />}
+        </button>
+
+        <div className="mt-2 min-h-[300px]">
+          {picking ? (
+            <div className="animate-fade-in">
+              <p className="text-xs text-slate-500 mb-2">Les sous-catégories comptent dans leur catégorie.</p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {globalFree && tile(null, 'Toutes les dépenses', <BudgetIcon size="sm" />)}
+                {choices.map((c) => tile(c.id, c.name, <IconBadge icon={c.icon} image={c.image} color={c.color} size="sm" />))}
+              </div>
+            </div>
+          ) : (
+            <>
+              {past && (past.last > 0 || past.average > 0) ? (
+                <div className="flex gap-2 mb-2">
+                  {suggestion('Mois dernier', past.last)}
+                  {suggestion('Moyenne sur 3 mois', past.average)}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 text-center mb-2 py-2">Pas encore de dépenses dans cette catégorie ces derniers mois.</p>
+              )}
+              <div className="grid grid-cols-3 gap-1.5">
+                {KEYS.map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => press(k)}
+                    aria-label={k === 'del' ? 'Effacer' : k}
+                    className="h-11 rounded-2xl bg-slate-100 active:bg-slate-200 font-bold text-lg text-slate-800 flex items-center justify-center cursor-pointer"
+                  >
+                    {k === 'del' ? <Delete className="w-5 h-5" /> : k === '.' ? ',' : k}
+                  </button>
+                ))}
+              </div>
+              <button
+                disabled={!valid}
+                onClick={() => onSave({ categoryId: categoryId ?? null, amount: value, currency })}
+                className="w-full mt-2 py-3.5 rounded-2xl bg-[#D8FB52] disabled:bg-slate-100 disabled:text-slate-400 text-slate-900 font-bold text-sm cursor-pointer disabled:cursor-default"
+              >
+                {categoryId === undefined ? 'Choisis une catégorie' : !(value > 0) ? 'Saisis un montant' : `Enregistrer ${formatMoney(value, currency)} par mois`}
+              </button>
+            </>
           )}
         </div>
-      )}
-
-      <button
-        disabled={!valid}
-        onClick={() => onSave({ categoryId: categoryId ?? null, amount: value, currency })}
-        className="w-full mt-4 py-3.5 rounded-2xl bg-[#D8FB52] disabled:bg-slate-100 disabled:text-slate-400 text-slate-900 text-sm font-bold cursor-pointer"
-      >
-        {categoryId === undefined ? 'Choisis une catégorie' : !(value > 0) ? 'Saisis un montant' : 'Enregistrer'}
-      </button>
-    </Sheet>
+      </div>
+    </div>
   );
 };

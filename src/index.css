@@ -111,6 +111,17 @@ html.dark .chart-inc { --series: #059669; --ref: #8b95a5; }
 .toggle:checked { background: #22c55e; }
 .toggle:checked::after { translate: 18px 0; }
 
+/* Une fenêtre (feuille, menu, détail) est ouverte : la page derrière ne défile plus,
+   et le défilement de la fenêtre ne « déborde » pas sur la page. Toutes les fenêtres de l'app
+   sont des « fixed inset-0 z-50 ». */
+html:has(.fixed.inset-0.z-50) {
+  overflow: hidden;
+}
+.fixed.inset-0.z-50,
+.fixed.inset-0.z-50 .overflow-y-auto {
+  overscroll-behavior: contain;
+}
+
 /* Longues listes : le navigateur ne dessine que les lignes visibles à l'écran */
 .cv-auto {
   content-visibility: auto;
