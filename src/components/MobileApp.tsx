@@ -12,6 +12,7 @@ import { SettingsView } from './SettingsView';
 import { ProfileView } from './ProfileView';
 import { RistourneView } from './RistourneView';
 import { CategoriesView } from './CategoriesView';
+import { MonthReportCard } from './MonthReportCard';
 import { BudgetsView } from './BudgetsView';
 
 // Interface TÉLÉPHONE : plein écran, barre d'onglets en bas
@@ -87,6 +88,15 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               </div>
             )}
+            <div className="px-5 mb-3">
+              <MonthReportCard
+                allTransactions={allTransactions}
+                wallets={wallets}
+                activeWallet={p.activeWallet}
+                settings={settings}
+                onOpenReports={() => onNavigate('statistic')}
+              />
+            </div>
             <TransactionList
               transactions={transactions}
               onSelectTransaction={onSelectTransaction}

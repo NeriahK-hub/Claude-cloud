@@ -14,6 +14,7 @@ import { StatisticView } from './StatisticView';
 import { ProfileView } from './ProfileView';
 import { RistourneView } from './RistourneView';
 import { CategoriesView } from './CategoriesView';
+import { MonthReportCard } from './MonthReportCard';
 import { BudgetsView } from './BudgetsView';
 
 // Interface ORDINATEUR : menu à gauche, contenu en grille à droite
@@ -144,6 +145,14 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
               {p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               )}
+
+              <MonthReportCard
+                allTransactions={allTransactions}
+                wallets={wallets}
+                activeWallet={p.activeWallet}
+                settings={settings}
+                onOpenReports={() => onNavigate('statistic')}
+              />
 
               <div className="bg-white rounded-3xl p-6 border border-slate-100">
                 <div className="flex items-center justify-between mb-3">

@@ -71,6 +71,20 @@ button {
   html.dark .tint-bg { background-color: oklch(from var(--tint) max(l, 0.62) c h); }
 }
 
+/* Graphique « Rapport de ce mois » : couleurs validées (contraste + daltonisme), une paire par mode.
+   --series = ce mois-ci, --ref = moyenne des 3 mois précédents (gris de référence). */
+.chart-exp { --series: #e11d48; --ref: #64748b; }
+.chart-inc { --series: #059669; --ref: #475569; }
+html.dark .chart-exp { --series: #f43f5e; --ref: #8b95a5; }
+html.dark .chart-inc { --series: #059669; --ref: #8b95a5; }
+.chart-series { stroke: var(--series); }
+.chart-ref { stroke: var(--ref); }
+.chart-area { fill: var(--series); fill-opacity: 0.1; }
+.chart-dot { fill: var(--series); stroke: var(--color-white); }
+.chart-key-series { background: var(--series); }
+.chart-key-ref { background: var(--ref); }
+.chart-underline { border-color: var(--series); }
+
 /* Longues listes : le navigateur ne dessine que les lignes visibles à l'écran */
 .cv-auto {
   content-visibility: auto;
