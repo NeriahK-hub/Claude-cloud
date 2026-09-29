@@ -200,6 +200,15 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
   };
   const signInWithGoogle = async () => {
     const sb = await getClient();
+    // Vérifie avant de quitter l'app : sinon Supabase affiche une page d'erreur brute
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_ANON_KEY } });
+      const settings = res.ok ? await res.json() : null;
+      if (settings?.external && !settings.external.google) throw new Error('Unsupported provider: provider is not enabled');
+    } catch (err) {
+      if (err instanceof Error && /provider is not enabled/.test(err.message)) throw err;
+      // hors ligne ou réponse inattendue : on tente quand même
+    }
     const { error: e } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
     if (e) throw new Error(e.message);
   };
