@@ -66,6 +66,38 @@ export interface Settings {
   rates: Record<string, number>;
 }
 
+// Ristourne (tontine) : chacun cotise à chaque tour, un membre reçoit la cagnotte à tour de rôle
+export interface Ristourne {
+  id: string;
+  name: string;
+  contribution: number; // cotisation de chaque membre, à chaque tour
+  currency: string;
+  frequency: 'weekly' | 'biweekly' | 'monthly';
+  startDate: string; // AAAA-MM-JJ : date du 1er tour
+  members: RistourneMember[];
+  payments: RistournePayment[];
+  ownerId?: string; // compte en ligne : propriétaire (absent = moi)
+}
+
+export interface RistourneMember {
+  id: string;
+  name: string;
+  turn: number; // tour où ce membre reçoit la cagnotte (1, 2, 3…)
+  isMe?: boolean;
+  contact?: string; // e-mail pour l'inviter
+  userId?: string; // compte en ligne (il a rejoint)
+  invited?: boolean;
+  removed?: boolean;
+}
+
+export interface RistournePayment {
+  id: string;
+  memberId: string;
+  turn: number;
+  amount: number;
+  paidAt: string; // ISO
+}
+
 // Budget mensuel : pour une catégorie (sous-catégories comprises) ou pour toutes les dépenses
 export interface Budget {
   id: string;

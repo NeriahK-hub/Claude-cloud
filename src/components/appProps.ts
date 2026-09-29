@@ -1,4 +1,4 @@
-import { Budget, Settings, Transaction, Wallet } from '../types';
+import { Budget, Ristourne, RistourneMember, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { BalanceInfo } from '../lib/money';
 import { Backup, ImportPlan } from '../lib/importExport';
@@ -42,6 +42,13 @@ export interface SharedProps {
   onDeleteBudget: (id: string) => void;
   cloud: Cloud;
   onAddDebt: (preset?: DebtPreset) => void;
+  ristournes: Ristourne[];
+  onCreateRistourne: (r: Omit<Ristourne, 'id' | 'payments'>) => string;
+  onUpdateRistourne: (id: string, changes: Partial<Ristourne>) => void;
+  onDeleteRistourne: (id: string) => void;
+  onPayRistourne: (r: Ristourne, m: RistourneMember, turn: number, walletId: string | null) => void;
+  onUnpayRistourne: (r: Ristourne, paymentId: string) => void;
+  onReceiveRistourne: (r: Ristourne, turn: number, walletId: string) => void;
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
 }

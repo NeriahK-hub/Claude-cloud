@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Upload, FileSpreadsheet, DatabaseBackup, X, AlertTriangle, Loader2 } from 'lucide-react';
-import { Budget, Settings, Transaction, Wallet } from '../types';
+import { Budget, Ristourne, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { Backup, exportBackup, exportExcel, ImportPlan, planImport, readBackup, readImportFile, ReadResult } from '../lib/importExport';
 
@@ -9,6 +9,7 @@ interface DataSectionProps {
   transactions: Transaction[];
   categories: Category[];
   budgets: Budget[];
+  ristournes: Ristourne[];
   settings: Settings;
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
@@ -17,7 +18,7 @@ interface DataSectionProps {
 const fmtDate = (d: Date | null) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 
 // Paramètres > Mes données : importer (Money Lover, Excel, CSV, sauvegarde) et exporter
-export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions, categories, budgets, settings, onImport, onRestore }) => {
+export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions, categories, budgets, ristournes, settings, onImport, onRestore }) => {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'read' | 'excel' | null>(null);
   const [error, setError] = useState('');
@@ -80,7 +81,7 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
             <span className="block text-xs font-medium text-slate-500">{transactions.length} transactions, format Money Lover</span>
           </span>
         </button>
-        <button onClick={() => exportBackup({ wallets, transactions, categories, settings, budgets })} disabled={!!busy} className={btn}>
+        <button onClick={() => exportBackup({ wallets, transactions, categories, settings, budgets, ristournes })} disabled={!!busy} className={btn}>
           <DatabaseBackup className="w-5 h-5 text-indigo-600" />
           <span className="flex-1">
             Sauvegarde complète (.json)

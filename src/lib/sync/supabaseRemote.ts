@@ -35,5 +35,9 @@ export function supabaseRemote(sb: SupabaseClient, me: string): Remote {
       must(await sb.rpc('leave_wallet', { w: id }));
     },
     visibleWalletIds: async () => (must(await sb.from('wallets').select('id').is('deleted_at', null)) as { id: string }[]).map((r) => r.id),
+    leaveRistourne: async (id) => {
+      must(await sb.rpc('leave_ristourne', { r: id }));
+    },
+    visibleRistourneIds: async () => (must(await sb.from('ristournes').select('id').is('deleted_at', null)) as { id: string }[]).map((r) => r.id),
   };
 }

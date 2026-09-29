@@ -1,14 +1,14 @@
 // Correspondance entre les données de l'app (camelCase, localStorage) et les tables Supabase (snake_case).
 // Règle d'or : toRow(fromRow(ligne)) doit donner la même empreinte que la donnée locale,
 // sinon la synchro renverrait sans fin des modifications qui n'en sont pas.
-import { Budget, Settings, Transaction, Wallet, WalletMember } from '../../types';
+import { Budget, Ristourne, RistourneMember, RistournePayment, Settings, Transaction, Wallet, WalletMember } from '../../types';
 import { Category } from '../../data/categories';
 import { CustomIcon } from '../customIcons';
 import { isUuid } from '../ids';
 
 export type Row = Record<string, unknown>;
 
-export const TABLES = ['profiles', 'categories', 'custom_icons', 'wallets', 'wallet_members', 'transactions', 'budgets'] as const;
+export const TABLES = ['profiles', 'categories', 'custom_icons', 'wallets', 'wallet_members', 'transactions', 'budgets', 'ristournes', 'ristourne_members', 'ristourne_payments'] as const;
 export type TableName = (typeof TABLES)[number];
 
 // Tout ce qui se synchronise
@@ -20,6 +20,7 @@ export interface SyncData {
   settings: Settings;
   profileName: string;
   customIcons: CustomIcon[];
+  ristournes: Ristourne[];
 }
 
 // Empreinte courte d'une ligne (FNV-1a 32 bits) : sert à savoir ce qui a changé depuis la dernière synchro
@@ -257,4 +258,71 @@ export const budgetFromRow = (r: Row): Budget => ({
   amount: Number(r.amount),
   currency: String(r.currency),
   createdAt: iso(r.created_at),
+});
+
+// ---------- Ristournes ----------
+
+export const ristourneRow = (r: Ristourne): Row => ({
+  id: r.id,
+  name: r.name,
+  contribution: r.contribution,
+  currency: r.currency,
+  frequency: r.frequency,
+  start_date: r.startDate,
+});
+
+// Membres : seul le propriétaire les écrit
+export function ristourneMemberRows(r: Ristourne, me: string): Row[] {
+  if (r.ownerId && r.ownerId !== me) return [];
+  return r.members.map((m) => {
+    const email = isEmail(m.contact) ? m.contact!.trim().toLowerCase() : null;
+    return {
+      id: m.id,
+      ristourne_id: r.id,
+      user_id: m.isMe ? me : m.userId ?? null,
+      email,
+      name: m.name,
+      turn: m.turn,
+      status: m.removed ? 'removed' : m.isMe || m.userId ? 'active' : email ? 'invited' : 'active',
+    };
+  });
+}
+
+export const paymentRow = (r: Ristourne, p: RistournePayment): Row => ({
+  id: p.id,
+  ristourne_id: r.id,
+  member_id: p.memberId,
+  turn: p.turn,
+  amount: p.amount,
+  paid_at: iso(p.paidAt),
+});
+
+export const ristourneFromRow = (row: Row, me: string, existing?: Ristourne): Ristourne => ({
+  ...(existing ?? { members: [], payments: [] }),
+  id: String(row.id),
+  name: String(row.name),
+  contribution: Number(row.contribution),
+  currency: String(row.currency),
+  frequency: row.frequency as Ristourne['frequency'],
+  startDate: String(row.start_date).slice(0, 10),
+  ownerId: row.owner_id === me ? undefined : String(row.owner_id),
+});
+
+export const ristourneMemberFromRow = (row: Row, me: string, old?: RistourneMember): RistourneMember => ({
+  id: String(row.id),
+  name: String(row.name),
+  turn: Number(row.turn),
+  isMe: row.user_id === me ? true : undefined,
+  contact: (row.email as string | null) ?? (old?.contact && !isEmail(old.contact) ? old.contact : undefined),
+  userId: row.user_id && row.user_id !== me ? String(row.user_id) : undefined,
+  invited: row.status === 'invited' ? true : undefined,
+  removed: row.status === 'removed' || !!row.deleted_at ? true : undefined,
+});
+
+export const paymentFromRow = (row: Row): RistournePayment => ({
+  id: String(row.id),
+  memberId: String(row.member_id),
+  turn: Number(row.turn),
+  amount: Number(row.amount),
+  paidAt: iso(row.paid_at),
 });

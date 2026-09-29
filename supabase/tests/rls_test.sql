@@ -118,6 +118,9 @@ update ristournes set contribution = 1;
 select pg_temp.check((select contribution from ristournes) = 50, 'un membre ne peut pas changer la cotisation (modification ignorée)');
 select pg_temp.login(:'bob', 'Bob@Test.cd');
 select pg_temp.check((select count(*) from ristournes) + (select count(*) from ristourne_payments) = 0, 'Bob ne voit pas la ristourne');
+select pg_temp.login(:'carol', 'carol@test.cd');
+select leave_ristourne('bbbbbbbb-0000-0000-0000-000000000001');
+select pg_temp.check((select count(*) from ristournes) = 0, 'Carol quitte la ristourne et ne la voit plus');
 
 -- ===== Visiteur non connecté =====
 reset role;

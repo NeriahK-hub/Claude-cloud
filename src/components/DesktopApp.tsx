@@ -1,23 +1,16 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon, PieChart, HandCoins } from 'lucide-react';
 import { SharedProps } from './appProps';
 import { WalletsView, HomeWalletCard } from './WalletsView';
 import { isShared } from './Members';
-import { SettingsView } from './SettingsView';
 import { countsInStats, formatMoney, toMain, walletBalance } from '../lib/money';
 import { IconBadge, WalletChipIcon } from './AppIcon';
 import { ACTIONS, HomeAction } from './BalanceSection';
 import { Page } from './BottomNav';
 import { TransactionItem } from './TransactionItem';
-import { TransactionHistoryView } from './TransactionHistoryView';
-import { StatisticView } from './StatisticView';
-import { ProfileView } from './ProfileView';
-import { RistourneView } from './RistourneView';
-import { CategoriesView } from './CategoriesView';
 import { MonthReportCard } from './MonthReportCard';
 import { inThisMonth } from '../lib/periods';
-import { BudgetsView } from './BudgetsView';
-import { DebtsView } from './DebtsView';
+import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView } from './pages';
 
 // Interface ORDINATEUR : menu à gauche, contenu en grille à droite
 type DesktopAppProps = SharedProps;
@@ -86,6 +79,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
 
       {/* Contenu */}
       <main className="flex-1 min-w-0 px-8 py-6">
+        <Suspense fallback={null}>
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-extrabold tracking-tight">{pageTitle}</h1>
           <div className="flex items-center gap-3">
@@ -239,7 +233,18 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 onSelectTransaction={onSelectTransaction}
               />
             )}
-            {page === 'ristourne' && <RistourneView onBack={() => onNavigate('home')} currency={main} />}
+            {page === 'ristourne' && <RistourneView
+                ristournes={p.ristournes}
+                wallets={wallets.filter((w) => !w.archived)}
+                defaultCurrency={settings.mainCurrency}
+                onBack={() => onNavigate('home')}
+                onCreate={p.onCreateRistourne}
+                onUpdate={p.onUpdateRistourne}
+                onDelete={p.onDeleteRistourne}
+                onPay={p.onPayRistourne}
+                onUnpay={p.onUnpayRistourne}
+                onReceive={p.onReceiveRistourne}
+              />}
             {page === 'categories' && (
               <CategoriesView
                 categories={categories}
@@ -277,11 +282,12 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
               />
             )}
             {page === 'settings' && (
-              <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
+              <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
             )}
             {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} />}
           </div>
         )}
+        </Suspense>
       </main>
     </div>
   );

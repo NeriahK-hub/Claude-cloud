@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Transaction, NotificationItem, Wallet, Settings, Budget } from './types';
+import { Transaction, NotificationItem, Wallet, Settings, Budget, Ristourne, RistourneMember } from './types';
 import { usePersistentState } from './hooks/usePersistentState';
 import { convertBetween, formatMoney, makeBalance, toMain, totalInMain, walletBalance } from './lib/money';
 import { HomeAction } from './components/BalanceSection';
@@ -54,6 +54,7 @@ export default function App() {
   const [storedSettings, setSettings] = usePersistentState<Settings>('ap.settings', DEFAULT_SETTINGS);
   const [activeWalletId, setActiveWalletId] = usePersistentState<string>('ap.activeWallet', 'all');
   const [budgets, setBudgets] = usePersistentState<Budget[]>('ap.budgets', []);
+  const [ristournes, setRistournes] = usePersistentState<Ristourne[]>('ap.ristournes', []);
   const [notifications, setNotifications] = usePersistentState<NotificationItem[]>('ap.notifications', WELCOME);
 
   // Réglages : on complète avec les valeurs par défaut si la donnée sauvegardée est incomplète
@@ -337,6 +338,72 @@ export default function App() {
     );
     showToast(`Catégorie « ${changes.name} » modifiée`);
   };
+  // Opération créée par une autre fonction (ristourne…) : sortie ou entrée, catégorie par défaut
+  const recordTransaction = (o: { out: boolean; amount: number; currency: string; walletId: string; categoryId: string; title: string }) => {
+    const wallet = wallets.find((w) => w.id === o.walletId);
+    const cat = categories.find((c) => c.id === o.categoryId);
+    if (!wallet) return;
+    const inWallet = convertBetween(o.amount, o.currency, wallet.currency, settings) ?? o.amount;
+    const differs = o.currency !== wallet.currency;
+    setTransactions((prev) => [
+      {
+        id: uuid(),
+        title: o.title,
+        createdAt: new Date().toISOString(),
+        amount: o.out ? -inWallet : inWallet,
+        currency: wallet.currency,
+        walletId: wallet.id,
+        originalAmount: differs ? (o.out ? -o.amount : o.amount) : undefined,
+        originalCurrency: differs ? o.currency : undefined,
+        type: o.out ? 'payment' : 'receive',
+        category: cat?.name ?? (o.out ? 'Ristourne (cotisation)' : 'Ristourne (cagnotte reçue)'),
+        categoryId: cat?.id,
+        avatarType: cat?.image ? 'image' : 'icon',
+        avatarValue: cat?.image ?? cat?.icon ?? 'Handshake',
+        color: cat?.color ?? '#65A30D',
+        status: 'completed',
+      },
+      ...prev,
+    ]);
+  };
+
+  // Ristournes
+  const handleCreateRistourne = (r: Omit<Ristourne, 'id' | 'payments'>) => {
+    const id = uuid();
+    setRistournes((prev) => [...prev, { ...r, id, payments: [] }]);
+    showToast(`Ristourne « ${r.name} » créée`);
+    return id;
+  };
+  const handleUpdateRistourne = (id: string, changes: Partial<Ristourne>) => {
+    setRistournes((prev) => prev.map((r) => (r.id === id ? { ...r, ...changes } : r)));
+    showToast('Ristourne modifiée');
+  };
+  const handleDeleteRistourne = (id: string) => {
+    const r = ristournes.find((x) => x.id === id);
+    setRistournes((prev) => prev.filter((x) => x.id !== id));
+    showToast(r?.ownerId ? 'Tu as quitté la ristourne' : 'Ristourne supprimée');
+  };
+  const handlePayRistourne = (r: Ristourne, m: RistourneMember, turn: number, walletId: string | null) => {
+    setRistournes((prev) =>
+      prev.map((x) =>
+        x.id === r.id ? { ...x, payments: [...x.payments, { id: uuid(), memberId: m.id, turn, amount: r.contribution, paidAt: new Date().toISOString() }] } : x
+      )
+    );
+    if (m.isMe && walletId) {
+      recordTransaction({ out: true, amount: r.contribution, currency: r.currency, walletId, categoryId: 'ristourne-out', title: `${r.name} · tour ${turn}` });
+    }
+    showToast(m.isMe ? 'Ta cotisation est notée' : `Paiement de ${m.name} noté`);
+  };
+  const handleUnpayRistourne = (r: Ristourne, paymentId: string) => {
+    setRistournes((prev) => prev.map((x) => (x.id === r.id ? { ...x, payments: x.payments.filter((p) => p.id !== paymentId) } : x)));
+    showToast('Paiement annulé');
+  };
+  const handleReceiveRistourne = (r: Ristourne, turn: number, walletId: string) => {
+    const pot = r.members.filter((m) => !m.removed).length * r.contribution;
+    recordTransaction({ out: false, amount: pot, currency: r.currency, walletId, categoryId: 'ristourne-in', title: `${r.name} · cagnotte du tour ${turn}` });
+    showToast(`Cagnotte de ${formatMoney(pot, r.currency)} enregistrée`);
+  };
+
   // Budgets
   const handleAddBudget = (b: Omit<Budget, 'id' | 'createdAt'>) => {
     setBudgets((prev) => [...prev, { ...b, id: uuid(), createdAt: new Date().toISOString() }]);
@@ -415,6 +482,7 @@ export default function App() {
     setSettings({ ...DEFAULT_SETTINGS, ...b.settings });
     replaceCustomIcons(b.customIcons);
     setBudgets(b.budgets ?? []);
+    setRistournes(b.ristournes ?? []);
     setActiveWalletId('all');
     showToast('Sauvegarde restaurée');
   };
@@ -424,8 +492,8 @@ export default function App() {
   useDisplayPrefs(); // un réglage d'affichage change : toute l'app se redessine
   const customIcons = useCustomIcons();
   const dataRef = useRef<SyncData>(null!);
-  dataRef.current = { wallets, transactions, categories, budgets, settings, profileName: profile.name, customIcons };
-  const changeKey = useMemo(() => ({}), [wallets, transactions, categories, budgets, storedSettings, profile.name, customIcons]);
+  dataRef.current = { wallets, transactions, categories, budgets, settings, profileName: profile.name, customIcons, ristournes };
+  const changeKey = useMemo(() => ({}), [wallets, transactions, categories, budgets, storedSettings, profile.name, customIcons, ristournes]);
   const cloud = useCloud({
     getLocal: () => dataRef.current,
     replaceLocal: (d, map) => {
@@ -441,6 +509,7 @@ export default function App() {
       setWallets((prev) => applyList(prev, p.wallets ?? (all ? none : undefined), all));
       setTransactions((prev) => applyList(prev, p.transactions ?? (all ? none : undefined), all));
       setBudgets((prev) => applyList(prev, p.budgets ?? (all ? none : undefined), all));
+      setRistournes((prev) => applyList(prev, p.ristournes ?? (all ? none : undefined), all));
       if (p.categories) setCategories((prev) => applyList(prev, p.categories, all));
       if (p.customIcons || all) replaceCustomIcons(applyList(getAllCustomIcons(), p.customIcons ?? none, all));
       if (p.settings) setSettings(p.settings);
@@ -452,6 +521,7 @@ export default function App() {
       setTransactions([]);
       setCategories(DEFAULT_CATEGORIES);
       setBudgets([]);
+      setRistournes([]);
       setSettings(DEFAULT_SETTINGS);
       setActiveWalletId('all');
       setNotifications(WELCOME);
@@ -501,6 +571,13 @@ export default function App() {
     onDeleteBudget: handleDeleteBudget,
     cloud,
     onAddDebt: (preset?: DebtPreset) => openAdd('debt', preset ?? null),
+    ristournes,
+    onCreateRistourne: handleCreateRistourne,
+    onUpdateRistourne: handleUpdateRistourne,
+    onDeleteRistourne: handleDeleteRistourne,
+    onPayRistourne: handlePayRistourne,
+    onUnpayRistourne: handleUnpayRistourne,
+    onReceiveRistourne: handleReceiveRistourne,
     onImport: handleImport,
     onRestore: handleRestore,
   };

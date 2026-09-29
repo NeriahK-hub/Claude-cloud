@@ -23,6 +23,9 @@ const KEYS: Record<TableName, string> = {
   wallet_members: 'id',
   transactions: 'id',
   budgets: 'id',
+  ristournes: 'id',
+  ristourne_members: 'id',
+  ristourne_payments: 'id',
 };
 
 // Imite supabase-js / PostgREST : chaque requête avec le jeton de l'utilisateur, soumise aux règles
@@ -62,6 +65,8 @@ function pgRemote(me: string, email: string): Remote {
     softDelete: (t, ids) => as(async (c) => void (await c.query(`update public.${t} set deleted_at = now() where id::text = any($1)`, [ids]))),
     leaveWallet: (id) => as(async (c) => void (await c.query('select leave_wallet($1)', [id]))),
     visibleWalletIds: () => as(async (c) => (await c.query('select id from public.wallets where deleted_at is null')).rows.map((r) => r.id)),
+    leaveRistourne: (id) => as(async (c) => void (await c.query('select leave_ristourne($1)', [id]))),
+    visibleRistourneIds: () => as(async (c) => (await c.query('select id from public.ristournes where deleted_at is null')).rows.map((r) => r.id)),
   };
 }
 
@@ -78,6 +83,7 @@ class Device {
       categories: p.categories ? applyList(this.data.categories, p.categories, r) : this.data.categories,
       budgets: applyList(this.data.budgets, p.budgets, r),
       customIcons: applyList(this.data.customIcons, p.customIcons, r),
+      ristournes: applyList(this.data.ristournes, p.ristournes, r),
       settings: p.settings ?? this.data.settings,
       profileName: p.profileName ?? this.data.profileName,
     };
@@ -104,6 +110,7 @@ const fresh = (): SyncData => ({
   settings: { mainCurrency: 'USD', secondCurrency: null, rates: {} },
   profileName: '',
   customIcons: [],
+  ristournes: [],
 });
 
 let failures = 0;
@@ -209,6 +216,43 @@ async function main() {
   check(balance(a1.data, 'Dollars Américain Cash') === balance(b1.data, 'Dollars Américain Cash'), 'même solde du partagé chez Alice et chez Bob');
   const r7 = await b1.sync();
   check(r7.status === 'done' && r7.pushed === 0, 'Bob : rien à renvoyer');
+
+  // 7b. Ristourne partagée : Alice crée, Bob la voit et note son paiement, Alice note celui de Papa
+  const rid = uuid();
+  const [mAlice, mBob, mPapa] = [uuid(), uuid(), uuid()];
+  a1.data = {
+    ...a1.data,
+    ristournes: [{
+      id: rid, name: 'Ristourne des amis', contribution: 20, currency: 'USD', frequency: 'weekly', startDate: '2026-09-29', payments: [],
+      members: [
+        { id: mAlice, name: 'Alice', turn: 1, isMe: true },
+        { id: mBob, name: 'Bob', turn: 2, contact: 'bob@test.cd' },
+        { id: mPapa, name: 'Papa', turn: 3 },
+      ],
+    }],
+  };
+  await a1.sync();
+  await b1.sync();
+  const rb = b1.data.ristournes.find((r) => r.id === rid);
+  check(!!rb && rb.ownerId === ALICE && rb.members.find((m) => m.id === mBob)?.isMe === true, 'Bob voit la ristourne d\'Alice, et s\'y reconnaît');
+  const rb2 = await b1.sync();
+  check(rb2.status === 'done' && rb2.pushed === 0 && b1.data.ristournes.length === 1, 'Bob : resynchro sans rien renvoyer ni quitter la ristourne');
+  b1.data = { ...b1.data, ristournes: b1.data.ristournes.map((r) => ({ ...r, payments: [...r.payments, { id: uuid(), memberId: mBob, turn: 1, amount: 20, paidAt: new Date().toISOString() }] })) };
+  await b1.sync();
+  a1.data = { ...a1.data, ristournes: a1.data.ristournes.map((r) => ({ ...r, payments: [...r.payments, { id: uuid(), memberId: mPapa, turn: 1, amount: 20, paidAt: new Date().toISOString() }] })) };
+  await a1.sync();
+  await b1.sync();
+  check(a1.data.ristournes[0].payments.length === 2 && b1.data.ristournes[0].payments.length === 2, 'paiements de Bob et de Papa visibles des deux côtés');
+  const ra = await a1.sync();
+  check(ra.status === 'done' && ra.pushed === 0, 'Alice : rien à renvoyer');
+  // Bob quitte la ristourne : ses paiements restent pour Alice
+  b1.data = { ...b1.data, ristournes: [] };
+  await b1.sync();
+  check((await count(`select count(*) n from ristourne_payments where deleted_at is null`)) === 2, 'Bob quitte la ristourne : aucun paiement supprimé');
+  await a1.sync();
+  check(a1.data.ristournes[0].members.find((m) => m.id === mBob)?.removed === true, 'Alice voit que Bob a quitté la ristourne');
+  const rq = await b1.sync();
+  check(rq.status === 'done' && b1.data.ristournes.length === 0, 'la ristourne ne revient pas chez Bob');
 
   // 8. Première connexion sur un téléphone qui a déjà des données -> on demande
   const b2 = new Device('Bob-tablette', { ...fresh(), transactions: [{ ...bobTx, id: uuid(), walletId: 'wallet-cash' }] }, pgRemote(BOB, 'bob@test.cd'));

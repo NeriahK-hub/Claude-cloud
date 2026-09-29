@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronDown, Sun, Moon, SmartphoneIcon } from 'lucide-react';
-import { Budget, Settings, Transaction, Wallet } from '../types';
+import { Budget, Ristourne, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { Backup, ImportPlan } from '../lib/importExport';
 import { DataSection } from './DataSection';
@@ -18,6 +18,7 @@ interface SettingsViewProps {
   transactions: Transaction[];
   categories: Category[];
   budgets: Budget[];
+  ristournes: Ristourne[];
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
   onChange: (s: Settings) => void;
@@ -62,7 +63,7 @@ const THEMES: { id: ThemePref; label: string; Icon: typeof Sun }[] = [
   { id: 'dark', label: 'Sombre', Icon: Moon },
 ];
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, budgets, onImport, onRestore, onChange, onBack }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, budgets, ristournes, onImport, onRestore, onChange, onBack }) => {
   const [theme, setTheme] = useState(getThemePref);
   const [haptics, setHaptics] = useState(hapticsEnabled);
   const needed = currenciesNeedingRate(wallets, settings);
@@ -106,6 +107,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
           transactions={transactions}
           categories={categories}
           budgets={budgets}
+          ristournes={ristournes}
           settings={settings}
           onImport={onImport}
           onRestore={onRestore}

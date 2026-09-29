@@ -323,6 +323,14 @@ language sql security definer set search_path = public as $$
    where wallet_id = w and user_id = auth.uid() and role <> 'owner';
 $$;
 
+-- Quitter une ristourne (un membre qui n'en est pas le propriétaire)
+create or replace function public.leave_ristourne(r uuid) returns void
+language sql security definer set search_path = public as $$
+  update ristourne_members set status = 'removed'
+   where ristourne_id = r and user_id = auth.uid()
+     and not exists (select 1 from ristournes where id = r and owner_id = auth.uid());
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Règles d'accès (Row Level Security)
 -- Pas de règle DELETE : l'app supprime en remplissant deleted_at.
@@ -393,6 +401,7 @@ revoke all on all tables in schema public from anon;
 grant select, insert, update on all tables in schema public to authenticated;
 grant execute on function public.accept_invites() to authenticated;
 grant execute on function public.leave_wallet(uuid) to authenticated;
+grant execute on function public.leave_ristourne(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Temps réel : prévenir l'app quand un membre modifie un portefeuille partagé

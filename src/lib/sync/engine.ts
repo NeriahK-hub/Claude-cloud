@@ -3,7 +3,7 @@
 // Une synchro = 1) envoyer ce qui a changé ici depuis la dernière fois, 2) récupérer ce qui a changé
 // dans la base (autres appareils, autres membres), 3) oublier les portefeuilles qu'on ne voit plus.
 // Conflit (même opération modifiée à deux endroits) : la dernière modification envoyée l'emporte.
-import { Budget, Transaction, Wallet } from '../../types';
+import { Budget, Ristourne, Transaction, Wallet } from '../../types';
 import { Category } from '../../data/categories';
 import { CustomIcon } from '../customIcons';
 import { isUuid, uuid } from '../ids';
@@ -20,6 +20,12 @@ import {
   iconRow,
   memberRows,
   mergeMembers,
+  paymentFromRow,
+  paymentRow,
+  ristourneFromRow,
+  ristourneMemberFromRow,
+  ristourneMemberRows,
+  ristourneRow,
   profileRow,
   settingsFromRow,
   transactionFromRow,
@@ -37,6 +43,8 @@ export interface Remote {
   softDelete(table: TableName, ids: string[]): Promise<void>;
   leaveWallet(id: string): Promise<void>;
   visibleWalletIds(): Promise<string[]>;
+  leaveRistourne(id: string): Promise<void>;
+  visibleRistourneIds(): Promise<string[]>;
 }
 
 // Mémoire de la synchro sur cet appareil
@@ -45,9 +53,10 @@ export interface SyncMeta {
   cursors: Partial<Record<TableName, string>>; // dernière date updated_at reçue par table
   snap: Partial<Record<TableName, Record<string, string>>>; // empreinte de chaque ligne telle qu'envoyée / reçue
   foreignWallets: string[]; // portefeuilles partagés dont je ne suis pas propriétaire
+  foreignRistournes?: string[]; // ristournes dont je ne suis pas propriétaire
 }
 
-export const emptyMeta = (userId: string): SyncMeta => ({ userId, cursors: {}, snap: {}, foreignWallets: [] });
+export const emptyMeta = (userId: string): SyncMeta => ({ userId, cursors: {}, snap: {}, foreignWallets: [], foreignRistournes: [] });
 
 // Changements à appliquer aux données locales (sur la version la plus récente, pas sur une copie)
 export interface ListPatch<T> {
@@ -62,6 +71,7 @@ export interface SyncPatch {
   categories?: ListPatch<Category>;
   budgets?: ListPatch<Budget>;
   customIcons?: ListPatch<CustomIcon>;
+  ristournes?: ListPatch<Ristourne>;
   settings?: SyncData['settings'];
   profileName?: string;
 }
@@ -114,7 +124,7 @@ export function migrateIds(d: SyncData): { data: SyncData; map: Record<string, s
 }
 
 // Données « vides » : rien de plus que les portefeuilles de départ
-export const isTrivial = (d: SyncData) => d.transactions.length === 0 && d.budgets.length === 0 && d.wallets.length <= 2;
+export const isTrivial = (d: SyncData) => d.transactions.length === 0 && d.budgets.length === 0 && d.ristournes.length === 0 && d.wallets.length <= 2;
 
 // ---------- Envoi ----------
 
@@ -125,7 +135,8 @@ interface TableSpec {
 }
 
 // Mémoire d'une ligne : son empreinte, et pour une transaction « empreinte:portefeuille »
-const stamp = (t: TableName, r: Row) => (t === 'transactions' ? `${fingerprint(r)}:${r.wallet_id}` : fingerprint(r));
+const stamp = (t: TableName, r: Row) =>
+  t === 'transactions' ? `${fingerprint(r)}:${r.wallet_id}` : t === 'ristourne_payments' ? `${fingerprint(r)}:${r.ristourne_id}` : fingerprint(r);
 
 const SPECS: TableSpec[] = [
   { name: 'profiles', rows: (d, me) => [profileRow(d, me)], key: (r) => String(r.id) },
@@ -135,6 +146,10 @@ const SPECS: TableSpec[] = [
   { name: 'wallet_members', rows: (d, me) => d.wallets.flatMap((w) => memberRows(w, me)), key: (r) => String(r.id) },
   { name: 'transactions', rows: (d) => d.transactions.map(transactionRow), key: (r) => String(r.id) },
   { name: 'budgets', rows: (d) => d.budgets.map(budgetRow), key: (r) => String(r.id) },
+  // Ristournes : la ristourne et ses membres par le propriétaire, les paiements par tout membre
+  { name: 'ristournes', rows: (d, me) => d.ristournes.filter((r) => !r.ownerId || r.ownerId === me).map(ristourneRow), key: (r) => String(r.id) },
+  { name: 'ristourne_members', rows: (d, me) => d.ristournes.flatMap((r) => ristourneMemberRows(r, me)), key: (r) => String(r.id) },
+  { name: 'ristourne_payments', rows: (d) => d.ristournes.flatMap((r) => r.payments.map((p) => paymentRow(r, p))), key: (r) => String(r.id) },
 ];
 
 async function push(d: SyncData, meta: SyncMeta, remote: Remote): Promise<number> {
@@ -142,6 +157,9 @@ async function push(d: SyncData, meta: SyncMeta, remote: Remote): Promise<number
   const me = remote.me;
   // Portefeuilles partagés quittés depuis la dernière synchro (calculé avant de toucher aux mémoires)
   const leaving = new Set(Object.keys(meta.snap.wallets ?? {}).filter((id) => meta.foreignWallets.includes(id) && !d.wallets.some((w) => w.id === id)));
+  // Ristournes d'autrui quittées ici (elles ne sont jamais envoyées : on se retire, rien n'est supprimé)
+  const leftRistournes = (meta.foreignRistournes ?? []).filter((id) => !d.ristournes.some((r) => r.id === id));
+  for (const id of leftRistournes) await remote.leaveRistourne(id);
   for (const spec of SPECS) {
     const snap = { ...(meta.snap[spec.name] ?? {}) };
     const rows = spec.rows(d, me);
@@ -153,9 +171,15 @@ async function push(d: SyncData, meta: SyncMeta, remote: Remote): Promise<number
 
     // Supprimés ici depuis la dernière synchro.
     // Les opérations d'un portefeuille partagé qu'on QUITTE ne sont pas supprimées pour les autres.
-    const gone = Object.keys(snap).filter((k) => !keys.has(k) && !(spec.name === 'transactions' && leaving.has(snap[k].split(':')[1])));
+    const scope = (k: string) => snap[k].split(':')[1];
+    const gone = Object.keys(snap).filter(
+      (k) =>
+        !keys.has(k) &&
+        !(spec.name === 'transactions' && leaving.has(scope(k))) &&
+        !(spec.name === 'ristourne_payments' && leftRistournes.includes(scope(k)))
+    );
     const forgotten = Object.keys(snap).filter((k) => !keys.has(k) && !gone.includes(k));
-    if (gone.length && spec.name !== 'profiles' && spec.name !== 'wallet_members') {
+    if (gone.length && spec.name !== 'profiles' && spec.name !== 'wallet_members' && spec.name !== 'ristourne_members') {
       if (spec.name === 'wallets') {
         // Portefeuille d'un autre : on le quitte ; le mien : on le supprime
         for (const id of gone.filter((id) => meta.foreignWallets.includes(id))) await remote.leaveWallet(id);
@@ -170,6 +194,7 @@ async function push(d: SyncData, meta: SyncMeta, remote: Remote): Promise<number
     meta.snap[spec.name] = snap;
   }
   meta.foreignWallets = d.wallets.filter((w) => w.ownerId && w.ownerId !== me).map((w) => w.id);
+  meta.foreignRistournes = d.ristournes.filter((r) => r.ownerId && r.ownerId !== me).map((r) => r.id);
   return sent;
 }
 
@@ -332,6 +357,53 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
       remove.forEach((id) => delete snap[id]);
     }
   }
+  // Ristournes (+ membres et paiements, rangés dans chaque ristourne)
+  {
+    const rr = await fetch('ristournes');
+    const mr = await fetch('ristourne_members');
+    const pr = await fetch('ristourne_payments');
+    const touched = new Map<string, Ristourne>();
+    const base = (id: string) => touched.get(id) ?? d.ristournes.find((x) => x.id === id);
+    const remove = rr.rows.filter((r) => r.deleted_at).map((r) => String(r.id));
+    for (const row of rr.rows.filter((r) => !r.deleted_at)) touched.set(String(row.id), ristourneFromRow(row, me, base(String(row.id))));
+    for (const row of mr.rows) {
+      const r = base(String(row.ristourne_id));
+      if (!r) continue;
+      const old = r.members.find((m) => m.id === row.id);
+      const m = ristourneMemberFromRow(row, me, old);
+      touched.set(r.id, { ...r, members: old ? r.members.map((x) => (x.id === m.id ? m : x)) : [...r.members, m] });
+    }
+    for (const row of pr.rows) {
+      const r = base(String(row.ristourne_id));
+      if (!r) continue;
+      const without = r.payments.filter((x) => x.id !== row.id);
+      touched.set(r.id, { ...r, payments: row.deleted_at ? without : [...without, paymentFromRow(row)] });
+    }
+    // Ristournes qu'on ne voit plus (retiré, ou on l'a quittée ailleurs)
+    const visible = new Set(await remote.visibleRistourneIds());
+    remove.push(...d.ristournes.filter((r) => (rr.snap[r.id] !== undefined || r.ownerId) && !visible.has(r.id) && !remove.includes(r.id)).map((r) => r.id));
+    remove.forEach((id) => touched.delete(id));
+
+    // On ne réapplique pas ce qui n'a pas changé
+    const same = (a: Ristourne, b?: Ristourne) => !!b && JSON.stringify(a) === JSON.stringify(b);
+    const upsert = [...touched.values()].filter((r) => !same(r, d.ristournes.find((x) => x.id === r.id)));
+    if (upsert.length || remove.length) patch.ristournes = { upsert, remove };
+    for (const r of touched.values()) {
+      if (!r.ownerId || r.ownerId === me) rr.snap[r.id] = fingerprint(ristourneRow(r));
+      ristourneMemberRows(r, me).forEach((row) => (mr.snap[String(row.id)] = fingerprint(row)));
+      r.payments.forEach((p) => (pr.snap[p.id] = stamp('ristourne_payments', paymentRow(r, p))));
+    }
+    for (const id of remove) {
+      delete rr.snap[id];
+      const r = d.ristournes.find((x) => x.id === id);
+      r?.members.forEach((m) => delete mr.snap[m.id]);
+      r?.payments.forEach((p) => delete pr.snap[p.id]);
+    }
+    pr.rows.filter((row) => row.deleted_at).forEach((row) => delete pr.snap[String(row.id)]);
+    meta.foreignRistournes = applyList(d.ristournes, patch.ristournes)
+      .filter((r) => r.ownerId && r.ownerId !== me)
+      .map((r) => r.id);
+  }
   return { patch, count };
 }
 
@@ -352,6 +424,9 @@ export async function runSync(
     delete meta.cursors.wallets;
     delete meta.cursors.wallet_members;
     delete meta.cursors.transactions;
+    delete meta.cursors.ristournes;
+    delete meta.cursors.ristourne_members;
+    delete meta.cursors.ristourne_payments;
   }
 
   let replace = false;
@@ -367,7 +442,7 @@ export async function runSync(
   if (replace) {
     // On repart des données du compte : rien n'est envoyé, tout est reçu
     meta = emptyMeta(me);
-    const empty: SyncData = { ...getLocal(), wallets: [], transactions: [], budgets: [], customIcons: [] };
+    const empty: SyncData = { ...getLocal(), wallets: [], transactions: [], budgets: [], customIcons: [], ristournes: [] };
     const { patch, count } = await pull(empty, meta, remote);
     patch.replaceAll = true;
     return { status: 'done', patch, meta, pushed: 0, pulled: count };

@@ -1,21 +1,14 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { SharedProps } from './appProps';
 import { Header } from './Header';
 import { BalanceSection, HomeAction } from './BalanceSection';
 import { TransactionList } from './TransactionList';
 import { BottomNav, Page, TabType } from './BottomNav';
-import { TransactionHistoryView } from './TransactionHistoryView';
-import { StatisticView } from './StatisticView';
 import { WalletsView, HomeWalletCard } from './WalletsView';
 import { isShared } from './Members';
-import { SettingsView } from './SettingsView';
-import { ProfileView } from './ProfileView';
-import { RistourneView } from './RistourneView';
-import { CategoriesView } from './CategoriesView';
 import { MonthReportCard } from './MonthReportCard';
 import { SyncIndicator } from './Account';
-import { BudgetsView } from './BudgetsView';
-import { DebtsView } from './DebtsView';
+import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView } from './pages';
 
 // Interface TÉLÉPHONE : plein écran, barre d'onglets en bas
 interface MobileAppProps extends SharedProps {
@@ -36,6 +29,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
     // pt : laisse la place à l'encoche et à l'heure du vrai téléphone
     <div className="min-h-dvh w-full max-w-md mx-auto bg-slate-50 pt-[env(safe-area-inset-top)]">
       <div className={isTab ? 'pb-28' : 'pb-6'}>
+        <Suspense fallback={null}>
         {page === 'debts' && (
           <DebtsView
             transactions={allTransactions}
@@ -58,7 +52,18 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
             onSelectTransaction={onSelectTransaction}
           />
         )}
-        {page === 'ristourne' && <RistourneView onBack={() => onNavigate('home')} currency={settings.mainCurrency} />}
+        {page === 'ristourne' && <RistourneView
+            ristournes={p.ristournes}
+            wallets={wallets.filter((w) => !w.archived)}
+            defaultCurrency={settings.mainCurrency}
+            onBack={() => onNavigate('home')}
+            onCreate={p.onCreateRistourne}
+            onUpdate={p.onUpdateRistourne}
+            onDelete={p.onDeleteRistourne}
+            onPay={p.onPayRistourne}
+            onUnpay={p.onUnpayRistourne}
+            onReceive={p.onReceiveRistourne}
+          />}
 
         {page === 'categories' && (
           <CategoriesView
@@ -147,9 +152,10 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
           />
         )}
         {page === 'settings' && (
-          <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
+          <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
         )}
         {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} />}
+        </Suspense>
       </div>
 
       {isTab && (
