@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { cloudConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from '../config';
-import { migrateIds, runSync, SyncMeta, SyncPatch } from './engine';
+import { keepLocalEdits, migrateIds, runSync, SyncMeta, SyncPatch } from './engine';
 import type { SyncData } from './mapping';
 import { supabaseRemote } from './supabaseRemote';
 
@@ -93,13 +93,17 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
       // Une fois : les anciens identifiants deviennent des UUID avant le premier envoi
       const { data, map } = migrateIds(fns.current.getLocal());
       if (Object.keys(map).length) fns.current.replaceLocal(data, map);
-      const res = await runSync(() => fns.current.getLocal(), readMeta(), supabaseRemote(sb, u.id), decision);
+      let seen: SyncData | undefined; // données lues pour la réception (dernier appel)
+      const read = () => (seen = fns.current.getLocal());
+      const res = await runSync(read, readMeta(), supabaseRemote(sb, u.id), decision);
       if (res.status === 'needs-decision') {
         setRemoteWallets(res.remoteWallets);
         setStatus('needs-decision');
         return;
       }
       const p = res.patch;
+      // Modifié ici pendant la synchro : on garde la version d'ici et on refait un tour
+      if (seen && keepLocalEdits(p, res.meta, seen, fns.current.getLocal())) again.current = true;
       if (p.replaceAll || p.wallets || p.transactions || p.categories || p.budgets || p.customIcons || p.settings || p.profileName !== undefined) {
         skipChange.current = true; // ce changement vient de la base : pas besoin de le renvoyer
         fns.current.applyPatch(p);

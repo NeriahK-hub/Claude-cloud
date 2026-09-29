@@ -3,7 +3,7 @@
 // Prérequis : base « wallo_test » créée avec supabase/tests/local_auth_stub.sql + la migration.
 import pg from 'pg';
 import readXlsxFile from 'read-excel-file/node';
-import { runSync, applyList, migrateIds, Remote, SyncMeta, SyncPatch } from '../src/lib/sync/engine';
+import { runSync, applyList, migrateIds, keepLocalEdits, Remote, SyncMeta, SyncPatch } from '../src/lib/sync/engine';
 import { Row, SyncData, TableName } from '../src/lib/sync/mapping';
 import { fromSheets, planImport } from '../src/lib/importExport';
 import { DEFAULT_CATEGORIES } from '../src/data/categories';
@@ -91,11 +91,13 @@ class Device {
   async sync(decision?: 'merge' | 'replace') {
     const { data } = migrateIds(this.data);
     this.data = data;
-    const res = await runSync(() => this.data, this.meta, this.remote, decision);
+    let seen: SyncData | undefined;
+    const res = await runSync(() => (seen = this.data), this.meta, this.remote, decision);
     if (res.status === 'needs-decision') return res;
+    const again = !!seen && keepLocalEdits(res.patch, res.meta, seen, this.data); // comme useCloud
     this.apply(res.patch);
     this.meta = res.meta;
-    return res;
+    return { ...res, again };
   }
 }
 
@@ -286,6 +288,41 @@ async function main() {
   await a1.sync();
   await a2.sync();
   check(!a2.data.wallets.some((w) => w.id === orange.id) && !a2.data.transactions.some((x) => x.walletId === orange.id), 'portefeuille supprimé sur les autres appareils, avec ses transactions');
+
+  // 11. Archiver / supprimer PENDANT une synchro en cours : rien ne « revient »
+  a1.data = { ...a1.data, wallets: a1.data.wallets.map((w) => ({ ...w, name: w.name })) }; // tout est « récent » côté base
+  await a1.sync();
+  const [toArchive, toDelete] = a1.data.wallets.filter((w) => !w.ownerId || w.ownerId === ALICE).slice(0, 2);
+  const realPull = a1.remote.pull;
+  let touchedOnce = false;
+  a1.remote = {
+    ...a1.remote,
+    pull: async (t, since) => {
+      const rows = await realPull(t, since);
+      if (t === 'wallets' && !touchedOnce) {
+        touchedOnce = true; // l'utilisateur agit pendant que la réponse arrive
+        a1.data = {
+          ...a1.data,
+          wallets: a1.data.wallets.filter((w) => w.id !== toDelete.id).map((w) => (w.id === toArchive.id ? { ...w, archived: true } : w)),
+          transactions: a1.data.transactions.filter((x) => x.walletId !== toDelete.id),
+        };
+      }
+      return rows;
+    },
+  };
+  await db.query(`update public.wallets set name = name where id = any($1)`, [[toArchive.id, toDelete.id]]); // lignes renvoyées par la base
+  const r11 = await a1.sync();
+  check(a1.data.wallets.find((w) => w.id === toArchive.id)?.archived === true, 'portefeuille archivé pendant la synchro : reste archivé');
+  check(!a1.data.wallets.some((w) => w.id === toDelete.id), 'portefeuille supprimé pendant la synchro : ne revient pas');
+  check(r11.status === 'done' && (r11 as { again?: boolean }).again === true, 'une nouvelle synchro est demandée');
+  a1.remote = { ...a1.remote, pull: realPull };
+  await a1.sync();
+  await a1.sync();
+  check(a1.data.wallets.find((w) => w.id === toArchive.id)?.archived === true && !a1.data.wallets.some((w) => w.id === toDelete.id), 'après les synchros suivantes : toujours archivé / supprimé');
+  check((await count(`select count(*) as n from public.wallets where id = '${toArchive.id}' and archived`)) === 1, 'archivage envoyé à la base');
+  check((await count(`select count(*) as n from public.wallets where id = '${toDelete.id}' and deleted_at is not null`)) === 1, 'suppression envoyée à la base');
+  await a2.sync();
+  check(a2.data.wallets.find((w) => w.id === toArchive.id)?.archived === true && !a2.data.wallets.some((w) => w.id === toDelete.id), 'le 2e appareil voit l\'archivage et la suppression');
 
   console.log(failures ? `\n${failures} ÉCHEC(S)` : '\n=== Synchro : tous les tests sont passés ===');
   await db.end();

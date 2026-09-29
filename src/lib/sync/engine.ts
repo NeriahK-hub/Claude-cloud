@@ -407,6 +407,43 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
   return { patch, count };
 }
 
+// ---------- Modifications faites PENDANT la synchro ----------
+// La réception part des données lues au début (`before`). Si, entre-temps, un élément a été
+// modifié, ajouté ou supprimé ici (`now`), la version reçue est plus ancienne : on ne l'applique
+// pas (sinon un portefeuille archivé ou supprimé « revient »), et on marque l'élément pour qu'il
+// soit renvoyé au prochain tour. Renvoie true s'il faut refaire une synchro.
+const LISTS = [
+  ['wallets', 'wallets'],
+  ['transactions', 'transactions'],
+  ['categories', 'categories'],
+  ['budgets', 'budgets'],
+  ['ristournes', 'ristournes'],
+  ['customIcons', 'custom_icons'],
+] as const;
+
+export function keepLocalEdits(patch: SyncPatch, meta: SyncMeta, before: SyncData, now: SyncData): boolean {
+  if (patch.replaceAll || before === now) return false;
+  let dirtyAny = false;
+  for (const [key, table] of LISTS) {
+    const prev = new Map<string, unknown>(before[key].map((x) => [x.id, x]));
+    const cur = new Map<string, { id: string; walletId?: string }>(now[key].map((x) => [x.id, x]));
+    const dirty = new Set<string>();
+    for (const [id, x] of cur) if (prev.get(id) !== x) dirty.add(id); // modifié ou ajouté
+    for (const id of prev.keys()) if (!cur.has(id)) dirty.add(id); // supprimé
+    if (!dirty.size) continue;
+    dirtyAny = true;
+    const lp = patch[key] as ListPatch<{ id: string }> | undefined;
+    if (lp) (patch[key] as ListPatch<{ id: string }>) = { ...lp, upsert: lp.upsert.filter((x) => !dirty.has(x.id)) };
+    // Modifié ici : empreinte invalide -> renvoyé. Supprimé ici : l'empreinte reste -> suppression envoyée.
+    const snap = (meta.snap[table] ??= {});
+    for (const id of dirty) {
+      const x = cur.get(id);
+      if (x) snap[id] = table === 'transactions' ? `dirty:${x.walletId}` : 'dirty';
+    }
+  }
+  return dirtyAny;
+}
+
 // ---------- Une synchro complète ----------
 // getLocal() est rappelé au moment de l'envoi pour prendre les données les plus récentes.
 export async function runSync(

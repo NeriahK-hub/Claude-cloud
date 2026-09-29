@@ -34,6 +34,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
   const [adjusting, setAdjusting] = useState<Wallet | null>(null);
   const [sharing, setSharing] = useState<Wallet | null>(null);
   const [reordering, setReordering] = useState(false);
+  const [showArchives, setShowArchives] = useState(false);
   const viewing = wallets.find((w) => w.id === viewingId) ?? null;
 
   const active = wallets.filter((w) => !w.archived);
@@ -186,20 +187,62 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
     );
   }
 
+  // Archives : un écran à part, ouvert par le bouton « Archives »
+  if (showArchives && archived.length > 0) {
+    return (
+      <div className="px-5 pt-4 pb-8 animate-screen">
+        <div className="flex items-center gap-3 mb-2">
+          <button
+            onClick={() => setShowArchives(false)}
+            aria-label="Retour"
+            className="w-11 h-11 shrink-0 rounded-full bg-white border border-slate-100 flex items-center justify-center cursor-pointer"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h1 className="flex-1 text-xl font-bold text-slate-900">Archives</h1>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Hors du total et des listes, mais leur historique est gardé. Touche <ArchiveRestore className="inline w-3.5 h-3.5 -mt-0.5" /> pour en restaurer un.
+        </p>
+        <div className="space-y-3 stagger">{archived.map(card)}</div>
+        {sheets}
+      </div>
+    );
+  }
+
   return (
     <div className="px-5 pt-4 pb-8 animate-screen">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-bold text-slate-900">Portefeuilles</h1>
+        <div className="flex items-center gap-2">
+        {archived.length > 0 && !reordering && (
+          <button
+            onClick={() => setShowArchives(true)}
+            aria-label={`Archives (${archived.length})`}
+            title="Archives"
+            className="relative w-10 h-10 rounded-full bg-white border border-slate-100 text-slate-700 flex items-center justify-center cursor-pointer hover:bg-slate-50"
+          >
+            <Archive className="w-4 h-4" />
+            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[#D8FB52] text-slate-900 text-[10px] font-extrabold flex items-center justify-center tabular-nums">
+              {archived.length}
+            </span>
+          </button>
+        )}
         {active.length > 1 && (
           <button
             onClick={() => setReordering((r) => !r)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold cursor-pointer transition ${
-              reordering ? 'bg-[#D8FB52] text-slate-900' : 'bg-white border border-slate-100 text-slate-700 hover:bg-slate-50'
+            aria-label={reordering ? 'Terminé' : 'Réorganiser'}
+            title={reordering ? undefined : 'Réorganiser'}
+            className={`flex items-center justify-center cursor-pointer transition ${
+              reordering
+                ? 'px-4 h-10 rounded-full bg-[#D8FB52] text-slate-900 text-xs font-bold'
+                : 'w-10 h-10 rounded-full bg-white border border-slate-100 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            {reordering ? 'Terminé' : <><ArrowUpDown className="w-3.5 h-3.5" /> Réorganiser</>}
+            {reordering ? 'Terminé' : <ArrowUpDown className="w-4 h-4" />}
           </button>
         )}
+        </div>
       </div>
 
       {reordering ? (
@@ -273,12 +316,6 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
             {active.length === 0 && <p className="text-center text-sm text-slate-400 py-6">Aucun portefeuille actif</p>}
           </div>
 
-          {archived.length > 0 && (
-            <>
-              <h2 className="text-sm font-bold text-slate-500 mt-6 mb-3">Archivés</h2>
-              <div className="space-y-3">{archived.map(card)}</div>
-            </>
-          )}
         </>
       )}
 
