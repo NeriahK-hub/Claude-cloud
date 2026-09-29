@@ -122,6 +122,43 @@ html:has(.fixed.inset-0.z-50) {
   overscroll-behavior: contain;
 }
 
+/* Sélection (tuile choisie : portefeuille, catégorie, période…) : pas de gros cadre,
+   un liseré fin couleur citron + un voile léger ; une petite coche est ajoutée par le composant.
+   Un sélecteur ouvert (Type, Portefeuille…) s'éclaircit simplement (.is-open). */
+:root {
+  --sel-ring: #8fbf1f;
+  --sel-bg: rgb(216 251 82 / 0.3);
+  --sel-check: #D8FB52;
+}
+html.dark {
+  --sel-ring: rgb(216 251 82 / 0.75);
+  --sel-bg: rgb(216 251 82 / 0.08);
+}
+.is-selected {
+  background-color: var(--sel-bg);
+  box-shadow: inset 0 0 0 1.5px var(--sel-ring);
+}
+.sel-ring {
+  box-shadow: inset 0 0 0 1.5px var(--sel-ring);
+}
+.is-open {
+  background-color: var(--color-slate-200);
+}
+.sel-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--sel-check);
+  color: #0d1015;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in 0.15s ease-out both;
+}
+
 /* Longues listes : le navigateur ne dessine que les lignes visibles à l'écran */
 .cv-auto {
   content-visibility: auto;

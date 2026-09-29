@@ -54,7 +54,7 @@ export const DebtsView: React.FC<DebtsViewProps> = ({ transactions, settings, on
         setSide(s);
       }}
       aria-pressed={side === s}
-      className={`text-left p-3.5 rounded-3xl border-2 cursor-pointer transition ${side === s ? 'border-slate-900 bg-white' : 'border-transparent bg-white/60 hover:bg-white'}`}
+      className={`text-left p-3.5 rounded-3xl border-2 cursor-pointer transition ${side === s ? 'bg-white sel-ring border-transparent' : 'border-transparent bg-white/60 hover:bg-white'}`}
     >
       <div className="text-xs font-semibold text-slate-500">{label}</div>
       <div className={`text-lg font-extrabold tabular-nums ${s === 'receivable' ? 'text-emerald-600' : 'text-rose-600'}`}>{money(totals[s])}</div>

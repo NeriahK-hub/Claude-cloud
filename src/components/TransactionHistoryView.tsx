@@ -149,7 +149,7 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
                 onClick={() => { haptic(); setWalletId(w.id); }}
                 aria-pressed={on}
                 className={`shrink-0 flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full text-xs font-semibold cursor-pointer border transition-colors ${
-                  on ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'
+                  on ? 'bg-[#D8FB52] text-slate-900 border-transparent' : 'bg-white text-slate-700 border-slate-200'
                 }`}
               >
                 {'icon' in w ? (

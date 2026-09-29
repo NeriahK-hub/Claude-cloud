@@ -10,6 +10,7 @@ import { currencyInfo } from '../data/currencies';
 import { convertBetween, countsInStats, formatMoney, walletBalance } from '../lib/money';
 import { inThisMonth } from '../lib/periods';
 import { isShared, MembersSheet, MemberStack, SharingBlock, activeMembers, memberOf, MemberAvatar, ME_ID } from './Members';
+import { SelCheck } from './SelCheck';
 
 interface WalletsViewProps {
   wallets: Wallet[];
@@ -548,7 +549,7 @@ const WalletSheet: React.FC<{
                     key={col}
                     onClick={() => setColor(col)}
                     aria-label={`Couleur ${col}`}
-                    className={`w-7 h-7 rounded-full cursor-pointer ${color === col ? 'ring-2 ring-offset-2 ring-slate-900' : ''}`}
+                    className={`w-7 h-7 rounded-full cursor-pointer ${color === col ? 'ring-2 ring-offset-2 ring-[var(--sel-ring)]' : ''}`}
                     style={{ backgroundColor: col }}
                   />
                 ))}
@@ -908,10 +909,11 @@ const WalletSelect: React.FC<{ label: string; wallets: Wallet[]; value: string; 
         <button
           key={w.id}
           onClick={() => onChange(w.id)}
-          className={`min-w-0 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-2xl border-2 text-center cursor-pointer transition ${
-            w.id === value ? 'border-slate-900 bg-[#D8FB52]/40' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
+          className={`relative min-w-0 flex flex-col items-center gap-0.5 px-1 py-2 rounded-2xl text-center cursor-pointer transition ${
+            w.id === value ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200/70'
           }`}
         >
+          {w.id === value && <SelCheck />}
           <IconBadge icon={w.icon} image={w.image} color={w.color} size="sm" />
           <span className="w-full text-[11px] font-bold text-slate-900 leading-tight truncate">{w.name}</span>
           <span className="w-full text-[10px] text-slate-500 tabular-nums truncate">{formatMoney(balanceOf(w), w.currency)}</span>

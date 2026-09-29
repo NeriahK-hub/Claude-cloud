@@ -65,7 +65,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({ choices, icon, image, co
             onClick={() => onIcon(name)}
             aria-label={custom.find((i) => i.id === name)?.name ?? name}
             className={`h-10 rounded-xl flex items-center justify-center cursor-pointer ${
-              icon === name ? 'ring-2 ring-slate-900' : 'hover:bg-slate-100'
+              icon === name ? 'sel-ring' : 'hover:bg-slate-100'
             }`}
             style={icon === name ? { backgroundColor: color + '22' } : undefined}
           >

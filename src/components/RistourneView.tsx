@@ -8,6 +8,7 @@ import { useProfile } from '../lib/profile';
 import { MemberAvatar } from './Members';
 import { IconBadge } from './AppIcon';
 import { haptic } from '../lib/haptics';
+import { SelCheck } from './SelCheck';
 
 interface RistourneViewProps {
   ristournes: Ristourne[];
@@ -367,8 +368,9 @@ const WalletChoiceSheet: React.FC<{
             <button
               key={w.id}
               onClick={() => setWalletId(w.id)}
-              className={`min-w-0 flex flex-col items-center gap-1 p-2 rounded-2xl border-2 cursor-pointer ${walletId === w.id ? 'border-slate-900 bg-[#D8FB52]/40' : 'border-transparent bg-slate-100'}`}
+              className={`relative min-w-0 flex flex-col items-center gap-1 p-2 rounded-2xl cursor-pointer transition ${walletId === w.id ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200/70'}`}
             >
+              {walletId === w.id && <SelCheck />}
               <IconBadge icon={w.icon} image={w.image} color={w.color} size="sm" />
               <span className="w-full text-center text-[11px] font-bold truncate">{w.name}</span>
             </button>
@@ -376,7 +378,7 @@ const WalletChoiceSheet: React.FC<{
           {allowNone && (
             <button
               onClick={() => setWalletId(null)}
-              className={`min-w-0 flex flex-col items-center justify-center gap-1 p-2 rounded-2xl border-2 cursor-pointer ${walletId === null ? 'border-slate-900 bg-[#D8FB52]/40' : 'border-transparent bg-slate-100'}`}
+              className={`relative min-w-0 flex flex-col items-center justify-center gap-1 p-2 rounded-2xl cursor-pointer transition ${walletId === null ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200/70'}`}
             >
               <WalletIcon className="w-5 h-5 text-slate-400" />
               <span className="text-[11px] font-bold text-slate-500 text-center leading-tight">Ne pas noter de dépense</span>

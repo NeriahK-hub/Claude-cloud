@@ -272,7 +272,7 @@ export const MergeDialog: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
   const option = (Icon: typeof Merge, title: string, text: string, onClick: () => void, danger = false) => (
     <button
       onClick={onClick}
-      className={`w-full text-left p-4 rounded-2xl border-2 flex gap-3 cursor-pointer ${danger ? 'border-red-200 hover:bg-red-50' : 'border-slate-200 hover:border-slate-900'}`}
+      className={`w-full text-left p-4 rounded-2xl flex gap-3 cursor-pointer transition ${danger ? 'bg-red-50/60 hover:bg-red-50' : 'bg-slate-100 hover:bg-slate-200'}`}
     >
       <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${danger ? 'text-red-600' : 'text-slate-800'}`} />
       <span>

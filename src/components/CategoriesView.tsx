@@ -221,7 +221,7 @@ const CategorySheet: React.FC<{
                   key={col}
                   onClick={() => setColor(col)}
                   aria-label={`Couleur ${col}`}
-                  className={`w-7 h-7 rounded-full cursor-pointer ${color === col ? 'ring-2 ring-offset-2 ring-slate-900' : ''}`}
+                  className={`w-7 h-7 rounded-full cursor-pointer ${color === col ? 'ring-2 ring-offset-2 ring-[var(--sel-ring)]' : ''}`}
                   style={{ backgroundColor: col }}
                 />
               ))}

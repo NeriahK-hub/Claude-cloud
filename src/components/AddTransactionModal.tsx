@@ -8,6 +8,7 @@ import { Settings, Wallet } from '../types';
 import { CURRENCIES } from '../data/currencies';
 import { convertBetween, formatMoney } from '../lib/money';
 import { haptic } from '../lib/haptics';
+import { SelCheck } from './SelCheck';
 
 export type AddMode = 'expense' | 'income' | 'debt';
 
@@ -186,10 +187,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     <button
       key={key}
       onClick={onClick}
-      className={`min-w-0 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 rounded-2xl text-center border-2 transition cursor-pointer ${
-        active ? 'border-slate-900 bg-[#D8FB52]/40' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
+      className={`relative min-w-0 flex flex-col items-center justify-center gap-0.5 px-1 py-2 rounded-2xl text-center transition cursor-pointer ${
+        active ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200/70'
       }`}
     >
+      {active && <SelCheck />}
       {badge}
       <span className="w-full text-[11px] font-bold text-slate-900 leading-tight line-clamp-2 [overflow-wrap:anywhere]">{title}</span>
       {sub}
@@ -292,8 +294,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   };
 
   const selectorCls = (active: boolean) =>
-    `min-w-0 flex-1 flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-2xl text-left cursor-pointer transition border-2 ${
-      active ? 'border-slate-900 bg-white' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
+    `min-w-0 flex-1 flex items-center gap-2 pl-1.5 pr-2.5 py-2 rounded-2xl text-left cursor-pointer transition ${
+      active ? 'is-open' : 'bg-slate-100 hover:bg-slate-200/70'
     }`;
 
   return (

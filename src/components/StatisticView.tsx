@@ -186,7 +186,7 @@ export const StatisticView: React.FC<StatisticViewProps> = ({
               key={id}
               onClick={() => setSide(id)}
               className={`text-left p-3 rounded-2xl border-2 cursor-pointer transition ${
-                side === id ? 'border-slate-900 bg-slate-50' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
+                side === id ? 'is-selected border-transparent' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
               }`}
             >
               <div className="text-xs font-semibold text-slate-500">{label}</div>
