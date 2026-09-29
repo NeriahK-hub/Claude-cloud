@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wallo · Confidentialité</title>
+<link rel="icon" href="/favicon.png" />
+<style>
+  :root { --bg: #f4f6f8; --card: #fff; --ink: #0f172a; --muted: #475569; --line: #e2e8f0; --accent: #D8FB52; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0d1015; --card: #171b22; --ink: #f1f5f9; --muted: #a0aab8; --line: #262c36; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  header img { width: 44px; height: 44px; border-radius: 12px; }
+  h1 { font-size: 28px; margin: 0; }
+  h2 { font-size: 18px; margin: 28px 0 6px; }
+  p, li { color: var(--muted); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 8px 20px 16px; }
+  a { color: inherit; }
+  .back { display: inline-block; margin-top: 24px; padding: 10px 18px; border-radius: 999px; background: var(--accent); color: #0f172a; font-weight: 700; text-decoration: none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/icons/icon-192.png" alt="" />
+    <div>
+      <h1>Confidentialité</h1>
+      <p style="margin:0">Wallo · mise à jour le 29 septembre 2026</p>
+    </div>
+  </header>
+  <section>
+    <h2>Ce que Wallo enregistre</h2>
+    <p>Ce que tu saisis dans l'app : portefeuilles, opérations, catégories, budgets, dettes, ristournes et icônes personnalisées. Si tu te connectes, ton adresse e-mail, et avec Google ton nom et ta photo de profil.</p>
+
+    <h2>Où sont tes données</h2>
+    <p>Sans compte, tout reste sur ton appareil. Avec un compte, tes données sont aussi copiées dans une base de données hébergée par Supabase dans l'Union européenne (Irlande), pour la synchronisation entre tes appareils. Les échanges sont chiffrés (HTTPS).</p>
+
+    <h2>Qui peut les voir</h2>
+    <p>Toi seul, sauf ce que tu partages : les membres d'un portefeuille partagé voient ce portefeuille et ses opérations, et les membres d'une ristourne voient cette ristourne. Des règles de sécurité dans la base empêchent tout autre accès.</p>
+
+    <h2>Ce que Wallo ne fait pas</h2>
+    <ul>
+      <li>Pas de publicité, pas de revente ni de partage de tes données.</li>
+      <li>Pas d'accès à ton compte bancaire : tu saisis toi-même tes opérations.</li>
+      <li>Wallo n'utilise ton compte Google que pour te connecter (nom, e-mail, photo).</li>
+    </ul>
+
+    <h2>Tes droits</h2>
+    <p>Tu peux exporter tes données à tout moment (Paramètres › Mes données). Tu peux demander la suppression de ton compte et de toutes tes données en écrivant à l'adresse e-mail d'assistance affichée lors de la connexion avec Google ; elle est faite sous 30 jours.</p>
+  </section>
+  <a class="back" href="/">Ouvrir Wallo</a>
+</main>
+</body>
+</html>
