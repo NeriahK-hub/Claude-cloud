@@ -3,7 +3,7 @@
 ## Installer le schéma (une seule fois)
 
 1. Dans ton projet Supabase : **SQL Editor** › **New query**.
-2. Colle tout le contenu de `migrations/20260929000000_wallo_init.sql`, puis **Run**.
+2. Colle tout le contenu de `migrations/20260929000000_wallo_init.sql`, puis **Run**. Recommence avec chaque fichier suivant de `migrations/`, dans l'ordre (ex. `20260930000000_delete_account.sql`).
 3. Tu dois voir « Success. No rows returned ».
 
 Le schéma crée les tables (profils, portefeuilles et leurs membres, transactions, catégories,
@@ -16,7 +16,7 @@ Avec un PostgreSQL 16 local :
 
 ```bash
 createdb wallo_test
-psql -v ON_ERROR_STOP=1 -d wallo_test -f supabase/tests/local_auth_stub.sql -f supabase/migrations/20260929000000_wallo_init.sql
+psql -v ON_ERROR_STOP=1 -d wallo_test -f supabase/tests/local_auth_stub.sql -f supabase/migrations/20260929000000_wallo_init.sql -f supabase/migrations/20260930000000_delete_account.sql
 psql -v ON_ERROR_STOP=1 -d wallo_test -f supabase/tests/rls_test.sql
 ```
 

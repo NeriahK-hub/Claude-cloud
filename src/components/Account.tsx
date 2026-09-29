@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace } from 'lucide-react';
+import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace, Trash2 } from 'lucide-react';
 import type { Cloud } from '../lib/sync/useCloud';
 
 // Messages d'erreur de Supabase, en clair
@@ -8,6 +8,7 @@ function frenchError(msg: string): string {
   if (/after \d+ seconds|rate limit|too many/i.test(msg)) return 'Trop de demandes : attends une minute avant de redemander un code.';
   if (/invalid.*email|email.*invalid/i.test(msg)) return "Cette adresse e-mail n'est pas valide.";
   if (/provider is not enabled|unsupported provider/i.test(msg)) return "La connexion Google n'est pas encore activée sur le compte en ligne.";
+  if (/delete_my_account/i.test(msg)) return "La suppression de compte n'est pas encore activée sur le serveur.";
   if (/fetch|network/i.test(msg)) return 'Pas de connexion internet. Réessaie quand le réseau revient.';
   return msg;
 }
@@ -43,6 +44,7 @@ export const SyncIndicator: React.FC<{ cloud: Cloud; onClick?: () => void }> = (
 export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
   const [login, setLogin] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [, force] = useState(0);
   useEffect(() => {
     const t = setInterval(() => force((n) => n + 1), 30_000); // « il y a 2 min » reste juste
@@ -126,11 +128,71 @@ export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
           </div>
         </div>
       ) : (
-        <button onClick={() => setConfirmOut(true)} className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-red-600 cursor-pointer">
-          <LogOut className="w-3.5 h-3.5" /> Se déconnecter
-        </button>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <button onClick={() => setConfirmOut(true)} className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-red-600 cursor-pointer">
+            <LogOut className="w-3.5 h-3.5" /> Se déconnecter
+          </button>
+          <button onClick={() => setDeleting(true)} className="text-xs font-semibold text-slate-400 hover:text-red-600 cursor-pointer">
+            Supprimer mon compte
+          </button>
+        </div>
       )}
+      {deleting && <DeleteAccountSheet cloud={cloud} onClose={() => setDeleting(false)} />}
     </div>
+  );
+};
+
+const CONFIRM_WORD = 'SUPPRIMER';
+
+// Suppression définitive : on explique ce qui part, on fait taper un mot pour confirmer
+const DeleteAccountSheet: React.FC<{ cloud: Cloud; onClose: () => void }> = ({ cloud, onClose }) => {
+  const [word, setWord] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const ok = word.trim().toUpperCase() === CONFIRM_WORD;
+  const run = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await cloud.deleteAccount();
+      onClose();
+    } catch (e) {
+      setError(frenchError(e instanceof Error ? e.message : String(e)));
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet title="Supprimer mon compte" onClose={busy ? undefined : onClose}>
+      <p className="text-sm text-slate-500 mb-3">
+        C'est définitif. Ton compte <b className="text-slate-800">{cloud.user?.email}</b> et tes données en ligne seront effacés, ainsi que celles de cet appareil.
+      </p>
+      <ul className="text-sm text-slate-600 space-y-1.5 mb-3 list-disc pl-5">
+        <li>Tes portefeuilles, opérations, catégories, budgets et dettes.</li>
+        <li>Les portefeuilles et ristournes que tu as créés, <b>aussi pour les personnes avec qui tu les partages</b>.</li>
+        <li>Dans les portefeuilles des autres, tes opérations restent (sans ton nom) ; dans leurs ristournes, ta place reste.</li>
+      </ul>
+      <p className="text-xs text-slate-500 mb-3 p-3 rounded-2xl bg-slate-100">
+        Tu veux garder une copie ? Exporte d'abord tes données : Paramètres › Mes données.
+      </p>
+      <label className="block text-xs font-semibold text-slate-500 mb-1">
+        Tape <b className="text-slate-900">{CONFIRM_WORD}</b> pour confirmer
+      </label>
+      <input
+        value={word}
+        onChange={(e) => setWord(e.target.value)}
+        autoCapitalize="characters"
+        autoComplete="off"
+        className="w-full px-4 py-3 rounded-2xl bg-slate-100 text-base outline-none focus:ring-2 focus:ring-red-300 mb-3"
+      />
+      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      <button
+        onClick={run}
+        disabled={!ok || busy}
+        className="w-full py-3.5 rounded-2xl bg-red-600 text-white text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Supprimer définitivement
+      </button>
+    </Sheet>
   );
 };
 

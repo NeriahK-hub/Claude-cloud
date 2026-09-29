@@ -122,6 +122,37 @@ select pg_temp.login(:'carol', 'carol@test.cd');
 select leave_ristourne('bbbbbbbb-0000-0000-0000-000000000001');
 select pg_temp.check((select count(*) from ristournes) = 0, 'Carol quitte la ristourne et ne la voit plus');
 
+-- ===== Supprimer son compte =====
+-- Bob : son portefeuille, une opération dans « Courses » d'Alice, un versement dans la ristourne d'Alice
+select pg_temp.login(:'alice', 'alice@test.cd');
+insert into wallets (id, name, currency) values ('aaaaaaaa-0000-0000-0000-0000000000a1', 'Courses', 'USD');
+insert into wallet_members (wallet_id, name, email, status) values ('aaaaaaaa-0000-0000-0000-0000000000a1', 'Bob', 'bob@test.cd', 'invited');
+insert into ristourne_members (id, ristourne_id, name, turn, email, status) values ('cccccccc-0000-0000-0000-000000000003', 'bbbbbbbb-0000-0000-0000-000000000001', 'Bob', 3, 'bob@test.cd', 'invited');
+select pg_temp.login(:'bob', 'Bob@Test.cd');
+select pg_temp.check(accept_invites() = 2, 'Bob rejoint « Courses » et la ristourne');
+insert into wallets (id, name, currency) values ('aaaaaaaa-0000-0000-0000-000000000009', 'Cash Bob', 'USD');
+insert into transactions (id, wallet_id, title, occurred_at, amount, currency, type) values
+  ('dddddddd-0000-0000-0000-000000000009', 'aaaaaaaa-0000-0000-0000-000000000009', 'Pain', now(), -2, 'USD', 'payment'),
+  ('dddddddd-0000-0000-0000-000000000010', 'aaaaaaaa-0000-0000-0000-0000000000a1', 'Essence', now(), -40, 'USD', 'payment');
+insert into ristourne_payments (ristourne_id, member_id, turn, amount) values ('bbbbbbbb-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000003', 1, 50);
+update transactions set created_by = null where id = 'dddddddd-0000-0000-0000-000000000010';
+select pg_temp.check((select created_by from transactions where id = 'dddddddd-0000-0000-0000-000000000010') = :'bob', 'on ne peut pas effacer l''auteur d''une opération');
+set role anon;
+select pg_temp.must_fail($$select delete_my_account()$$, 'un visiteur non connecté supprime un compte');
+set role authenticated;
+select delete_my_account();
+reset role;
+select pg_temp.check(not exists (select 1 from auth.users where id = :'bob'), 'le compte de Bob est supprimé');
+select pg_temp.check(not exists (select 1 from wallets where id = 'aaaaaaaa-0000-0000-0000-000000000009'), 'son portefeuille est supprimé');
+select pg_temp.check(not exists (select 1 from transactions where id = 'dddddddd-0000-0000-0000-000000000009'), 'ses opérations dans son portefeuille sont supprimées');
+select pg_temp.check(not exists (select 1 from categories where user_id = :'bob') and not exists (select 1 from profiles where id = :'bob'), 'ses catégories et son profil sont supprimés');
+select pg_temp.check((select created_by from transactions where id = 'dddddddd-0000-0000-0000-000000000010') is null, 'son opération dans « Courses » reste, sans auteur');
+select pg_temp.check((select status from wallet_members where email = 'bob@test.cd' and wallet_id = 'aaaaaaaa-0000-0000-0000-0000000000a1') = 'removed', 'il a quitté « Courses »');
+select pg_temp.check((select user_id from ristourne_members where id = 'cccccccc-0000-0000-0000-000000000003') is null
+  and (select count(*) from ristourne_payments where member_id = 'cccccccc-0000-0000-0000-000000000003') = 1, 'sa place et son versement dans la ristourne restent');
+select pg_temp.check((select count(*) from wallets where id = 'aaaaaaaa-0000-0000-0000-0000000000a1') = 1, '« Courses » d''Alice existe toujours');
+set role authenticated;
+
 -- ===== Visiteur non connecté =====
 reset role;
 set role anon;

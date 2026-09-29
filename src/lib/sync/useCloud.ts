@@ -221,6 +221,17 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
     setUser(null);
     setStatus('signed-out');
   };
+  // Supprime le compte et toutes ses données en ligne, puis vide cet appareil
+  const deleteAccount = async () => {
+    const sb = await getClient();
+    const { error: e } = await sb.rpc('delete_my_account');
+    if (e) throw new Error(e.message);
+    await sb.auth.signOut({ scope: 'local' });
+    writeMeta(null);
+    fns.current.clearLocal();
+    setUser(null);
+    setStatus('signed-out');
+  };
 
   return {
     configured: cloudConfigured,
@@ -235,6 +246,7 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
     verifyCode,
     signInWithGoogle,
     signOut,
+    deleteAccount,
   };
 }
 
