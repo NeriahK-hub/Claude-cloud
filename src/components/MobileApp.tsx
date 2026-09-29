@@ -7,6 +7,7 @@ import { BottomNav, Page, TabType } from './BottomNav';
 import { TransactionHistoryView } from './TransactionHistoryView';
 import { StatisticView } from './StatisticView';
 import { WalletsView, HomeWalletCard } from './WalletsView';
+import { isShared } from './Members';
 import { SettingsView } from './SettingsView';
 import { ProfileView } from './ProfileView';
 import { RistourneView, RistourneSummaryCard } from './RistourneView';
@@ -67,7 +68,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
               onOpenAccountPicker={onOpenAccountPicker}
               onActionClick={onQuickAction}
             />
-            {p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit') && (
+            {p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
               <div className="px-5 mb-3">
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               </div>
@@ -110,7 +111,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
           />
         )}
         {page === 'settings' && (
-          <SettingsView settings={settings} wallets={wallets} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
+          <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
         )}
         {page === 'profile' && <ProfileView onOpenSettings={() => onNavigate('settings')} />}
       </div>

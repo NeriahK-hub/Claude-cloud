@@ -54,6 +54,20 @@ export function addCustomIcon(name: string, dataUrl: string, keepColors: boolean
   save([...icons, { id: `${CUSTOM_PREFIX}${Date.now()}`, name, dataUrl, keepColors }]);
 }
 
+export const getAllCustomIcons = () => icons;
+
+// Restauration d'une sauvegarde : seules des images SVG en data URL sont acceptées
+export function replaceCustomIcons(list: unknown) {
+  if (!Array.isArray(list)) return;
+  save(
+    list.filter(
+      (i): i is CustomIcon =>
+        !!i && typeof i.id === 'string' && i.id.startsWith(CUSTOM_PREFIX) && typeof i.name === 'string' &&
+        typeof i.dataUrl === 'string' && i.dataUrl.startsWith('data:image/svg+xml')
+    ).map((i) => ({ id: i.id, name: i.name, dataUrl: i.dataUrl, keepColors: !!i.keepColors }))
+  );
+}
+
 export function deleteCustomIcon(id: string) {
   save(icons.filter((i) => i.id !== id));
 }

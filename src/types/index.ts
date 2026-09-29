@@ -21,6 +21,9 @@ export interface Transaction {
   transferId?: string; // relie les deux moitiés d'un transfert
   counterpartWalletId?: string; // l'autre portefeuille du transfert
   status?: 'completed' | 'pending' | 'failed';
+  excludeFromReport?: boolean; // vraie dépense/revenu, mais gardé hors des statistiques (ex. prêts importés de Money Lover)
+  withPerson?: string; // « Avec » : la personne concernée (prêt, dette…)
+  memberId?: string; // portefeuille partagé : qui a fait l'opération (absent = moi)
 }
 
 export interface Wallet {
@@ -37,6 +40,16 @@ export interface Wallet {
   creditLimit?: number; // seulement 'credit'
   goalAmount?: number; // seulement 'goal'
   goalDate?: string; // seulement 'goal', format AAAA-MM-JJ
+  members?: WalletMember[]; // portefeuille partagé : les autres personnes (moi n'y figure pas)
+}
+
+// Une personne avec qui on partage un portefeuille (ex. son conjoint)
+export interface WalletMember {
+  id: string;
+  name: string;
+  color: string;
+  contact?: string; // téléphone ou e-mail, pour l'inviter plus tard
+  removed?: boolean; // retiré du partage : on garde son nom sur ses anciennes opérations
 }
 
 export type WalletKind = 'basic' | 'credit' | 'goal';

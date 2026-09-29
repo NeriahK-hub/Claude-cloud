@@ -20,7 +20,7 @@ export function formatMoney(amount: number, currency: string): string {
 // Solde d'un portefeuille = solde de départ + somme de ses transactions
 // Les transferts et ajustements déplacent ou corrigent de l'argent : ce ne sont pas des dépenses/revenus
 export function countsInStats(t: Transaction): boolean {
-  return t.type !== 'transfer' && t.type !== 'adjustment';
+  return t.type !== 'transfer' && t.type !== 'adjustment' && !t.excludeFromReport;
 }
 
 export function walletBalance(wallet: Wallet, transactions: Transaction[]): number {

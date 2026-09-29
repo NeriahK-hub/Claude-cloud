@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Delete, Settings2, ChevronDown, ChevronLeft, ArrowUpRight, ArrowDownLeft, X } from 'lucide-react';
 import { Category, categoriesFor } from '../data/categories';
+import { isShared, MemberChips, ME_ID } from './Members';
 import { IconBadge } from './AppIcon';
 import { Settings, Wallet } from '../types';
 import { CURRENCIES } from '../data/currencies';
@@ -16,7 +17,7 @@ interface AddTransactionModalProps {
   defaultWalletId: string;
   onClose: () => void;
   onChangeMode: (m: AddMode) => void;
-  onSave: (amount: number, category: Category, note: string, walletId: string, currency: string) => void;
+  onSave: (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string) => void;
   onManageCategories: () => void;
 }
 
@@ -51,6 +52,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const [note, setNote] = useState('');
   const [walletId, setWalletId] = useState('');
   const [currency, setCurrency] = useState('');
+  const [memberId, setMemberId] = useState(ME_ID); // portefeuille partagé : qui fait l'opération
   const [panel, setPanel] = useState<Panel>(null);
   const [subOf, setSubOf] = useState<string | null>(null); // panneau catégorie : sous-catégories de…
 
@@ -67,6 +69,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     if (isOpen) {
       setAmount('');
       setNote('');
+      setMemberId(ME_ID);
       setWalletId(defaultWalletId);
       setCurrency(wallets.find((w) => w.id === defaultWalletId)?.currency ?? '');
     }
@@ -104,7 +107,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
   const save = () => {
     if (!canSave || !selected || !wallet) return;
-    onSave(value, selected, note, wallet.id, cur);
+    onSave(value, selected, note, wallet.id, cur, isShared(wallet) && memberId !== ME_ID ? memberId : undefined);
     onClose();
   };
 
@@ -231,6 +234,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 () => {
                   setWalletId(w.id);
                   setCurrency(w.currency);
+                  setMemberId(ME_ID);
                   setPanel(null);
                 },
                 <IconBadge icon={w.icon} image={w.image} color={w.color} size="sm" />,
@@ -359,6 +363,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
             <div className="animate-fade-in">{renderPanel()}</div>
           ) : (
             <>
+              {isShared(wallet) && (
+                <div className="mb-2">
+                  <MemberChips wallet={wallet} value={memberId} onChange={setMemberId} label={direction === 'in' ? 'Versé par' : 'Fait par'} />
+                </div>
+              )}
               <input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}

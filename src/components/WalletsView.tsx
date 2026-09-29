@@ -7,6 +7,7 @@ import { IconPicker, COLOR_CHOICES } from './IconPicker';
 import { CurrencyPicker } from './CurrencyPicker';
 import { currencyInfo } from '../data/currencies';
 import { convertBetween, countsInStats, formatMoney, walletBalance } from '../lib/money';
+import { isShared, MembersSheet, MemberStack, SharingBlock, activeMembers, memberOf, MemberAvatar, ME_ID } from './Members';
 
 interface WalletsViewProps {
   wallets: Wallet[];
@@ -27,6 +28,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [transferFrom, setTransferFrom] = useState<string | null>(null); // id, ou '' = à choisir
   const [adjusting, setAdjusting] = useState<Wallet | null>(null);
+  const [sharing, setSharing] = useState<Wallet | null>(null);
   const viewing = wallets.find((w) => w.id === viewingId) ?? null;
 
   const active = wallets.filter((w) => !w.archived);
@@ -48,6 +50,11 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
           {formatMoney(walletBalance(w, transactions), w.currency)}
         </div>
         <WalletProgress wallet={w} balance={walletBalance(w, transactions)} />
+        {isShared(w) && (
+          <span className="flex items-center gap-1.5 mt-1.5 text-[11px] font-semibold text-slate-500">
+            <MemberStack wallet={w} /> Partagé à {activeMembers(w).length + 1}
+          </span>
+        )}
         {!w.includeInTotal && (
           <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[11px] font-semibold">
             Exclu du total
@@ -107,6 +114,16 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
           }}
         />
       )}
+      {sharing && (
+        <MembersSheet
+          wallet={sharing}
+          onClose={() => setSharing(null)}
+          onSave={(members) => {
+            onUpdate(sharing.id, { members });
+            setSharing(null);
+          }}
+        />
+      )}
       {editing && (
         <WalletSheet
           wallet={editing === 'new' ? null : editing}
@@ -152,6 +169,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
           onRestore={() => onUpdate(viewing.id, { archived: false })}
           onTransfer={active.length > 1 && !viewing.archived ? () => setTransferFrom(viewing.id) : undefined}
           onAdjust={() => setAdjusting(viewing)}
+          onShare={() => setSharing(viewing)}
           onSelectTransaction={onSelectTransaction}
         />
         {sheets}
@@ -612,7 +630,8 @@ export const WalletKindSummary: React.FC<{ wallet: Wallet; balance: number }> = 
 // Carte de l'accueil quand un portefeuille crédit / objectif est sélectionné
 export const HomeWalletCard: React.FC<{ wallet: Wallet; transactions: Transaction[] }> = ({ wallet, transactions }) => {
   const kind = wallet.kind ?? 'basic';
-  if (kind === 'basic') return null;
+  const shared = isShared(wallet);
+  if (kind === 'basic' && !shared) return null;
   const info = KINDS.find((k) => k.id === kind)!;
   return (
     <div className="bg-white rounded-3xl border border-slate-100 p-4">
@@ -620,10 +639,47 @@ export const HomeWalletCard: React.FC<{ wallet: Wallet; transactions: Transactio
         <IconBadge icon={wallet.icon} image={wallet.image} color={wallet.color} size="sm" />
         <div className="min-w-0">
           <div className="text-sm font-bold text-slate-900 truncate">{wallet.name}</div>
-          <div className="text-[11px] font-semibold text-slate-500">{info.title}</div>
+          <div className="text-[11px] font-semibold text-slate-500">{info.title}{shared && ` · partagé à ${activeMembers(wallet).length + 1}`}</div>
         </div>
+        {shared && (
+          <span className="ml-auto">
+            <MemberStack wallet={wallet} size="sm" />
+          </span>
+        )}
       </div>
       <WalletKindSummary wallet={wallet} balance={walletBalance(wallet, transactions)} />
+      {shared && <SharedMonthLine wallet={wallet} transactions={transactions} />}
+    </div>
+  );
+};
+
+// Accueil : ce que chacun a versé dans le portefeuille partagé ce mois-ci
+const SharedMonthLine: React.FC<{ wallet: Wallet; transactions: Transaction[] }> = ({ wallet, transactions }) => {
+  const now = new Date();
+  const put = new Map<string, number>();
+  for (const t of transactions) {
+    const d = new Date(t.createdAt);
+    if (t.walletId !== wallet.id || t.amount <= 0 || t.type === 'adjustment') continue;
+    if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) continue;
+    const id = t.memberId || ME_ID;
+    put.set(id, (put.get(id) ?? 0) + t.amount);
+  }
+  const people = [ME_ID, ...activeMembers(wallet).map((m) => m.id)];
+  return (
+    <div className={(wallet.kind ?? 'basic') === 'basic' ? '' : 'mt-3 pt-3 border-t border-slate-100'}>
+      <div className="text-[11px] font-semibold text-slate-500 mb-1.5">Versé ce mois-ci</div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {people.map((id) => {
+          const m = memberOf(wallet, id);
+          return (
+            <span key={id} className="flex items-center gap-1.5 text-xs">
+              <MemberAvatar name={m.name} color={m.color} size="xs" />
+              <span className="font-semibold text-slate-700">{m.name}</span>
+              <span className="font-bold tabular-nums text-emerald-600">+{formatMoney(put.get(id) ?? 0, wallet.currency)}</span>
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -645,8 +701,9 @@ const WalletDetail: React.FC<{
   onRestore: () => void;
   onTransfer?: () => void;
   onAdjust: () => void;
+  onShare: () => void;
   onSelectTransaction: (tx: Transaction) => void;
-}> = ({ wallet: w, transactions, onBack, onEdit, onDelete, onRestore, onTransfer, onAdjust, onSelectTransaction }) => {
+}> = ({ wallet: w, transactions, onBack, onEdit, onDelete, onRestore, onTransfer, onAdjust, onShare, onSelectTransaction }) => {
   const balance = walletBalance(w, transactions);
   const money = (v: number) => formatMoney(v, w.currency);
   const kind = w.kind ?? 'basic';
@@ -697,6 +754,8 @@ const WalletDetail: React.FC<{
       </div>
 
       {(kind === 'credit' || kind === 'goal') && <div className="bg-white rounded-3xl border border-slate-100 p-4 mb-3">{kindBlock}</div>}
+
+      {!w.archived && <SharingBlock wallet={w} transactions={transactions} onManage={onShare} />}
 
       <div className="bg-white rounded-3xl border border-slate-100 p-4 mb-3 flex gap-3">
         <Stat label="Entrées ce mois" value={`+${money(monthIn)}`} tone="text-emerald-600" />

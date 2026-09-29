@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronDown, Sun, Moon, SmartphoneIcon } from 'lucide-react';
-import { Settings, Wallet } from '../types';
+import { Settings, Transaction, Wallet } from '../types';
+import { Category } from '../data/categories';
+import { Backup, ImportPlan } from '../lib/importExport';
+import { DataSection } from './DataSection';
 import { CurrencyPicker } from './CurrencyPicker';
 import { currencyInfo } from '../data/currencies';
 import { currenciesNeedingRate } from '../lib/money';
@@ -10,6 +13,10 @@ import { CustomIconsSection } from './CustomIconsSection';
 interface SettingsViewProps {
   settings: Settings;
   wallets: Wallet[];
+  transactions: Transaction[];
+  categories: Category[];
+  onImport: (plan: ImportPlan, replace: boolean) => void;
+  onRestore: (backup: Backup) => void;
   onChange: (s: Settings) => void;
   onBack: () => void;
 }
@@ -52,7 +59,7 @@ const THEMES: { id: ThemePref; label: string; Icon: typeof Sun }[] = [
   { id: 'dark', label: 'Sombre', Icon: Moon },
 ];
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, onChange, onBack }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, onImport, onRestore, onChange, onBack }) => {
   const [theme, setTheme] = useState(getThemePref);
   const needed = currenciesNeedingRate(wallets, settings);
   // Texte tapé dans les champs de taux (on garde le texte pour ne pas gêner la saisie)
@@ -88,6 +95,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, o
         </button>
         <h1 className="text-xl font-bold text-slate-900">Paramètres</h1>
       </div>
+
+      <Section title="Mes données" hint="Importe ton historique (Money Lover, Excel…) ou exporte tout.">
+        <DataSection
+          wallets={wallets}
+          transactions={transactions}
+          categories={categories}
+          settings={settings}
+          onImport={onImport}
+          onRestore={onRestore}
+        />
+      </Section>
 
       <Section title="Apparence" hint="« Système » suit le réglage clair / sombre de ton téléphone.">
         <div className="grid grid-cols-3 gap-1 p-1 rounded-2xl bg-slate-100">

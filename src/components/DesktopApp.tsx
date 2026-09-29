@@ -2,6 +2,7 @@ import React from 'react';
 import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon } from 'lucide-react';
 import { SharedProps } from './appProps';
 import { WalletsView, HomeWalletCard } from './WalletsView';
+import { isShared } from './Members';
 import { SettingsView } from './SettingsView';
 import { countsInStats, formatMoney, toMain, walletBalance } from '../lib/money';
 import { IconBadge, WalletChipIcon } from './AppIcon';
@@ -138,7 +139,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                   ))}
                 </div>
               </div>
-              {p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit') && (
+              {p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               )}
 
@@ -242,7 +243,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
               />
             )}
             {page === 'settings' && (
-              <SettingsView settings={settings} wallets={wallets} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
+              <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
             )}
             {page === 'profile' && <ProfileView onOpenSettings={() => onNavigate('settings')} />}
           </div>

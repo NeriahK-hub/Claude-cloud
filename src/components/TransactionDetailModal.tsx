@@ -4,6 +4,7 @@ import { Transaction, Wallet } from '../types';
 import { Category, categoriesFor } from '../data/categories';
 import { IconBadge } from './AppIcon';
 import { formatMoney, dayLabel, timeLabel } from '../lib/money';
+import { isShared, memberOf, MemberAvatar, MemberChips, ME_ID } from './Members';
 
 interface TransactionDetailModalProps {
   transaction: Transaction | null;
@@ -138,6 +139,16 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
               {row('Catégorie', transaction.category)}
               {row('Date', `${dayLabel(transaction.createdAt)} à ${timeLabel(transaction.createdAt)}`)}
               {row('Portefeuille', wallet?.name ?? '—')}
+              {(isShared(wallet) || transaction.memberId) &&
+                row(
+                  isPositive ? 'Versé par' : 'Fait par',
+                  <span className="inline-flex items-center gap-1.5">
+                    <MemberAvatar {...memberOf(wallet, transaction.memberId)} size="xs" />
+                    {memberOf(wallet, transaction.memberId).name}
+                  </span>
+                )}
+              {transaction.withPerson && row('Avec', transaction.withPerson)}
+              {transaction.excludeFromReport && row('Rapport', 'Exclue des statistiques')}
               {counterpart && row(isPositive ? 'Venant de' : 'Envoyé vers', counterpart.name)}
               {transaction.referenceNumber && (
                 <div className="flex items-center justify-between">
@@ -228,6 +239,8 @@ const EditForm: React.FC<{
   const [categoryId, setCategoryId] = useState(tx.categoryId ?? '');
   const [walletId, setWalletId] = useState(tx.walletId);
   const [when, setWhen] = useState(toLocalInput(tx.createdAt));
+  const [memberId, setMemberId] = useState(tx.memberId ?? ME_ID);
+  const editWallet = wallets.find((w) => w.id === walletId);
 
   const value = parseFloat(amount.replace(/\s/g, '').replace(',', '.'));
   const valid = value > 0 && title.trim() !== '' && !!when;
@@ -238,6 +251,7 @@ const EditForm: React.FC<{
       title: title.trim(),
       walletId,
       createdAt: new Date(when).toISOString(),
+      memberId: isShared(editWallet) && memberId !== ME_ID ? memberId : undefined,
     };
     if (value !== Math.abs(tx.amount)) {
       // Le montant d'origine (autre devise) ne correspond plus
@@ -294,6 +308,12 @@ const EditForm: React.FC<{
             ))}
           </select>
         </>
+      )}
+
+      {isShared(editWallet) && (
+        <div className="mt-3">
+          <MemberChips wallet={editWallet} value={memberId} onChange={setMemberId} label={isOut ? 'Fait par' : 'Versé par'} />
+        </div>
       )}
 
       <label className={label}>Date et heure</label>

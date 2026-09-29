@@ -8,6 +8,8 @@ import { SharedProps } from './components/appProps';
 import { Page } from './components/BottomNav';
 import { useIsDesktop } from './hooks/useIsDesktop';
 import { Category, DEFAULT_CATEGORIES } from './data/categories';
+import { Backup, ImportPlan } from './lib/importExport';
+import { replaceCustomIcons } from './lib/customIcons';
 
 // Les deux interfaces
 import { MobileApp } from './components/MobileApp';
@@ -101,7 +103,7 @@ export default function App() {
   };
 
   // Enregistrer une dépense ou un revenu
-  const handleAddTransaction = (amount: number, category: Category, note: string, walletId: string, currency: string) => {
+  const handleAddTransaction = (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string) => {
     const wallet = wallets.find((w) => w.id === walletId);
     if (!wallet) return;
     const isExpense = addMode === 'expense' || (addMode === 'debt' && category.direction === 'out');
@@ -129,6 +131,7 @@ export default function App() {
       color: category.color,
       referenceNumber: `MN-${Math.floor(10000 + Math.random() * 90000)}`,
       status: 'completed',
+      memberId,
     };
 
     setTransactions((prev) => [newTx, ...prev]);
@@ -314,6 +317,25 @@ export default function App() {
     showToast('Catégorie supprimée');
   };
 
+  // Import d'un fichier (Money Lover, Excel, CSV) : déjà vérifié dans l'aperçu
+  const handleImport = (plan: ImportPlan, replace: boolean) => {
+    setWallets((prev) => [...prev, ...plan.newWallets]);
+    setCategories((prev) => [...prev, ...plan.newCategories]);
+    setTransactions((prev) => (replace ? plan.transactions : [...plan.transactions, ...prev]));
+    showToast(`${plan.transactions.length} transactions importées`);
+  };
+
+  // Restauration d'une sauvegarde complète
+  const handleRestore = (b: Backup) => {
+    setWallets(b.wallets);
+    setTransactions(b.transactions);
+    setCategories(b.categories);
+    setSettings({ ...DEFAULT_SETTINGS, ...b.settings });
+    replaceCustomIcons(b.customIcons);
+    setActiveWalletId('all');
+    showToast('Sauvegarde restaurée');
+  };
+
   // Ce qui est commun aux deux interfaces
   const shared: SharedProps = {
     page,
@@ -341,6 +363,8 @@ export default function App() {
     onDeleteWallet: handleDeleteWallet,
     onTransfer: handleTransfer,
     onAdjustBalance: handleAdjustBalance,
+    onImport: handleImport,
+    onRestore: handleRestore,
   };
 
   return (
