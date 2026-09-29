@@ -5,7 +5,7 @@ import { haptic } from '../lib/haptics';
 export type TabType = 'home' | 'statistic' | 'wallets' | 'profile';
 
 // Toutes les pages de l'app (les onglets + les écrans sans onglet)
-export type Page = TabType | 'history' | 'ristourne' | 'categories' | 'settings' | 'budgets';
+export type Page = TabType | 'history' | 'ristourne' | 'categories' | 'settings' | 'budgets' | 'debts';
 
 interface BottomNavProps {
   activeTab: TabType;

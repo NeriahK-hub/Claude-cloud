@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Home, BarChart2, CreditCard, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Settings, HelpCircle, Shield, LogOut, Tags } from 'lucide-react';
+import { X, Home, BarChart2, CreditCard, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Settings, HelpCircle, Shield, LogOut, Tags, HandCoins, PieChart } from 'lucide-react';
 import { Page } from './BottomNav';
 import { initialsOf, useProfile } from '../lib/profile';
 
@@ -90,6 +90,26 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
               <span>Statistiques</span>
             </button>
 
+            <button
+              onClick={() => {
+                onNavigate('debts');
+                onClose();
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 transition cursor-pointer text-left"
+            >
+              <HandCoins className="w-4 h-4 text-slate-500" />
+              <span>Dettes et prêts</span>
+            </button>
+            <button
+              onClick={() => {
+                onNavigate('budgets');
+                onClose();
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 transition cursor-pointer text-left"
+            >
+              <PieChart className="w-4 h-4 text-slate-500" />
+              <span>Budgets</span>
+            </button>
             <button
               onClick={() => {
                 onNavigate('categories');

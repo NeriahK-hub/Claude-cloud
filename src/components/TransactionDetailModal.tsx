@@ -240,6 +240,8 @@ const EditForm: React.FC<{
   const [walletId, setWalletId] = useState(tx.walletId);
   const [when, setWhen] = useState(toLocalInput(tx.createdAt));
   const [memberId, setMemberId] = useState(tx.memberId ?? ME_ID);
+  const [person, setPerson] = useState(tx.withPerson ?? '');
+  const isDebt = categories.find((c) => c.id === (categoryId || tx.categoryId))?.type === 'debt';
   const editWallet = wallets.find((w) => w.id === walletId);
 
   const value = parseFloat(amount.replace(/\s/g, '').replace(',', '.'));
@@ -252,6 +254,7 @@ const EditForm: React.FC<{
       walletId,
       createdAt: new Date(when).toISOString(),
       memberId: isShared(editWallet) && memberId !== ME_ID ? memberId : undefined,
+      withPerson: isDebt ? person.trim() || undefined : tx.withPerson,
     };
     if (value !== Math.abs(tx.amount)) {
       // Le montant d'origine (autre devise) ne correspond plus
@@ -307,6 +310,13 @@ const EditForm: React.FC<{
               </option>
             ))}
           </select>
+        </>
+      )}
+
+      {isDebt && (
+        <>
+          <label className={label}>Avec qui ?</label>
+          <input value={person} onChange={(e) => setPerson(e.target.value)} placeholder="ex. Kemy" className={field} />
         </>
       )}
 

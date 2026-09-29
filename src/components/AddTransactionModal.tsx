@@ -18,8 +18,11 @@ interface AddTransactionModalProps {
   defaultWalletId: string;
   onClose: () => void;
   onChangeMode: (m: AddMode) => void;
-  onSave: (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string) => void;
+  onSave: (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string) => void;
   onManageCategories: () => void;
+  // Ouverture pré-remplie (ex. « Il me rembourse » depuis Dettes et prêts)
+  preset?: { categoryId?: string; withPerson?: string; amount?: number; currency?: string } | null;
+  people?: string[]; // noms déjà utilisés (suggestions pour « Avec qui ? »)
 }
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
@@ -46,6 +49,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   onChangeMode,
   onSave,
   onManageCategories,
+  preset,
+  people = [],
 }) => {
   const [amount, setAmount] = useState('');
   const [parentId, setParentId] = useState(''); // catégorie principale choisie
@@ -54,6 +59,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const [walletId, setWalletId] = useState('');
   const [currency, setCurrency] = useState('');
   const [memberId, setMemberId] = useState(ME_ID); // portefeuille partagé : qui fait l'opération
+  const [person, setPerson] = useState(''); // Dette / Prêt : avec qui
   const [panel, setPanel] = useState<Panel>(null);
   const [subOf, setSubOf] = useState<string | null>(null); // panneau catégorie : sous-catégories de…
 
@@ -68,11 +74,12 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   // À l'ouverture : tout remettre à zéro
   useEffect(() => {
     if (isOpen) {
-      setAmount('');
+      setAmount(preset?.amount ? String(Math.round(preset.amount * 100) / 100) : '');
       setNote('');
+      setPerson(preset?.withPerson ?? '');
       setMemberId(ME_ID);
       setWalletId(defaultWalletId);
-      setCurrency(wallets.find((w) => w.id === defaultWalletId)?.currency ?? '');
+      setCurrency(preset?.currency ?? wallets.find((w) => w.id === defaultWalletId)?.currency ?? '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -81,11 +88,12 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   // En Dette / Prêt, rien n'est présélectionné : on ouvre directement le choix.
   useEffect(() => {
     if (mode) {
-      const first = mode === 'debt' ? undefined : categoriesFor(mode, categories).find((c) => !c.parentId);
-      setParentId(first?.id ?? '');
+      const pre = preset?.categoryId ? categoriesFor(mode, categories).find((c) => c.id === preset.categoryId) : undefined;
+      const first = pre ?? (mode === 'debt' ? undefined : categoriesFor(mode, categories).find((c) => !c.parentId));
+      setParentId(first?.parentId ?? first?.id ?? '');
       setSelectedId(first?.id ?? '');
       setSubOf(null);
-      setPanel(mode === 'debt' ? 'category' : null);
+      setPanel(mode === 'debt' && !first ? 'category' : null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
@@ -112,7 +120,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
   const save = () => {
     if (!canSave || !selected || !wallet) return;
-    onSave(value, selected, note, wallet.id, cur, isShared(wallet) && memberId !== ME_ID ? memberId : undefined);
+    onSave(value, selected, note, wallet.id, cur, isShared(wallet) && memberId !== ME_ID ? memberId : undefined, mode === 'debt' ? person.trim() || undefined : undefined);
     onClose();
   };
 
@@ -373,13 +381,32 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   <MemberChips wallet={wallet} value={memberId} onChange={setMemberId} label={direction === 'in' ? 'Versé par' : 'Fait par'} />
                 </div>
               )}
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && save()}
-                placeholder="Note (facultatif) : ex. marché de Gambela"
-                className="w-full mb-2 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
-              />
+              {mode === 'debt' ? (
+                <>
+                  {/* Dette / Prêt : avec qui (suggestions = noms déjà utilisés) */}
+                  <input
+                    value={person}
+                    onChange={(e) => setPerson(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && save()}
+                    list="wallo-people"
+                    placeholder="Avec qui ? (ex. Kemy)"
+                    className="w-full mb-2 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
+                  />
+                  <datalist id="wallo-people">
+                    {people.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
+                </>
+              ) : (
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && save()}
+                  placeholder="Note (facultatif) : ex. marché de Gambela"
+                  className="w-full mb-2 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
+                />
+              )}
               <div className="grid grid-cols-3 gap-1.5">
                 {KEYS.map((k) => (
                   <button

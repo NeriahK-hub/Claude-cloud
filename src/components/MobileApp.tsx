@@ -15,6 +15,7 @@ import { CategoriesView } from './CategoriesView';
 import { MonthReportCard } from './MonthReportCard';
 import { SyncIndicator } from './Account';
 import { BudgetsView } from './BudgetsView';
+import { DebtsView } from './DebtsView';
 
 // Interface TÉLÉPHONE : plein écran, barre d'onglets en bas
 interface MobileAppProps extends SharedProps {
@@ -35,6 +36,15 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
     // pt : laisse la place à l'encoche et à l'heure du vrai téléphone
     <div className="min-h-dvh w-full max-w-md mx-auto bg-slate-50 pt-[env(safe-area-inset-top)]">
       <div className={isTab ? 'pb-28' : 'pb-6'}>
+        {page === 'debts' && (
+          <DebtsView
+            transactions={allTransactions}
+            settings={settings}
+            onBack={() => onNavigate('home')}
+            onAdd={p.onAddDebt}
+            onSelectTransaction={onSelectTransaction}
+          />
+        )}
         {page === 'budgets' && (
           <BudgetsView
             budgets={p.budgets}

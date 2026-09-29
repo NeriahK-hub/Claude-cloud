@@ -14,6 +14,7 @@ import { useCloud } from './lib/sync/useCloud';
 import { applyList } from './lib/sync/engine';
 import type { SyncData } from './lib/sync/mapping';
 import { MergeDialog } from './components/Account';
+import type { DebtPreset } from './components/DebtsView';
 import { budgetStatus } from './lib/budgets';
 import { uuid } from './lib/ids';
 
@@ -62,6 +63,7 @@ export default function App() {
 
   // Fenêtres
   const [addMode, setAddMode] = useState<AddMode | null>(null);
+  const [addPreset, setAddPreset] = useState<DebtPreset | null>(null);
   const [isAccountPickerOpen, setIsAccountPickerOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -91,7 +93,8 @@ export default function App() {
   };
 
   // Ouvre l'écran d'ajout (il faut au moins un portefeuille actif)
-  const openAdd = (mode: AddMode) => {
+  const openAdd = (mode: AddMode, preset: DebtPreset | null = null) => {
+    setAddPreset(preset);
     if (activeWallets.length === 0) {
       showToast("Crée d'abord un portefeuille");
       navigate('wallets');
@@ -117,7 +120,7 @@ export default function App() {
   };
 
   // Enregistrer une dépense ou un revenu
-  const handleAddTransaction = (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string) => {
+  const handleAddTransaction = (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string) => {
     const wallet = wallets.find((w) => w.id === walletId);
     if (!wallet) return;
     const isExpense = addMode === 'expense' || (addMode === 'debt' && category.direction === 'out');
@@ -129,7 +132,7 @@ export default function App() {
 
     const newTx: Transaction = {
       id: uuid(),
-      title: note || category.name,
+      title: note || (withPerson ? `${category.name} · ${withPerson}` : category.name),
       createdAt: new Date().toISOString(),
       amount: signed,
       currency: wallet.currency,
@@ -146,6 +149,7 @@ export default function App() {
       referenceNumber: `MN-${Math.floor(10000 + Math.random() * 90000)}`,
       status: 'completed',
       memberId,
+      withPerson,
     };
 
     setTransactions((prev) => [newTx, ...prev]);
@@ -454,6 +458,12 @@ export default function App() {
     changeKey,
   });
 
+  // Noms déjà utilisés dans les dettes et prêts (suggestions)
+  const people = useMemo(
+    () => [...new Set(transactions.map((t) => t.withPerson?.trim()).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, 'fr')),
+    [transactions]
+  );
+
   // Ce qui est commun aux deux interfaces
   const shared: SharedProps = {
     page,
@@ -487,6 +497,7 @@ export default function App() {
     onUpdateBudget: handleUpdateBudget,
     onDeleteBudget: handleDeleteBudget,
     cloud,
+    onAddDebt: (preset?: DebtPreset) => openAdd('debt', preset ?? null),
     onImport: handleImport,
     onRestore: handleRestore,
   };
@@ -517,6 +528,8 @@ export default function App() {
         onClose={() => setAddMode(null)}
         onChangeMode={setAddMode}
         onSave={handleAddTransaction}
+        preset={addPreset}
+        people={people}
         onManageCategories={() => {
           setAddMode(null);
           navigate('categories');

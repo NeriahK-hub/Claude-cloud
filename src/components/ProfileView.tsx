@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone } from 'lucide-react';
+import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone, HandCoins, PieChart } from 'lucide-react';
 import { Page } from './BottomNav';
 import { initialsOf, setProfileName, useProfile } from '../lib/profile';
 import type { Cloud } from '../lib/sync/useCloud';
@@ -81,6 +81,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) =
         {link('Catégories', 'Créer, modifier, ranger en sous-catégories', Tags, 'categories')}
         {link('Portefeuilles', 'Ajouter, réorganiser, partager', Wallet, 'wallets')}
         {link('Historique', 'Toutes les transactions, par période', History, 'history')}
+        {link('Dettes et prêts', "Qui te doit, à qui tu dois, ce qu'il reste", HandCoins, 'debts')}
+        {link('Budgets', 'Limites par mois et par catégorie', PieChart, 'budgets')}
       </div>
 
       <p className="text-center text-[11px] text-slate-400 mt-6">Wallo</p>

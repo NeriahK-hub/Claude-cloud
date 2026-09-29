@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon, PieChart } from 'lucide-react';
+import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon, PieChart, HandCoins } from 'lucide-react';
 import { SharedProps } from './appProps';
 import { WalletsView, HomeWalletCard } from './WalletsView';
 import { isShared } from './Members';
@@ -16,6 +16,7 @@ import { RistourneView } from './RistourneView';
 import { CategoriesView } from './CategoriesView';
 import { MonthReportCard } from './MonthReportCard';
 import { BudgetsView } from './BudgetsView';
+import { DebtsView } from './DebtsView';
 
 // Interface ORDINATEUR : menu à gauche, contenu en grille à droite
 type DesktopAppProps = SharedProps;
@@ -25,6 +26,7 @@ const MENU: { id: Page; label: string; icon: React.ElementType }[] = [
   { id: 'history', label: 'Historique', icon: History },
   { id: 'statistic', label: 'Statistiques', icon: BarChart2 },
   { id: 'budgets', label: 'Budgets', icon: PieChart },
+  { id: 'debts', label: 'Dettes et prêts', icon: HandCoins },
   { id: 'ristourne', label: 'Ristourne', icon: Users },
   { id: 'categories', label: 'Catégories', icon: Tags },
   { id: 'wallets', label: 'Portefeuilles', icon: Wallet },
@@ -214,6 +216,15 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 initialWalletId={p.activeWallet?.id ?? 'all'}
                 settings={settings}
                 onBack={() => onNavigate('home')}
+                onSelectTransaction={onSelectTransaction}
+              />
+            )}
+            {page === 'debts' && (
+              <DebtsView
+                transactions={allTransactions}
+                settings={settings}
+                onBack={() => onNavigate('home')}
+                onAdd={p.onAddDebt}
                 onSelectTransaction={onSelectTransaction}
               />
             )}

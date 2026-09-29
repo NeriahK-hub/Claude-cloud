@@ -3,6 +3,7 @@ import { Category } from '../data/categories';
 import { BalanceInfo } from '../lib/money';
 import { Backup, ImportPlan } from '../lib/importExport';
 import type { Cloud } from '../lib/sync/useCloud';
+import type { DebtPreset } from './DebtsView';
 import { HomeAction } from './BalanceSection';
 import { Page } from './BottomNav';
 
@@ -40,6 +41,7 @@ export interface SharedProps {
   onUpdateBudget: (id: string, changes: Partial<Budget>) => void;
   onDeleteBudget: (id: string) => void;
   cloud: Cloud;
+  onAddDebt: (preset?: DebtPreset) => void;
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
 }
