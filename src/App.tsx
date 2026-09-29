@@ -28,6 +28,7 @@ import { AccountSwitcherSheet } from './components/AccountSwitcherSheet';
 import { NotificationsModal } from './components/NotificationsModal';
 import { NavigationDrawer } from './components/NavigationDrawer';
 import { CheckCircle } from 'lucide-react';
+import { haptic } from './lib/haptics';
 
 const DEFAULT_WALLETS: Wallet[] = [
   { id: 'wallet-cash', name: 'Cash', icon: 'Banknote', color: '#059669', currency: 'USD', initialBalance: 0, includeInTotal: true, archived: false },
@@ -77,7 +78,9 @@ export default function App() {
     ? makeBalance(toMain(walletBalance(activeWallet, transactions), activeWallet.currency, settings), settings)
     : totalBalance;
 
+  // Message de confirmation (+ petit double « tic » : l'action a bien été faite)
   const showToast = (msg: string) => {
+    haptic('success');
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };

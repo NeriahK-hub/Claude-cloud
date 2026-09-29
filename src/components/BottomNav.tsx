@@ -1,5 +1,6 @@
 import React from 'react';
 import { Home, BarChart2, Wallet, User, Plus } from 'lucide-react';
+import { haptic } from '../lib/haptics';
 
 export type TabType = 'home' | 'statistic' | 'wallets' | 'profile';
 
@@ -22,7 +23,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       <div className="flex items-center justify-between">
         {/* Home */}
         <button
-          onClick={() => onChangeTab('home')}
+          onClick={() => { haptic(); onChangeTab('home'); }}
           className={`flex flex-col items-center justify-center min-w-[50px] py-1 cursor-pointer transition ${
             activeTab === 'home' ? 'text-slate-900 font-bold' : 'text-slate-400 hover:text-slate-600'
           }`}
@@ -33,7 +34,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
         {/* Statistic */}
         <button
-          onClick={() => onChangeTab('statistic')}
+          onClick={() => { haptic(); onChangeTab('statistic'); }}
           className={`flex flex-col items-center justify-center min-w-[50px] py-1 cursor-pointer transition ${
             activeTab === 'statistic' ? 'text-slate-900 font-bold' : 'text-slate-400 hover:text-slate-600'
           }`}
@@ -45,7 +46,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         {/* Center Floating QR / Pay Button */}
         <div className="flex flex-col items-center -mt-5">
           <button
-            onClick={onOpenScanPay}
+            onClick={() => { haptic(); onOpenScanPay(); }}
             aria-label="Ajouter une transaction"
             className="w-13 h-13 rounded-2xl bg-[#D8FB52] hover:bg-[#cbed3b] active:scale-95 flex items-center justify-center shadow-md shadow-lime-300/30 border-2 border-white transition duration-200 cursor-pointer group"
           >
@@ -55,7 +56,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
         {/* Card */}
         <button
-          onClick={() => onChangeTab('wallets')}
+          onClick={() => { haptic(); onChangeTab('wallets'); }}
           className={`flex flex-col items-center justify-center min-w-[50px] py-1 cursor-pointer transition ${
             activeTab === 'wallets' ? 'text-slate-900 font-bold' : 'text-slate-400 hover:text-slate-600'
           }`}
@@ -66,7 +67,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
         {/* Profile */}
         <button
-          onClick={() => onChangeTab('profile')}
+          onClick={() => { haptic(); onChangeTab('profile'); }}
           className={`flex flex-col items-center justify-center min-w-[50px] py-1 cursor-pointer transition ${
             activeTab === 'profile' ? 'text-slate-900 font-bold' : 'text-slate-400 hover:text-slate-600'
           }`}

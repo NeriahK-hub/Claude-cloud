@@ -9,6 +9,7 @@ import { currencyInfo } from '../data/currencies';
 import { currenciesNeedingRate } from '../lib/money';
 import { getThemePref, setThemePref, ThemePref } from '../lib/theme';
 import { CustomIconsSection } from './CustomIconsSection';
+import { hapticsEnabled, setHapticsEnabled } from '../lib/haptics';
 
 interface SettingsViewProps {
   settings: Settings;
@@ -62,6 +63,7 @@ const THEMES: { id: ThemePref; label: string; Icon: typeof Sun }[] = [
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, budgets, onImport, onRestore, onChange, onBack }) => {
   const [theme, setTheme] = useState(getThemePref);
+  const [haptics, setHaptics] = useState(hapticsEnabled);
   const needed = currenciesNeedingRate(wallets, settings);
   // Texte tapé dans les champs de taux (on garde le texte pour ne pas gêner la saisie)
   const [draft, setDraft] = useState<Record<string, string>>(() =>
@@ -127,6 +129,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
             </button>
           ))}
         </div>
+        <label className="flex items-center justify-between gap-3 mt-4 cursor-pointer">
+          <span>
+            <span className="block text-sm font-semibold text-slate-800">Retour haptique</span>
+            <span className="block text-xs text-slate-400">Petite vibration au toucher (iPhone avec iOS 18 ou plus récent, Android).</span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={haptics}
+            onChange={(e) => {
+              setHaptics(e.target.checked);
+              setHapticsEnabled(e.target.checked);
+            }}
+            className="toggle shrink-0"
+          />
+        </label>
       </Section>
 
       <Section title="Devise principale" hint="Le solde de l'accueil est affiché dans cette devise.">

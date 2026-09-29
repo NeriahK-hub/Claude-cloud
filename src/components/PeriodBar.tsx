@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CalendarDays, X } from 'lucide-react';
 import { Period, PeriodKind, PERIOD_KINDS, periodLabel } from '../lib/periods';
+import { haptic } from '../lib/haptics';
 
 // Onglets de périodes (les plus récentes à droite, glisser vers la gauche pour remonter le temps)
 // + bouton calendrier pour choisir l'intervalle : jour, semaine, mois…
@@ -34,7 +35,7 @@ export const PeriodBar: React.FC<{ value: Period; onChange: (p: Period) => void 
               return (
                 <button
                   key={o}
-                  onClick={() => onChange({ kind: value.kind, offset: o })}
+                  onClick={() => { haptic(); onChange({ kind: value.kind, offset: o }); }}
                   className={`shrink-0 px-3 pb-2 pt-1 text-xs font-bold uppercase tracking-wide border-b-2 -mb-px cursor-pointer transition ${
                     active ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'
                   }`}

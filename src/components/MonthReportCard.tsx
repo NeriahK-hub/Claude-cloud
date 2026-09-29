@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Settings, Transaction, Wallet } from '../types';
 import { countsInStats, formatMoney, toMain } from '../lib/money';
+import { haptic } from '../lib/haptics';
 
 interface MonthReportCardProps {
   allTransactions: Transaction[];
@@ -116,12 +117,17 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
   const pickDay = (clientX: number, el: Element) => {
     const r = el.getBoundingClientRect();
     const rel = (clientX - r.left - PAD.left) / (plotW || 1);
-    setHover(Math.max(0, Math.min(data.days - 1, Math.round(rel * (data.days - 1)))));
+    const next = Math.max(0, Math.min(data.days - 1, Math.round(rel * (data.days - 1))));
+    if (next !== hover) haptic();
+    setHover(next);
   };
 
   const tab = (s: Side, label: string, value: number) => (
     <button
-      onClick={() => setSide(s)}
+      onClick={() => {
+        haptic();
+        setSide(s);
+      }}
       aria-pressed={side === s}
       className={`flex-1 pb-2 text-center cursor-pointer border-b-2 transition-colors ${side === s ? 'chart-underline' : 'border-slate-100'}`}
     >

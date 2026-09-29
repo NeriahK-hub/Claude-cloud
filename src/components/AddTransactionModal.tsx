@@ -6,6 +6,7 @@ import { IconBadge } from './AppIcon';
 import { Settings, Wallet } from '../types';
 import { CURRENCIES } from '../data/currencies';
 import { convertBetween, formatMoney } from '../lib/money';
+import { haptic } from '../lib/haptics';
 
 export type AddMode = 'expense' | 'income' | 'debt';
 
@@ -89,7 +90,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  const pressKey = (k: string) =>
+  const pressKey = (k: string) => {
+    haptic();
+    return pressAmount(k);
+  };
+  const pressAmount = (k: string) =>
     setAmount((a) => {
       if (k === 'del') return a.slice(0, -1);
       if (k === '.' && a.includes('.')) return a;
@@ -294,7 +299,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
             {(['expense', 'income', 'debt'] as const).map((m) => (
               <button
                 key={m}
-                onClick={() => onChangeMode(m)}
+                onClick={() => { haptic(); onChangeMode(m); }}
                 className={`py-1.5 rounded-xl text-[13px] font-semibold transition cursor-pointer ${mode === m ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
               >
                 {m === 'expense' ? 'Dépense' : m === 'income' ? 'Revenu' : 'Dette / Prêt'}

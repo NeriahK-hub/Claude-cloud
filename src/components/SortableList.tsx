@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { haptic } from '../lib/haptics';
 
 interface SortableListProps<T> {
   items: T[];
@@ -36,6 +37,7 @@ export function SortableList<T>({ items, getId, renderItem, onChange }: Sortable
     const rects = rows.current.slice(0, items.length).map((el) => el!.getBoundingClientRect());
     const gap = rects.length > 1 ? rects[1].top - rects[0].bottom : 0;
     e.currentTarget.setPointerCapture(e.pointerId);
+    haptic();
     setDrag({ from: index, to: index, startY: e.clientY, dy: 0, rects, gap });
   };
 
@@ -51,6 +53,7 @@ export function SortableList<T>({ items, getId, renderItem, onChange }: Sortable
       if (i > drag.from && center > mid) to = i;
       if (i < drag.from && center < mid) to = Math.min(to, i);
     });
+    if (to !== drag.to) haptic();
     setDrag({ ...drag, dy, to });
   };
 
@@ -93,7 +96,10 @@ export function SortableList<T>({ items, getId, renderItem, onChange }: Sortable
               dragging,
               move: (delta) => {
                 const to = i + delta;
-                if (to >= 0 && to < items.length) commit(i, to);
+                if (to >= 0 && to < items.length) {
+                  haptic();
+                  commit(i, to);
+                }
               },
             })}
           </div>

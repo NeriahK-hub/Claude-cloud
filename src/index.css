@@ -85,6 +85,32 @@ html.dark .chart-inc { --series: #059669; --ref: #8b95a5; }
 .chart-key-ref { background: var(--ref); }
 .chart-underline { border-color: var(--series); }
 
+/* Interrupteur (réglages) */
+.toggle {
+  appearance: none;
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--color-slate-200);
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease-out);
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: translate 0.2s var(--ease-out);
+}
+.toggle:checked { background: #22c55e; }
+.toggle:checked::after { translate: 18px 0; }
+
 /* Longues listes : le navigateur ne dessine que les lignes visibles à l'écran */
 .cv-auto {
   content-visibility: auto;
