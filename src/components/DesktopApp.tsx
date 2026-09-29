@@ -1,18 +1,16 @@
-import React from 'react';
-import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon } from 'lucide-react';
+import React, { Suspense } from 'react';
+import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon, PieChart, HandCoins } from 'lucide-react';
 import { SharedProps } from './appProps';
 import { WalletsView, HomeWalletCard } from './WalletsView';
-import { SettingsView } from './SettingsView';
+import { isShared } from './Members';
 import { countsInStats, formatMoney, toMain, walletBalance } from '../lib/money';
 import { IconBadge, WalletChipIcon } from './AppIcon';
 import { ACTIONS, HomeAction } from './BalanceSection';
 import { Page } from './BottomNav';
 import { TransactionItem } from './TransactionItem';
-import { TransactionHistoryView } from './TransactionHistoryView';
-import { StatisticView } from './StatisticView';
-import { ProfileView } from './ProfileView';
-import { RistourneView, RistourneSummaryCard } from './RistourneView';
-import { CategoriesView } from './CategoriesView';
+import { MonthReportCard } from './MonthReportCard';
+import { inThisMonth } from '../lib/periods';
+import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView } from './pages';
 
 // Interface ORDINATEUR : menu à gauche, contenu en grille à droite
 type DesktopAppProps = SharedProps;
@@ -21,6 +19,8 @@ const MENU: { id: Page; label: string; icon: React.ElementType }[] = [
   { id: 'home', label: 'Accueil', icon: Home },
   { id: 'history', label: 'Historique', icon: History },
   { id: 'statistic', label: 'Statistiques', icon: BarChart2 },
+  { id: 'budgets', label: 'Budgets', icon: PieChart },
+  { id: 'debts', label: 'Dettes et prêts', icon: HandCoins },
   { id: 'ristourne', label: 'Ristourne', icon: Users },
   { id: 'categories', label: 'Catégories', icon: Tags },
   { id: 'wallets', label: 'Portefeuilles', icon: Wallet },
@@ -36,10 +36,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
   } = p;
   const main = settings.mainCurrency;
   const now = new Date();
-  const thisMonth = transactions.filter((t) => {
-    const d = new Date(t.createdAt);
-    return countsInStats(t) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
+  const thisMonth = transactions.filter((t) => countsInStats(t) && inThisMonth(t.createdAt, now));
   const spent = thisMonth.filter((t) => t.amount < 0).reduce((s, t) => s - toMain(t.amount, t.currency, settings), 0);
   const earned = thisMonth.filter((t) => t.amount > 0).reduce((s, t) => s + toMain(t.amount, t.currency, settings), 0);
   const pageTitle = MENU.find((m) => m.id === page)?.label ?? '';
@@ -49,8 +46,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
       {/* Menu de gauche */}
       <aside className="w-64 shrink-0 bg-white border-r border-slate-200/70 p-5 flex flex-col sticky top-0 h-dvh">
         <div className="flex items-center gap-2.5 mb-8 px-2">
-          <div className="w-9 h-9 rounded-xl bg-[#D8FB52] font-black flex items-center justify-center text-sm">AP</div>
-          <span className="text-base font-extrabold tracking-tight">AetherPay</span>
+          <img src="/icons/wallo.svg" alt="" className="w-9 h-9" />
+          <span className="text-base font-extrabold tracking-tight">Wallo</span>
         </div>
 
         <nav className="flex flex-col gap-1">
@@ -82,6 +79,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
 
       {/* Contenu */}
       <main className="flex-1 min-w-0 px-8 py-6">
+        <Suspense fallback={null}>
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-extrabold tracking-tight">{pageTitle}</h1>
           <div className="flex items-center gap-3">
@@ -138,9 +136,17 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                   ))}
                 </div>
               </div>
-              {p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit') && (
+              {p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               )}
+
+              <MonthReportCard
+                allTransactions={allTransactions}
+                wallets={wallets}
+                activeWallet={p.activeWallet}
+                settings={settings}
+                onOpenReports={() => onNavigate('statistic')}
+              />
 
               <div className="bg-white rounded-3xl p-6 border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
@@ -162,8 +168,6 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
 
             {/* Colonne droite (1/3) */}
             <div className="space-y-6">
-              <RistourneSummaryCard onOpen={() => onNavigate('ristourne')} />
-
               <div className="bg-white rounded-3xl p-6 border border-slate-100">
                 <h2 className="text-base font-bold mb-4">Ce mois-ci</h2>
                 <div className="flex justify-between text-sm mb-2">
@@ -199,13 +203,48 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
           <div className="max-w-2xl bg-slate-50 rounded-3xl border border-slate-100 overflow-hidden">
             {page === 'history' && (
               <TransactionHistoryView
-                transactions={transactions}
+                transactions={allTransactions}
+                wallets={wallets}
+                initialWalletId={p.activeWallet?.id ?? 'all'}
                 settings={settings}
                 onBack={() => onNavigate('home')}
                 onSelectTransaction={onSelectTransaction}
               />
             )}
-            {page === 'ristourne' && <RistourneView onBack={() => onNavigate('home')} currency={main} />}
+            {page === 'debts' && (
+              <DebtsView
+                transactions={allTransactions}
+                settings={settings}
+                onBack={() => onNavigate('home')}
+                onAdd={p.onAddDebt}
+                onSelectTransaction={onSelectTransaction}
+              />
+            )}
+            {page === 'budgets' && (
+              <BudgetsView
+                budgets={p.budgets}
+                transactions={allTransactions}
+                categories={categories}
+                settings={settings}
+                onAdd={p.onAddBudget}
+                onUpdate={p.onUpdateBudget}
+                onDelete={p.onDeleteBudget}
+                onBack={() => onNavigate('home')}
+                onSelectTransaction={onSelectTransaction}
+              />
+            )}
+            {page === 'ristourne' && <RistourneView
+                ristournes={p.ristournes}
+                wallets={wallets.filter((w) => !w.archived)}
+                defaultCurrency={settings.mainCurrency}
+                onBack={() => onNavigate('home')}
+                onCreate={p.onCreateRistourne}
+                onUpdate={p.onUpdateRistourne}
+                onDelete={p.onDeleteRistourne}
+                onPay={p.onPayRistourne}
+                onUnpay={p.onUnpayRistourne}
+                onReceive={p.onReceiveRistourne}
+              />}
             {page === 'categories' && (
               <CategoriesView
                 categories={categories}
@@ -239,14 +278,16 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 onTransfer={p.onTransfer}
                 settings={settings}
                 onAdjustBalance={p.onAdjustBalance}
+                onReorder={p.onReorderWallets}
               />
             )}
             {page === 'settings' && (
-              <SettingsView settings={settings} wallets={wallets} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
+              <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
             )}
-            {page === 'profile' && <ProfileView onOpenSettings={() => onNavigate('settings')} />}
+            {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} />}
           </div>
         )}
+        </Suspense>
       </main>
     </div>
   );

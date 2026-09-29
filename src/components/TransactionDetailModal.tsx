@@ -4,6 +4,8 @@ import { Transaction, Wallet } from '../types';
 import { Category, categoriesFor } from '../data/categories';
 import { IconBadge } from './AppIcon';
 import { formatMoney, dayLabel, timeLabel } from '../lib/money';
+import { isShared, memberOf, MemberAvatar, MemberChips, ME_ID } from './Members';
+import { useDisplayPrefs } from '../lib/display';
 
 interface TransactionDetailModalProps {
   transaction: Transaction | null;
@@ -79,7 +81,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 animate-fade-in" onClick={onClose}>
       <div
         className="w-full sm:max-w-md max-h-[100dvh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl relative animate-slide-up"
         onClick={(e) => e.stopPropagation()}
@@ -138,6 +140,16 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
               {row('Catégorie', transaction.category)}
               {row('Date', `${dayLabel(transaction.createdAt)} à ${timeLabel(transaction.createdAt)}`)}
               {row('Portefeuille', wallet?.name ?? '—')}
+              {(isShared(wallet) || transaction.memberId) &&
+                row(
+                  isPositive ? 'Versé par' : 'Fait par',
+                  <span className="inline-flex items-center gap-1.5">
+                    <MemberAvatar {...memberOf(wallet, transaction.memberId)} size="xs" />
+                    {memberOf(wallet, transaction.memberId).name}
+                  </span>
+                )}
+              {transaction.withPerson && row('Avec', transaction.withPerson)}
+              {transaction.excludeFromReport && row('Rapport', 'Exclue des statistiques')}
               {counterpart && row(isPositive ? 'Venant de' : 'Envoyé vers', counterpart.name)}
               {transaction.referenceNumber && (
                 <div className="flex items-center justify-between">
@@ -228,6 +240,12 @@ const EditForm: React.FC<{
   const [categoryId, setCategoryId] = useState(tx.categoryId ?? '');
   const [walletId, setWalletId] = useState(tx.walletId);
   const [when, setWhen] = useState(toLocalInput(tx.createdAt));
+  const [memberId, setMemberId] = useState(tx.memberId ?? ME_ID);
+  const [person, setPerson] = useState(tx.withPerson ?? '');
+  const [exclude, setExclude] = useState(!!tx.excludeFromReport);
+  const { excludeOption } = useDisplayPrefs();
+  const isDebt = categories.find((c) => c.id === (categoryId || tx.categoryId))?.type === 'debt';
+  const editWallet = wallets.find((w) => w.id === walletId);
 
   const value = parseFloat(amount.replace(/\s/g, '').replace(',', '.'));
   const valid = value > 0 && title.trim() !== '' && !!when;
@@ -238,6 +256,9 @@ const EditForm: React.FC<{
       title: title.trim(),
       walletId,
       createdAt: new Date(when).toISOString(),
+      memberId: isShared(editWallet) && memberId !== ME_ID ? memberId : undefined,
+      withPerson: isDebt ? person.trim() || undefined : tx.withPerson,
+      excludeFromReport: simple && exclude ? true : undefined,
     };
     if (value !== Math.abs(tx.amount)) {
       // Le montant d'origine (autre devise) ne correspond plus
@@ -294,6 +315,29 @@ const EditForm: React.FC<{
             ))}
           </select>
         </>
+      )}
+
+      {isDebt && (
+        <>
+          <label className={label}>Avec qui ?</label>
+          <input value={person} onChange={(e) => setPerson(e.target.value)} placeholder="ex. Kemy" className={field} />
+        </>
+      )}
+
+      {isShared(editWallet) && (
+        <div className="mt-3">
+          <MemberChips wallet={editWallet} value={memberId} onChange={setMemberId} label={isOut ? 'Fait par' : 'Versé par'} />
+        </div>
+      )}
+
+      {simple && (excludeOption || tx.excludeFromReport) && (
+        <label className="flex items-center justify-between gap-3 mt-3 cursor-pointer">
+          <span>
+            <span className="block text-sm font-semibold text-slate-700">Exclure du rapport</span>
+            <span className="block text-xs text-slate-400">Compte dans le solde, mais pas dans les statistiques ni les budgets.</span>
+          </span>
+          <input type="checkbox" role="switch" checked={exclude} onChange={(e) => setExclude(e.target.checked)} className="toggle shrink-0" />
+        </label>
       )}
 
       <label className={label}>Date et heure</label>

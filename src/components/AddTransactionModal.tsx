@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Delete, Settings2, ChevronDown, ChevronLeft, ArrowUpRight, ArrowDownLeft, X } from 'lucide-react';
+import { Delete, Settings2, ChevronDown, ChevronLeft, ArrowUpRight, ArrowDownLeft, X, EyeOff } from 'lucide-react';
 import { Category, categoriesFor } from '../data/categories';
+import { isShared, MemberChips, ME_ID } from './Members';
+import { useDisplayPrefs } from '../lib/display';
 import { IconBadge } from './AppIcon';
 import { Settings, Wallet } from '../types';
 import { CURRENCIES } from '../data/currencies';
 import { convertBetween, formatMoney } from '../lib/money';
+import { haptic } from '../lib/haptics';
+import { SelCheck } from './SelCheck';
 
 export type AddMode = 'expense' | 'income' | 'debt';
 
@@ -16,8 +20,11 @@ interface AddTransactionModalProps {
   defaultWalletId: string;
   onClose: () => void;
   onChangeMode: (m: AddMode) => void;
-  onSave: (amount: number, category: Category, note: string, walletId: string, currency: string) => void;
+  onSave: (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string, excludeFromReport?: boolean) => void;
   onManageCategories: () => void;
+  // Ouverture pré-remplie (ex. « Il me rembourse » depuis Dettes et prêts)
+  preset?: { categoryId?: string; withPerson?: string; amount?: number; currency?: string } | null;
+  people?: string[]; // noms déjà utilisés (suggestions pour « Avec qui ? »)
 }
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
@@ -44,6 +51,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   onChangeMode,
   onSave,
   onManageCategories,
+  preset,
+  people = [],
 }) => {
   const [amount, setAmount] = useState('');
   const [parentId, setParentId] = useState(''); // catégorie principale choisie
@@ -51,6 +60,10 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const [note, setNote] = useState('');
   const [walletId, setWalletId] = useState('');
   const [currency, setCurrency] = useState('');
+  const [memberId, setMemberId] = useState(ME_ID); // portefeuille partagé : qui fait l'opération
+  const [person, setPerson] = useState(''); // Dette / Prêt : avec qui
+  const [exclude, setExclude] = useState(false); // exclure du rapport (si l'option est activée)
+  const { excludeOption } = useDisplayPrefs();
   const [panel, setPanel] = useState<Panel>(null);
   const [subOf, setSubOf] = useState<string | null>(null); // panneau catégorie : sous-catégories de…
 
@@ -65,10 +78,13 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   // À l'ouverture : tout remettre à zéro
   useEffect(() => {
     if (isOpen) {
-      setAmount('');
+      setAmount(preset?.amount ? String(Math.round(preset.amount * 100) / 100) : '');
       setNote('');
+      setPerson(preset?.withPerson ?? '');
+      setExclude(false);
+      setMemberId(ME_ID);
       setWalletId(defaultWalletId);
-      setCurrency(wallets.find((w) => w.id === defaultWalletId)?.currency ?? '');
+      setCurrency(preset?.currency ?? wallets.find((w) => w.id === defaultWalletId)?.currency ?? '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -77,16 +93,21 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   // En Dette / Prêt, rien n'est présélectionné : on ouvre directement le choix.
   useEffect(() => {
     if (mode) {
-      const first = mode === 'debt' ? undefined : categoriesFor(mode, categories).find((c) => !c.parentId);
-      setParentId(first?.id ?? '');
+      const pre = preset?.categoryId ? categoriesFor(mode, categories).find((c) => c.id === preset.categoryId) : undefined;
+      const first = pre ?? (mode === 'debt' ? undefined : categoriesFor(mode, categories).find((c) => !c.parentId));
+      setParentId(first?.parentId ?? first?.id ?? '');
       setSelectedId(first?.id ?? '');
       setSubOf(null);
-      setPanel(mode === 'debt' ? 'category' : null);
+      setPanel(mode === 'debt' && !first ? 'category' : null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  const pressKey = (k: string) =>
+  const pressKey = (k: string) => {
+    haptic();
+    return pressAmount(k);
+  };
+  const pressAmount = (k: string) =>
     setAmount((a) => {
       if (k === 'del') return a.slice(0, -1);
       if (k === '.' && a.includes('.')) return a;
@@ -104,7 +125,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
   const save = () => {
     if (!canSave || !selected || !wallet) return;
-    onSave(value, selected, note, wallet.id, cur);
+    onSave(value, selected, note, wallet.id, cur, isShared(wallet) && memberId !== ME_ID ? memberId : undefined, mode === 'debt' ? person.trim() || undefined : undefined, excludeOption && exclude ? true : undefined);
     onClose();
   };
 
@@ -166,10 +187,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     <button
       key={key}
       onClick={onClick}
-      className={`min-w-0 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 rounded-2xl text-center border-2 transition cursor-pointer ${
-        active ? 'border-slate-900 bg-[#D8FB52]/40' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
+      className={`relative min-w-0 flex flex-col items-center justify-center gap-0.5 px-1 py-2 rounded-2xl text-center transition cursor-pointer ${
+        active ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200/70'
       }`}
     >
+      {active && <SelCheck />}
       {badge}
       <span className="w-full text-[11px] font-bold text-slate-900 leading-tight line-clamp-2 [overflow-wrap:anywhere]">{title}</span>
       {sub}
@@ -231,6 +253,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 () => {
                   setWalletId(w.id);
                   setCurrency(w.currency);
+                  setMemberId(ME_ID);
                   setPanel(null);
                 },
                 <IconBadge icon={w.icon} image={w.image} color={w.color} size="sm" />,
@@ -271,8 +294,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   };
 
   const selectorCls = (active: boolean) =>
-    `min-w-0 flex-1 flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-2xl text-left cursor-pointer transition border-2 ${
-      active ? 'border-slate-900 bg-white' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
+    `min-w-0 flex-1 flex items-center gap-2 pl-1.5 pr-2.5 py-2 rounded-2xl text-left cursor-pointer transition ${
+      active ? 'is-open' : 'bg-slate-100 hover:bg-slate-200/70'
     }`;
 
   return (
@@ -290,7 +313,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
             {(['expense', 'income', 'debt'] as const).map((m) => (
               <button
                 key={m}
-                onClick={() => onChangeMode(m)}
+                onClick={() => { haptic(); onChangeMode(m); }}
                 className={`py-1.5 rounded-xl text-[13px] font-semibold transition cursor-pointer ${mode === m ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
               >
                 {m === 'expense' ? 'Dépense' : m === 'income' ? 'Revenu' : 'Dette / Prêt'}
@@ -359,13 +382,54 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
             <div className="animate-fade-in">{renderPanel()}</div>
           ) : (
             <>
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && save()}
-                placeholder="Note (facultatif) : ex. marché de Gambela"
-                className="w-full mb-2 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
-              />
+              {isShared(wallet) && (
+                <div className="mb-2">
+                  <MemberChips wallet={wallet} value={memberId} onChange={setMemberId} label={direction === 'in' ? 'Versé par' : 'Fait par'} />
+                </div>
+              )}
+              <div className="flex gap-2 items-start">
+              <div className="flex-1 min-w-0">
+              {mode === 'debt' ? (
+                <>
+                  {/* Dette / Prêt : avec qui (suggestions = noms déjà utilisés) */}
+                  <input
+                    value={person}
+                    onChange={(e) => setPerson(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && save()}
+                    list="wallo-people"
+                    placeholder="Avec qui ? (ex. Kemy)"
+                    className="w-full mb-2 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
+                  />
+                  <datalist id="wallo-people">
+                    {people.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
+                </>
+              ) : (
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && save()}
+                  placeholder="Note (facultatif) : ex. marché de Gambela"
+                  className="w-full mb-2 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
+                />
+              )}
+              </div>
+              {excludeOption && (
+                <button
+                  type="button"
+                  onClick={() => setExclude((x) => !x)}
+                  aria-pressed={exclude}
+                  title="Exclure du rapport"
+                  className={`shrink-0 h-9 px-3 rounded-2xl text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+                    exclude ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <EyeOff className="w-3.5 h-3.5" /> Hors rapport
+                </button>
+              )}
+              </div>
               <div className="grid grid-cols-3 gap-1.5">
                 {KEYS.map((k) => (
                   <button

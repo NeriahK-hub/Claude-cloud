@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Wallo : deux billets qui forment un « W ».
+       Le billet de gauche est découpé (masque) autour de celui de droite et le long de son pli :
+       ces espaces laissent voir le fond, quel qu'il soit. -->
+  <defs>
+    <rect id="shape" x="0" y="0" width="118" height="260" rx="24"/>
+    <g id="face">
+      <use href="#shape" fill="#fff"/>
+      <path d="M17 36 Q18 21 34 19 L50 17" stroke="#000" stroke-width="9" stroke-linecap="round" fill="none"/>
+      <path d="M80 17 L94 19 Q101 21 101 32" stroke="#000" stroke-width="9" stroke-linecap="round" fill="none"/>
+      <circle cx="59" cy="104" r="32" fill="#000"/>
+      <text x="59" y="118" text-anchor="middle" font-family="Arial Rounded MT Bold, Arial, Helvetica, sans-serif" font-weight="900" font-size="40" fill="#fff">$</text>
+    </g>
+    <mask id="left" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <g transform="translate(186 262) rotate(-21) translate(-59 -130)">
+        <use href="#face"/>
+        <path d="M92 150 L92 272" stroke="#000" stroke-width="9" stroke-linecap="round"/>
+      </g>
+      <g transform="translate(328 250) rotate(23) translate(-59 -130)">
+        <use href="#shape" fill="#000" stroke="#000" stroke-width="18"/>
+      </g>
+    </mask>
+    <mask id="right" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <g transform="translate(328 250) rotate(23) translate(-59 -130)"><use href="#face"/></g>
+    </mask>
+  </defs>
+  <rect width="512" height="512" fill="#fff" mask="url(#left)"/>
+  <rect width="512" height="512" fill="#fff" mask="url(#right)"/>
+</svg>

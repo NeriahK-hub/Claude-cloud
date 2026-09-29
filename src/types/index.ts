@@ -21,6 +21,9 @@ export interface Transaction {
   transferId?: string; // relie les deux moitiés d'un transfert
   counterpartWalletId?: string; // l'autre portefeuille du transfert
   status?: 'completed' | 'pending' | 'failed';
+  excludeFromReport?: boolean; // vraie dépense/revenu, mais gardé hors des statistiques (ex. prêts importés de Money Lover)
+  withPerson?: string; // « Avec » : la personne concernée (prêt, dette…)
+  memberId?: string; // portefeuille partagé : qui a fait l'opération (absent = moi)
 }
 
 export interface Wallet {
@@ -37,6 +40,21 @@ export interface Wallet {
   creditLimit?: number; // seulement 'credit'
   goalAmount?: number; // seulement 'goal'
   goalDate?: string; // seulement 'goal', format AAAA-MM-JJ
+  members?: WalletMember[]; // portefeuille partagé : les autres personnes (moi n'y figure pas)
+  ownerId?: string; // compte en ligne : propriétaire (absent = moi, portefeuille créé ici)
+  myMemberId?: string; // compte en ligne : ma ligne de membre dans ce portefeuille
+}
+
+// Une personne avec qui on partage un portefeuille (ex. son conjoint)
+export interface WalletMember {
+  id: string;
+  name: string;
+  color: string;
+  contact?: string; // téléphone ou e-mail, pour l'inviter plus tard
+  removed?: boolean; // retiré du partage : on garde son nom sur ses anciennes opérations
+  userId?: string; // compte en ligne de cette personne (elle a rejoint le portefeuille)
+  invited?: boolean; // invitation envoyée par e-mail, pas encore acceptée
+  owner?: boolean; // propriétaire du portefeuille (vu depuis le téléphone d'un autre membre)
 }
 
 export type WalletKind = 'basic' | 'credit' | 'goal';
@@ -48,44 +66,52 @@ export interface Settings {
   rates: Record<string, number>;
 }
 
-// Ancien type (fichiers de démonstration non utilisés)
-export interface BankAccount {
+// Ristourne (tontine) : chacun cotise à chaque tour, un membre reçoit la cagnotte à tour de rôle
+export interface Ristourne {
   id: string;
   name: string;
-  cardNumber: string; // e.g. "**** 3425"
-  fullNumber: string;
-  cardType: 'Visa' | 'Mastercard' | 'Apple Pay';
-  balance: number;
+  contribution: number; // cotisation de chaque membre, à chaque tour
   currency: string;
-  isDefault: boolean;
-  themeColor: string;
-  expiry: string;
-  cvv: string;
-  holder: string;
+  frequency: 'weekly' | 'biweekly' | 'monthly';
+  startDate: string; // AAAA-MM-JJ : date du 1er tour
+  members: RistourneMember[];
+  payments: RistournePayment[];
+  ownerId?: string; // compte en ligne : propriétaire (absent = moi)
 }
 
-export interface MerchantOffer {
-  id: string;
-  title: string;
-  subtitle: string;
-  discount: string;
-  merchantName: string;
-  category: string;
-  bannerGradient: string;
-  accentColor: string;
-  badge: string;
-  code: string;
-  expiresIn: string;
-}
-
-export interface QuickContact {
+export interface RistourneMember {
   id: string;
   name: string;
-  handle: string;
-  avatar: string;
-  avatarBg: string;
-  initials: string;
-  recentAmount?: number;
+  turn: number; // tour où ce membre reçoit la cagnotte (1, 2, 3…)
+  isMe?: boolean;
+  contact?: string; // e-mail pour l'inviter
+  userId?: string; // compte en ligne (il a rejoint)
+  invited?: boolean;
+  removed?: boolean;
+}
+
+export interface RistournePayment {
+  id: string;
+  memberId: string;
+  turn: number;
+  amount: number;
+  paidAt: string; // ISO
+}
+
+// Budget : pour une catégorie (sous-catégories comprises) ou pour toutes les dépenses.
+// Semaine / mois / trimestre / année : recommence automatiquement à chaque période.
+// Personnalisé : une seule période, du « from » au « to ».
+export type BudgetPeriod = 'week' | 'month' | 'quarter' | 'year' | 'custom';
+
+export interface Budget {
+  id: string;
+  categoryId: string | null; // null = toutes les dépenses
+  amount: number; // par période
+  currency: string;
+  createdAt: string;
+  period?: BudgetPeriod; // absent = 'month' (budgets d'avant)
+  from?: string; // personnalisé : AAAA-MM-JJ (inclus)
+  to?: string; // personnalisé : AAAA-MM-JJ (inclus)
 }
 
 export interface NotificationItem {
@@ -94,5 +120,5 @@ export interface NotificationItem {
   message: string;
   time: string;
   read: boolean;
-  type: 'transaction' | 'promo' | 'security';
+  type: 'transaction' | 'promo' | 'security' | 'budget';
 }

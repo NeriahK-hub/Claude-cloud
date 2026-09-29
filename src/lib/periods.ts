@@ -1,5 +1,6 @@
 // Périodes pour l'historique et le rapport : jour, semaine, mois, trimestre, année, tout, personnalisé.
 // offset = 0 pour la période en cours, -1 pour la précédente, etc.
+import { formatDate, getPrefs } from './display';
 
 export type PeriodKind = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all' | 'custom';
 
@@ -20,10 +21,11 @@ export const PERIOD_KINDS: { id: PeriodKind; label: string }[] = [
   { id: 'custom', label: 'Personnalisé' },
 ];
 
-const pad = (n: number) => String(n).padStart(2, '0');
 
-// Début (inclus) et fin (exclue) de la période
+// Début (inclus) et fin (exclue) de la période.
+// Suit Paramètres › Affichage : premier jour de la semaine, du mois (ex. 25 = mois de paie), de l'année.
 export function periodRange(p: Period, now = new Date()): { start: Date | null; end: Date | null } {
+  const { weekStart, monthStart, yearStart } = getPrefs();
   const y = now.getFullYear();
   const m = now.getMonth();
   const d = now.getDate();
@@ -31,17 +33,23 @@ export function periodRange(p: Period, now = new Date()): { start: Date | null; 
     case 'day':
       return { start: new Date(y, m, d + p.offset), end: new Date(y, m, d + p.offset + 1) };
     case 'week': {
-      const monday = d - ((now.getDay() + 6) % 7); // la semaine commence le lundi
-      return { start: new Date(y, m, monday + 7 * p.offset), end: new Date(y, m, monday + 7 * (p.offset + 1)) };
+      const first = d - ((now.getDay() - weekStart + 7) % 7);
+      return { start: new Date(y, m, first + 7 * p.offset), end: new Date(y, m, first + 7 * (p.offset + 1)) };
     }
-    case 'month':
-      return { start: new Date(y, m + p.offset, 1), end: new Date(y, m + p.offset + 1, 1) };
+    case 'month': {
+      // Le mois en cours a commencé ce mois-ci si on a passé le jour de départ, sinon le mois dernier
+      const base = d >= monthStart ? m : m - 1;
+      return { start: new Date(y, base + p.offset, monthStart), end: new Date(y, base + p.offset + 1, monthStart) };
+    }
     case 'quarter': {
-      const q = Math.floor(m / 3) * 3;
-      return { start: new Date(y, q + 3 * p.offset, 1), end: new Date(y, q + 3 * (p.offset + 1), 1) };
+      const fy = m >= yearStart ? y : y - 1; // début de l'année (exercice) en cours
+      const q = Math.floor(((m - yearStart + 12) % 12) / 3);
+      return { start: new Date(fy, yearStart + 3 * (q + p.offset), 1), end: new Date(fy, yearStart + 3 * (q + p.offset + 1), 1) };
     }
-    case 'year':
-      return { start: new Date(y + p.offset, 0, 1), end: new Date(y + p.offset + 1, 0, 1) };
+    case 'year': {
+      const fy = m >= yearStart ? y : y - 1;
+      return { start: new Date(fy + p.offset, yearStart, 1), end: new Date(fy + p.offset + 1, yearStart, 1) };
+    }
     case 'custom': {
       const from = p.from ? new Date(p.from + 'T00:00') : null;
       const to = p.to ? new Date(p.to + 'T00:00') : null;
@@ -58,7 +66,7 @@ export function inPeriod(iso: string, range: { start: Date | null; end: Date | n
   return (!range.start || t >= range.start.getTime()) && (!range.end || t < range.end.getTime());
 }
 
-const short = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+const short = (d: Date) => formatDate(d, true);
 
 export function periodLabel(p: Period, now = new Date()): string {
   const { start, end } = periodRange(p, now);
@@ -80,12 +88,19 @@ export function periodLabel(p: Period, now = new Date()): string {
       const last = new Date(end!.getTime() - 86400000);
       return `${short(start)} – ${short(last)}`;
     }
-    case 'month':
-      return `${pad(start.getMonth() + 1)}/${start.getFullYear()}`;
-    case 'quarter':
-      return `T${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`;
-    case 'year':
-      return String(start.getFullYear());
+    case 'month': {
+      if (getPrefs().monthStart !== 1) return `${short(start)} – ${short(new Date(end!.getTime() - 86400000))}`;
+      const label = start.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
+      return label.charAt(0).toUpperCase() + label.slice(1);
+    }
+    case 'quarter': {
+      const ys = getPrefs().yearStart;
+      return `T${Math.floor(((start.getMonth() - ys + 12) % 12) / 3) + 1} ${start.getFullYear()}`;
+    }
+    case 'year': {
+      const last = new Date(end!.getTime() - 86400000);
+      return last.getFullYear() === start.getFullYear() ? String(start.getFullYear()) : `${start.getFullYear()}–${last.getFullYear()}`;
+    }
     case 'custom': {
       const last = end ? new Date(end.getTime() - 86400000) : null;
       return last ? `${short(start)} – ${short(last)}` : `Depuis le ${short(start)}`;
@@ -94,3 +109,14 @@ export function periodLabel(p: Period, now = new Date()): string {
       return '';
   }
 }
+
+// Titre d'un mois (budgets) : « Septembre 2026 », ou « 25/08 – 24/09 » si le mois commence un autre jour
+export function monthTitle(offset: number, now = new Date()): string {
+  const { start, end } = periodRange({ kind: 'month', offset }, now);
+  if (getPrefs().monthStart !== 1) return `${formatDate(start!, true)} – ${formatDate(new Date(end!.getTime() - 86400000), true)}`;
+  const s = start!.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// La date tombe-t-elle dans le mois en cours (selon le premier jour du mois choisi) ?
+export const inThisMonth = (iso: string, now = new Date()) => inPeriod(iso, periodRange({ kind: 'month', offset: 0 }, now));

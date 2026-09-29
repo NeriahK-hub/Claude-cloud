@@ -1,15 +1,26 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronDown, Sun, Moon, SmartphoneIcon } from 'lucide-react';
-import { Settings, Wallet } from '../types';
+import { Budget, Ristourne, Settings, Transaction, Wallet } from '../types';
+import { Category } from '../data/categories';
+import { Backup, ImportPlan } from '../lib/importExport';
+import { DataSection } from './DataSection';
 import { CurrencyPicker } from './CurrencyPicker';
 import { currencyInfo } from '../data/currencies';
 import { currenciesNeedingRate } from '../lib/money';
 import { getThemePref, setThemePref, ThemePref } from '../lib/theme';
 import { CustomIconsSection } from './CustomIconsSection';
+import { DisplaySettings } from './DisplaySettings';
+import { hapticsEnabled, setHapticsEnabled } from '../lib/haptics';
 
 interface SettingsViewProps {
   settings: Settings;
   wallets: Wallet[];
+  transactions: Transaction[];
+  categories: Category[];
+  budgets: Budget[];
+  ristournes: Ristourne[];
+  onImport: (plan: ImportPlan, replace: boolean) => void;
+  onRestore: (backup: Backup) => void;
   onChange: (s: Settings) => void;
   onBack: () => void;
 }
@@ -52,8 +63,9 @@ const THEMES: { id: ThemePref; label: string; Icon: typeof Sun }[] = [
   { id: 'dark', label: 'Sombre', Icon: Moon },
 ];
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, onChange, onBack }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, budgets, ristournes, onImport, onRestore, onChange, onBack }) => {
   const [theme, setTheme] = useState(getThemePref);
+  const [haptics, setHaptics] = useState(hapticsEnabled);
   const needed = currenciesNeedingRate(wallets, settings);
   // Texte tapé dans les champs de taux (on garde le texte pour ne pas gêner la saisie)
   const [draft, setDraft] = useState<Record<string, string>>(() =>
@@ -89,6 +101,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, o
         <h1 className="text-xl font-bold text-slate-900">Paramètres</h1>
       </div>
 
+      <Section title="Mes données" hint="Importe ton historique (Money Lover, Excel…) ou exporte tout.">
+        <DataSection
+          wallets={wallets}
+          transactions={transactions}
+          categories={categories}
+          budgets={budgets}
+          ristournes={ristournes}
+          settings={settings}
+          onImport={onImport}
+          onRestore={onRestore}
+        />
+      </Section>
+
       <Section title="Apparence" hint="« Système » suit le réglage clair / sombre de ton téléphone.">
         <div className="grid grid-cols-3 gap-1 p-1 rounded-2xl bg-slate-100">
           {THEMES.map(({ id, label, Icon }) => (
@@ -107,6 +132,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, o
             </button>
           ))}
         </div>
+        <label className="flex items-center justify-between gap-3 mt-4 cursor-pointer">
+          <span>
+            <span className="block text-sm font-semibold text-slate-800">Retour haptique</span>
+            <span className="block text-xs text-slate-400">Petite vibration au toucher (iPhone avec iOS 18 ou plus récent, Android).</span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={haptics}
+            onChange={(e) => {
+              setHaptics(e.target.checked);
+              setHapticsEnabled(e.target.checked);
+            }}
+            className="toggle shrink-0"
+          />
+        </label>
+      </Section>
+
+      <Section title="Affichage">
+        <DisplaySettings currency={settings.mainCurrency} />
       </Section>
 
       <Section title="Devise principale" hint="Le solde de l'accueil est affiché dans cette devise.">
@@ -158,7 +203,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, o
           </div>
         )}
       </Section>
-      <Section title="Mes icônes" hint="Crée tes propres icônes SVG pour tes catégories et portefeuilles.">
+      <Section title="Mes icônes" hint="Ajoute tes propres icônes (SVG, PNG ou JPG) pour tes catégories et portefeuilles.">
         <CustomIconsSection />
       </Section>
     </div>

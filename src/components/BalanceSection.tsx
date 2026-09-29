@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowUpRight, ArrowDownLeft, PieChart, Users, ChevronDown } from 'lucide-react';
 import { BalanceInfo, formatMoney } from '../lib/money';
+import { useCountUp } from '../hooks/useCountUp';
 import { Wallet } from '../types';
 import { WalletChipIcon } from './AppIcon';
 
@@ -35,6 +36,9 @@ export const BalanceSection: React.FC<BalanceSectionProps> = ({
   onOpenAccountPicker,
   onActionClick,
 }) => {
+  const shownMain = useCountUp(balance.main);
+  const shownSecond = useCountUp(balance.second ?? 0);
+
   return (
     <div className="px-5 pt-3 pb-4 flex flex-col items-center text-center">
       {/* Choix du portefeuille (M-Pesa, Airtel Money, cash...) */}
@@ -53,11 +57,11 @@ export const BalanceSection: React.FC<BalanceSectionProps> = ({
 
       {/* Solde : police normale (plus de font-mono), chiffres alignés */}
       <div className="text-[34px] sm:text-[38px] font-extrabold text-slate-900 tracking-tight leading-none mb-3 tabular-nums">
-        {formatMoney(balance.main, balance.mainCurrency)}
+        {formatMoney(shownMain, balance.mainCurrency)}
       </div>
       {balance.second !== null && balance.secondCurrency && (
         <div className="text-sm font-semibold text-slate-400 tabular-nums -mt-1 mb-3">
-          {formatMoney(balance.second, balance.secondCurrency)}
+          {formatMoney(shownSecond, balance.secondCurrency)}
         </div>
       )}
 

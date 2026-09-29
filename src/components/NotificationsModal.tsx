@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Bell, CheckCheck, Sparkles, Shield, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { X, Sparkles, Shield, ArrowDownLeft, PieChart } from 'lucide-react';
 import { NotificationItem } from '../types';
 
 interface NotificationsModalProps {
@@ -18,7 +18,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 animate-fade-in">
       <div className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl relative animate-slide-up max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -26,7 +26,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
             <h3 className="text-base font-bold text-slate-900 tracking-tight">Notifications</h3>
             {notifications.filter((n) => !n.read).length > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-[#D8FB52] text-slate-950 text-[10px] font-extrabold">
-                {notifications.filter((n) => !n.read).length} new
+                {notifications.filter((n) => !n.read).length} nouvelle{notifications.filter((n) => !n.read).length > 1 ? 's' : ''}
               </span>
             )}
           </div>
@@ -35,7 +35,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
               onClick={onMarkAllRead}
               className="text-xs font-semibold text-slate-500 hover:text-slate-900 cursor-pointer"
             >
-              Mark all read
+              Tout marquer comme lu
             </button>
             <button
               onClick={onClose}
@@ -48,6 +48,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
 
         {/* Notifications List */}
         <div className="flex-1 overflow-y-auto py-3 space-y-2.5">
+          {notifications.length === 0 && <p className="text-sm text-slate-400 text-center py-8">Aucune notification pour l'instant.</p>}
           {notifications.map((notif) => (
             <div
               key={notif.id}
@@ -57,7 +58,9 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
             >
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 mt-0.5">
-                  {notif.type === 'transaction' ? (
+                  {notif.type === 'budget' ? (
+                    <PieChart className="w-4 h-4 text-amber-600" />
+                  ) : notif.type === 'transaction' ? (
                     <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
                   ) : notif.type === 'promo' ? (
                     <Sparkles className="w-4 h-4 text-indigo-600" />

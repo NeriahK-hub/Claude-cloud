@@ -1,26 +1,32 @@
 import { Settings, Transaction, Wallet } from '../types';
+import { DisplayPrefs, getPrefs, NUMBER_LOCALES } from './display';
 
 const formatters = new Map<string, Intl.NumberFormat>();
 
-// UNIQUE fonction d'affichage des montants de toute l'app
-export function formatMoney(amount: number, currency: string): string {
+// UNIQUE fonction d'affichage des montants de toute l'app (suit Paramètres › Affichage).
+// `prefs` permet d'afficher un aperçu avec un autre réglage.
+export function formatMoney(amount: number, currency: string, prefs: Pick<DisplayPrefs, 'number' | 'decimals'> = getPrefs()): string {
+  const { number, decimals } = prefs;
+  const locale = NUMBER_LOCALES[number];
+  const digits = decimals === 'never' || (decimals === 'auto' && Math.abs(amount - Math.round(amount)) < 0.005) ? 0 : 2;
+  const key = `${locale}|${currency}|${digits}`;
   try {
-    let f = formatters.get(currency);
+    let f = formatters.get(key);
     if (!f) {
-      f = new Intl.NumberFormat('fr-FR', { style: 'currency', currency });
-      formatters.set(currency, f);
+      f = new Intl.NumberFormat(locale, { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits });
+      formatters.set(key, f);
     }
     return f.format(amount);
   } catch {
     // code de devise inconnu
-    return `${amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+    return `${amount.toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${currency}`;
   }
 }
 
 // Solde d'un portefeuille = solde de départ + somme de ses transactions
 // Les transferts et ajustements déplacent ou corrigent de l'argent : ce ne sont pas des dépenses/revenus
 export function countsInStats(t: Transaction): boolean {
-  return t.type !== 'transfer' && t.type !== 'adjustment';
+  return t.type !== 'transfer' && t.type !== 'adjustment' && !t.excludeFromReport;
 }
 
 export function walletBalance(wallet: Wallet, transactions: Transaction[]): number {

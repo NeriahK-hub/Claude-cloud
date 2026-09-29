@@ -1,20 +1,31 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Wallo
 
-# Run and deploy your AI Studio app
+Gestion de budget : portefeuilles (cash, Mobile Money, banque, objectifs, crédit, partagés),
+dépenses et revenus multi-devises, transferts, rapports par période et par catégorie,
+import / export Money Lover (Excel), mode sombre.
 
-This contains everything you need to run your app locally.
+## Lancer l'app en local
 
-View your app in AI Studio: https://ai.studio/apps/e3363256-e6ea-4037-b045-9990d21c3a00
+Prérequis : Node.js 18 ou plus récent.
 
-## Run Locally
+```bash
+npm install
+npm run dev
+```
 
-**Prerequisites:**  Node.js
+Puis ouvrir http://localhost:3000. Sur un téléphone du même Wi-Fi : `http://<IP-de-l-ordinateur>:3000`
+(l'adresse s'affiche dans le terminal sous « Network »).
 
+## Vérifications
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm run lint    # vérification des types (TypeScript)
+npm run build   # version de production dans dist/
+```
+
+## Où sont les choses
+
+- `src/App.tsx` : les données (portefeuilles, transactions, catégories, réglages) et les actions.
+- `src/components/` : les écrans (accueil, portefeuilles, rapport, historique, paramètres…).
+- `src/lib/` : calculs d'argent et de devises, périodes, import / export, icônes personnalisées.
+- `public/` : icônes de l'app et manifeste (installation sur l'écran d'accueil).

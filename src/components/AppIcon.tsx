@@ -39,7 +39,10 @@ export const AppIcon: React.FC<{ name: string; className?: string; style?: React
   const custom = useCustomIcons().find((i) => i.id === name);
   if (custom) {
     // Icône SVG de l'utilisateur : image (couleurs d'origine) ou masque coloré
-    if (custom.keepColors) return <img src={custom.dataUrl} alt="" className={`${className} object-contain`} style={style} />;
+    // Les logos en couleur (Orange Money, Airtel…) ont leur propre fond et des marges :
+    // on les affiche un peu plus grands que les icônes au trait pour qu'ils restent lisibles
+    if (custom.keepColors)
+      return <img src={custom.dataUrl} alt="" className={`${className} object-contain`} style={{ ...style, scale: '1.45' }} />;
     const mask = `url("${custom.dataUrl}") center / contain no-repeat`;
     return (
       <span
@@ -67,10 +70,10 @@ export const IconBadge: React.FC<{
     <img src={image} alt="" className={`${BOX[size]} rounded-full object-cover shrink-0`} />
   ) : (
     <div
-      className={`${BOX[size]} rounded-full flex items-center justify-center shrink-0`}
-      style={{ backgroundColor: color + '22' }}
+      className={`${BOX[size]} rounded-full flex items-center justify-center shrink-0 tint`}
+      style={{ backgroundColor: color + '22', '--tint': color } as React.CSSProperties}
     >
-      <AppIcon name={icon} className={GLYPH[size]} style={{ color }} />
+      <AppIcon name={icon} className={GLYPH[size]} />
     </div>
   );
 

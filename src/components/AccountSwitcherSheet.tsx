@@ -29,7 +29,7 @@ export const AccountSwitcherSheet: React.FC<AccountSwitcherSheetProps> = ({
 
   const rowCls = (selected: boolean) =>
     `p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
-      selected ? 'border-[#B8E94C] bg-lime-50/50 ring-2 ring-[#D8FB52]/40' : 'border-slate-200 hover:bg-slate-50'
+      selected ? 'border-transparent is-selected' : 'border-slate-200 hover:bg-slate-50'
     }`;
   const check = (
     <div className="w-6 h-6 rounded-full bg-[#D8FB52] flex items-center justify-center">
@@ -38,7 +38,7 @@ export const AccountSwitcherSheet: React.FC<AccountSwitcherSheetProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 animate-fade-in" onClick={onClose}>
       <div className="w-full sm:max-w-md max-h-[90dvh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slide-up" onClick={(e) => e.stopPropagation()}>
         <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-4 sm:hidden"></div>
 

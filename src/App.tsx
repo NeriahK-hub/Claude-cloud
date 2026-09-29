@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { INITIAL_NOTIFICATIONS } from './data/mockData';
-import { Transaction, NotificationItem, Wallet, Settings } from './types';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Transaction, NotificationItem, Wallet, Settings, Budget, Ristourne, RistourneMember } from './types';
 import { usePersistentState } from './hooks/usePersistentState';
 import { convertBetween, formatMoney, makeBalance, toMain, totalInMain, walletBalance } from './lib/money';
 import { HomeAction } from './components/BalanceSection';
@@ -8,6 +7,17 @@ import { SharedProps } from './components/appProps';
 import { Page } from './components/BottomNav';
 import { useIsDesktop } from './hooks/useIsDesktop';
 import { Category, DEFAULT_CATEGORIES } from './data/categories';
+import { Backup, ImportPlan } from './lib/importExport';
+import { getAllCustomIcons, replaceCustomIcons, useCustomIcons } from './lib/customIcons';
+import { setProfileName, useProfile } from './lib/profile';
+import { useDisplayPrefs } from './lib/display';
+import { useCloud } from './lib/sync/useCloud';
+import { applyList } from './lib/sync/engine';
+import type { SyncData } from './lib/sync/mapping';
+import { MergeDialog } from './components/Account';
+import type { DebtPreset } from './components/DebtsView';
+import { budgetStatus, periodOf } from './lib/budgets';
+import { uuid } from './lib/ids';
 
 // Les deux interfaces
 import { MobileApp } from './components/MobileApp';
@@ -20,10 +30,15 @@ import { AccountSwitcherSheet } from './components/AccountSwitcherSheet';
 import { NotificationsModal } from './components/NotificationsModal';
 import { NavigationDrawer } from './components/NavigationDrawer';
 import { CheckCircle } from 'lucide-react';
+import { haptic } from './lib/haptics';
 
 const DEFAULT_WALLETS: Wallet[] = [
   { id: 'wallet-cash', name: 'Cash', icon: 'Banknote', color: '#059669', currency: 'USD', initialBalance: 0, includeInTotal: true, archived: false },
   { id: 'wallet-momo', name: 'Mobile Money', icon: 'Smartphone', color: '#F97316', currency: 'USD', initialBalance: 0, includeInTotal: true, archived: false },
+];
+
+const WELCOME: NotificationItem[] = [
+  { id: 'welcome', title: 'Bienvenue sur Wallo', message: 'Ajoute ta première dépense avec le bouton +, ou importe ton historique dans Paramètres › Mes données.', time: '', read: false, type: 'transaction' },
 ];
 
 const DEFAULT_SETTINGS: Settings = { mainCurrency: 'USD', secondCurrency: null, rates: {} };
@@ -38,7 +53,9 @@ export default function App() {
   const [categories, setCategories] = usePersistentState<Category[]>('ap.categories', DEFAULT_CATEGORIES);
   const [storedSettings, setSettings] = usePersistentState<Settings>('ap.settings', DEFAULT_SETTINGS);
   const [activeWalletId, setActiveWalletId] = usePersistentState<string>('ap.activeWallet', 'all');
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [budgets, setBudgets] = usePersistentState<Budget[]>('ap.budgets', []);
+  const [ristournes, setRistournes] = usePersistentState<Ristourne[]>('ap.ristournes', []);
+  const [notifications, setNotifications] = usePersistentState<NotificationItem[]>('ap.notifications', WELCOME);
 
   // Réglages : on complète avec les valeurs par défaut si la donnée sauvegardée est incomplète
   const settings: Settings = { ...DEFAULT_SETTINGS, ...storedSettings, rates: storedSettings.rates ?? {} };
@@ -48,6 +65,7 @@ export default function App() {
 
   // Fenêtres
   const [addMode, setAddMode] = useState<AddMode | null>(null);
+  const [addPreset, setAddPreset] = useState<DebtPreset | null>(null);
   const [isAccountPickerOpen, setIsAccountPickerOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -64,7 +82,9 @@ export default function App() {
     ? makeBalance(toMain(walletBalance(activeWallet, transactions), activeWallet.currency, settings), settings)
     : totalBalance;
 
+  // Message de confirmation (+ petit double « tic » : l'action a bien été faite)
   const showToast = (msg: string) => {
+    haptic('success');
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
@@ -75,7 +95,8 @@ export default function App() {
   };
 
   // Ouvre l'écran d'ajout (il faut au moins un portefeuille actif)
-  const openAdd = (mode: AddMode) => {
+  const openAdd = (mode: AddMode, preset: DebtPreset | null = null) => {
+    setAddPreset(preset);
     if (activeWallets.length === 0) {
       showToast("Crée d'abord un portefeuille");
       navigate('wallets');
@@ -92,7 +113,7 @@ export default function App() {
         openAdd(action);
         break;
       case 'budget':
-        showToast('Les budgets arrivent bientôt');
+        navigate('budgets');
         break;
       case 'ristourne':
         navigate('ristourne');
@@ -101,7 +122,7 @@ export default function App() {
   };
 
   // Enregistrer une dépense ou un revenu
-  const handleAddTransaction = (amount: number, category: Category, note: string, walletId: string, currency: string) => {
+  const handleAddTransaction = (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string, excludeFromReport?: boolean) => {
     const wallet = wallets.find((w) => w.id === walletId);
     if (!wallet) return;
     const isExpense = addMode === 'expense' || (addMode === 'debt' && category.direction === 'out');
@@ -112,8 +133,8 @@ export default function App() {
     const differs = currency !== wallet.currency;
 
     const newTx: Transaction = {
-      id: `tx-${Date.now()}`,
-      title: note || category.name,
+      id: uuid(),
+      title: note || (withPerson ? `${category.name} · ${withPerson}` : category.name),
       createdAt: new Date().toISOString(),
       amount: signed,
       currency: wallet.currency,
@@ -129,6 +150,9 @@ export default function App() {
       color: category.color,
       referenceNumber: `MN-${Math.floor(10000 + Math.random() * 90000)}`,
       status: 'completed',
+      memberId,
+      withPerson,
+      excludeFromReport,
     };
 
     setTransactions((prev) => [newTx, ...prev]);
@@ -144,7 +168,6 @@ export default function App() {
     const from = wallets.find((w) => w.id === fromId);
     const to = wallets.find((w) => w.id === toId);
     if (!from || !to || fromAmount <= 0 || toAmount <= 0) return;
-    const stamp = Date.now();
     const base = {
       createdAt: new Date().toISOString(),
       type: 'transfer' as const,
@@ -152,12 +175,12 @@ export default function App() {
       avatarType: 'icon' as const,
       avatarValue: 'ArrowLeftRight',
       color: '#64748B',
-      transferId: `tr-${stamp}`,
+      transferId: uuid(),
       status: 'completed' as const,
     };
     const out: Transaction = {
       ...base,
-      id: `tx-${stamp}-out`,
+      id: uuid(),
       title: note || `Vers ${to.name}`,
       amount: -fromAmount,
       currency: from.currency,
@@ -166,7 +189,7 @@ export default function App() {
     };
     const inn: Transaction = {
       ...base,
-      id: `tx-${stamp}-in`,
+      id: uuid(),
       title: note || `Depuis ${from.name}`,
       amount: toAmount,
       currency: to.currency,
@@ -178,7 +201,7 @@ export default function App() {
       fee > 0
         ? [
             {
-              id: `tx-${stamp}-fee`,
+              id: uuid(),
               title: `Frais de transfert vers ${to.name}`,
               createdAt: base.createdAt,
               amount: -fee,
@@ -207,7 +230,7 @@ export default function App() {
     const diff = Math.round((newBalance - walletBalance(wallet, transactions)) * 100) / 100;
     if (diff === 0) return;
     const adj: Transaction = {
-      id: `tx-${Date.now()}`,
+      id: uuid(),
       title: 'Ajustement du solde',
       createdAt: new Date().toISOString(),
       amount: diff,
@@ -226,18 +249,26 @@ export default function App() {
 
   // Portefeuilles : ajouter / modifier / supprimer
   const handleAddWallet = (w: Omit<Wallet, 'id' | 'archived'>) => {
-    setWallets((prev) => [...prev, { ...w, id: `wallet-${Date.now()}`, archived: false }]);
+    setWallets((prev) => [...prev, { ...w, id: uuid(), archived: false }]);
     showToast(`Portefeuille « ${w.name} » créé`);
   };
   const handleUpdateWallet = (id: string, changes: Partial<Wallet>) => {
     setWallets((prev) => prev.map((w) => (w.id === id ? { ...w, ...changes } : w)));
     if (changes.archived === true) showToast('Portefeuille archivé');
   };
+  // Nouvel ordre choisi dans Portefeuilles > Réorganiser (les archivés restent à la fin)
+  const handleReorderWallets = (ids: string[]) => {
+    setWallets((prev) => {
+      const moved = ids.map((id) => prev.find((w) => w.id === id)).filter((w): w is Wallet => !!w);
+      return [...moved, ...prev.filter((w) => !ids.includes(w.id))];
+    });
+  };
   const handleDeleteWallet = (id: string) => {
+    const shared = !!wallets.find((w) => w.id === id)?.ownerId; // portefeuille d'un autre : on le quitte
     setWallets((prev) => prev.filter((w) => w.id !== id));
     setTransactions((prev) => prev.filter((t) => t.walletId !== id));
     if (activeWalletId === id) setActiveWalletId('all');
-    showToast('Portefeuille supprimé');
+    showToast(shared ? 'Tu as quitté ce portefeuille partagé' : 'Portefeuille supprimé');
   };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -270,12 +301,11 @@ export default function App() {
   };
 
   const handleDuplicateTransaction = (tx: Transaction) => {
-    const stamp = Date.now();
     const now = new Date().toISOString();
-    const newTransferId = tx.transferId ? `tr-${stamp}` : undefined;
-    const copies = groupOf(tx).map((t, i) => ({
+    const newTransferId = tx.transferId ? uuid() : undefined;
+    const copies = groupOf(tx).map((t) => ({
       ...t,
-      id: `tx-${stamp}-${i}`,
+      id: uuid(),
       createdAt: now,
       transferId: newTransferId,
       referenceNumber: t.referenceNumber ? `MN-${Math.floor(10000 + Math.random() * 90000)}` : undefined,
@@ -308,11 +338,205 @@ export default function App() {
     );
     showToast(`Catégorie « ${changes.name} » modifiée`);
   };
+  // Opération créée par une autre fonction (ristourne…) : sortie ou entrée, catégorie par défaut
+  const recordTransaction = (o: { out: boolean; amount: number; currency: string; walletId: string; categoryId: string; title: string }) => {
+    const wallet = wallets.find((w) => w.id === o.walletId);
+    const cat = categories.find((c) => c.id === o.categoryId);
+    if (!wallet) return;
+    const inWallet = convertBetween(o.amount, o.currency, wallet.currency, settings) ?? o.amount;
+    const differs = o.currency !== wallet.currency;
+    setTransactions((prev) => [
+      {
+        id: uuid(),
+        title: o.title,
+        createdAt: new Date().toISOString(),
+        amount: o.out ? -inWallet : inWallet,
+        currency: wallet.currency,
+        walletId: wallet.id,
+        originalAmount: differs ? (o.out ? -o.amount : o.amount) : undefined,
+        originalCurrency: differs ? o.currency : undefined,
+        type: o.out ? 'payment' : 'receive',
+        category: cat?.name ?? (o.out ? 'Ristourne (cotisation)' : 'Ristourne (cagnotte reçue)'),
+        categoryId: cat?.id,
+        avatarType: cat?.image ? 'image' : 'icon',
+        avatarValue: cat?.image ?? cat?.icon ?? 'Handshake',
+        color: cat?.color ?? '#65A30D',
+        status: 'completed',
+      },
+      ...prev,
+    ]);
+  };
+
+  // Ristournes
+  const handleCreateRistourne = (r: Omit<Ristourne, 'id' | 'payments'>) => {
+    const id = uuid();
+    setRistournes((prev) => [...prev, { ...r, id, payments: [] }]);
+    showToast(`Ristourne « ${r.name} » créée`);
+    return id;
+  };
+  const handleUpdateRistourne = (id: string, changes: Partial<Ristourne>) => {
+    setRistournes((prev) => prev.map((r) => (r.id === id ? { ...r, ...changes } : r)));
+    showToast('Ristourne modifiée');
+  };
+  const handleDeleteRistourne = (id: string) => {
+    const r = ristournes.find((x) => x.id === id);
+    setRistournes((prev) => prev.filter((x) => x.id !== id));
+    showToast(r?.ownerId ? 'Tu as quitté la ristourne' : 'Ristourne supprimée');
+  };
+  const handlePayRistourne = (r: Ristourne, m: RistourneMember, turn: number, walletId: string | null) => {
+    setRistournes((prev) =>
+      prev.map((x) =>
+        x.id === r.id ? { ...x, payments: [...x.payments, { id: uuid(), memberId: m.id, turn, amount: r.contribution, paidAt: new Date().toISOString() }] } : x
+      )
+    );
+    if (m.isMe && walletId) {
+      recordTransaction({ out: true, amount: r.contribution, currency: r.currency, walletId, categoryId: 'ristourne-out', title: `${r.name} · tour ${turn}` });
+    }
+    showToast(m.isMe ? 'Ta cotisation est notée' : `Paiement de ${m.name} noté`);
+  };
+  const handleUnpayRistourne = (r: Ristourne, paymentId: string) => {
+    setRistournes((prev) => prev.map((x) => (x.id === r.id ? { ...x, payments: x.payments.filter((p) => p.id !== paymentId) } : x)));
+    showToast('Paiement annulé');
+  };
+  const handleReceiveRistourne = (r: Ristourne, turn: number, walletId: string) => {
+    const pot = r.members.filter((m) => !m.removed).length * r.contribution;
+    recordTransaction({ out: false, amount: pot, currency: r.currency, walletId, categoryId: 'ristourne-in', title: `${r.name} · cagnotte du tour ${turn}` });
+    showToast(`Cagnotte de ${formatMoney(pot, r.currency)} enregistrée`);
+  };
+
+  // Budgets
+  const handleAddBudget = (b: Omit<Budget, 'id' | 'createdAt'>) => {
+    setBudgets((prev) => [...prev, { ...b, id: uuid(), createdAt: new Date().toISOString() }]);
+    showToast('Budget créé');
+  };
+  const handleUpdateBudget = (id: string, changes: Partial<Budget>) => {
+    setBudgets((prev) => prev.map((b) => (b.id === id ? { ...b, ...changes } : b)));
+    showToast('Budget modifié');
+  };
+  const handleDeleteBudget = (id: string) => {
+    setBudgets((prev) => prev.filter((b) => b.id !== id));
+    showToast('Budget supprimé');
+  };
+
+  // Alerte quand un budget atteint 80 %, puis 100 % (une seule fois par budget, par période et par seuil)
+  useEffect(() => {
+    const now = new Date();
+    const fresh: NotificationItem[] = [];
+    for (const b of budgets) {
+      const cat = categories.find((c) => c.id === b.categoryId);
+      if (b.categoryId && !cat) continue;
+      const st = budgetStatus(b, transactions, categories, settings);
+      if (now < st.start || now >= st.end) continue; // budget personnalisé pas en cours
+      const level = st.ratio >= 1 ? 100 : st.ratio >= 0.8 ? 80 : 0;
+      const when = { week: 'cette semaine', month: 'ce mois-ci', quarter: 'ce trimestre', year: 'cette année', custom: 'sur la période' }[periodOf(b)];
+      const id = `budget-${b.id}-${st.start.toISOString().slice(0, 10)}-${level}`;
+      if (!level || notifications.some((n) => n.id === id)) continue;
+      const name = cat?.name ?? 'Toutes les dépenses';
+      fresh.push({
+        id,
+        type: 'budget',
+        read: false,
+        time: now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        title: level === 100 ? `Budget dépassé : ${name}` : `Budget bientôt atteint : ${name}`,
+        message:
+          level === 100
+            ? `Tu as dépensé ${formatMoney(st.spent, b.currency)} sur ${formatMoney(b.amount, b.currency)} ${when}.`
+            : `${Math.round(st.ratio * 100)} % utilisé : il reste ${formatMoney(st.left, b.currency)} ${when}.`,
+      });
+    }
+    if (fresh.length > 0) {
+      setNotifications((prev) => [...fresh, ...prev].slice(0, 50));
+      showToast(fresh[0].title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [budgets, transactions, categories]);
+
   const handleDeleteCategory = (id: string) => {
     // On supprime aussi ses sous-catégories
     setCategories((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
     showToast('Catégorie supprimée');
   };
+
+  // Import d'un fichier (Money Lover, Excel, CSV) : déjà vérifié dans l'aperçu
+  const handleImport = (plan: ImportPlan, replace: boolean) => {
+    // Catégories déjà là que le fichier range sous un parent (elles prennent sa couleur)
+    const moved = new Map(plan.categoryUpdates.map((u) => [u.id, u]));
+    const recolor = (t: Transaction) => (t.categoryId && moved.has(t.categoryId) ? { ...t, color: moved.get(t.categoryId)!.color } : t);
+    setWallets((prev) => [...prev, ...plan.newWallets]);
+    setCategories((prev) => [
+      ...prev.map((c) => (moved.has(c.id) ? { ...c, parentId: moved.get(c.id)!.parentId, color: moved.get(c.id)!.color } : c)),
+      ...plan.newCategories,
+    ]);
+    setTransactions((prev) => (replace ? plan.transactions : [...plan.transactions, ...prev]).map(recolor));
+    showToast(
+      plan.transactions.length > 0
+        ? `${plan.transactions.length} transactions importées`
+        : `${plan.categoryUpdates.length} catégories rangées sous leur parent`
+    );
+  };
+
+  // Restauration d'une sauvegarde complète
+  const handleRestore = (b: Backup) => {
+    setWallets(b.wallets);
+    setTransactions(b.transactions);
+    setCategories(b.categories);
+    setSettings({ ...DEFAULT_SETTINGS, ...b.settings });
+    replaceCustomIcons(b.customIcons);
+    setBudgets(b.budgets ?? []);
+    setRistournes(b.ristournes ?? []);
+    setActiveWalletId('all');
+    showToast('Sauvegarde restaurée');
+  };
+
+  // ---------- Compte en ligne et synchro ----------
+  const profile = useProfile();
+  useDisplayPrefs(); // un réglage d'affichage change : toute l'app se redessine
+  const customIcons = useCustomIcons();
+  const dataRef = useRef<SyncData>(null!);
+  dataRef.current = { wallets, transactions, categories, budgets, settings, profileName: profile.name, customIcons, ristournes };
+  const changeKey = useMemo(() => ({}), [wallets, transactions, categories, budgets, storedSettings, profile.name, customIcons, ristournes]);
+  const cloud = useCloud({
+    getLocal: () => dataRef.current,
+    replaceLocal: (d, map) => {
+      dataRef.current = d;
+      setWallets(d.wallets);
+      setTransactions(d.transactions);
+      setBudgets(d.budgets);
+      setActiveWalletId((prev) => map[prev] ?? prev);
+    },
+    applyPatch: (p) => {
+      const all = !!p.replaceAll;
+      const none = { upsert: [], remove: [] };
+      setWallets((prev) => applyList(prev, p.wallets ?? (all ? none : undefined), all));
+      setTransactions((prev) => applyList(prev, p.transactions ?? (all ? none : undefined), all));
+      setBudgets((prev) => applyList(prev, p.budgets ?? (all ? none : undefined), all));
+      setRistournes((prev) => applyList(prev, p.ristournes ?? (all ? none : undefined), all));
+      if (p.categories) setCategories((prev) => applyList(prev, p.categories, all));
+      if (p.customIcons || all) replaceCustomIcons(applyList(getAllCustomIcons(), p.customIcons ?? none, all));
+      if (p.settings) setSettings(p.settings);
+      if (p.profileName !== undefined) setProfileName(p.profileName);
+      if (all) setActiveWalletId('all');
+    },
+    clearLocal: () => {
+      setWallets(DEFAULT_WALLETS);
+      setTransactions([]);
+      setCategories(DEFAULT_CATEGORIES);
+      setBudgets([]);
+      setRistournes([]);
+      setSettings(DEFAULT_SETTINGS);
+      setActiveWalletId('all');
+      setNotifications(WELCOME);
+      replaceCustomIcons([]);
+      setProfileName('');
+    },
+    changeKey,
+  });
+
+  // Noms déjà utilisés dans les dettes et prêts (suggestions)
+  const people = useMemo(
+    () => [...new Set(transactions.map((t) => t.withPerson?.trim()).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, 'fr')),
+    [transactions]
+  );
 
   // Ce qui est commun aux deux interfaces
   const shared: SharedProps = {
@@ -341,6 +565,22 @@ export default function App() {
     onDeleteWallet: handleDeleteWallet,
     onTransfer: handleTransfer,
     onAdjustBalance: handleAdjustBalance,
+    onReorderWallets: handleReorderWallets,
+    budgets,
+    onAddBudget: handleAddBudget,
+    onUpdateBudget: handleUpdateBudget,
+    onDeleteBudget: handleDeleteBudget,
+    cloud,
+    onAddDebt: (preset?: DebtPreset) => openAdd('debt', preset ?? null),
+    ristournes,
+    onCreateRistourne: handleCreateRistourne,
+    onUpdateRistourne: handleUpdateRistourne,
+    onDeleteRistourne: handleDeleteRistourne,
+    onPayRistourne: handlePayRistourne,
+    onUnpayRistourne: handleUnpayRistourne,
+    onReceiveRistourne: handleReceiveRistourne,
+    onImport: handleImport,
+    onRestore: handleRestore,
   };
 
   return (
@@ -369,6 +609,8 @@ export default function App() {
         onClose={() => setAddMode(null)}
         onChangeMode={setAddMode}
         onSave={handleAddTransaction}
+        preset={addPreset}
+        people={people}
         onManageCategories={() => {
           setAddMode(null);
           navigate('categories');
@@ -401,6 +643,8 @@ export default function App() {
         onDelete={handleDeleteTransaction}
         onDuplicate={handleDuplicateTransaction}
       />
+
+      {cloud.status === 'needs-decision' && <MergeDialog cloud={cloud} />}
 
       <NotificationsModal
         isOpen={isNotificationsOpen}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowDown, ArrowUpDown, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
+import { SortableList } from './SortableList';
 import { Settings, Transaction, Wallet, WalletKind } from '../types';
 import { TransactionItem } from './TransactionItem';
 import { AppIcon, IconBadge, WALLET_ICON_CHOICES } from './AppIcon';
@@ -7,6 +8,9 @@ import { IconPicker, COLOR_CHOICES } from './IconPicker';
 import { CurrencyPicker } from './CurrencyPicker';
 import { currencyInfo } from '../data/currencies';
 import { convertBetween, countsInStats, formatMoney, walletBalance } from '../lib/money';
+import { inThisMonth } from '../lib/periods';
+import { isShared, MembersSheet, MemberStack, SharingBlock, activeMembers, memberOf, MemberAvatar, ME_ID } from './Members';
+import { SelCheck } from './SelCheck';
 
 interface WalletsViewProps {
   wallets: Wallet[];
@@ -18,15 +22,19 @@ interface WalletsViewProps {
   onSelectTransaction: (tx: Transaction) => void;
   onTransfer: (fromId: string, toId: string, fromAmount: number, toAmount: number, note: string, fee: number) => void;
   onAdjustBalance: (walletId: string, newBalance: number) => void;
+  onReorder: (ids: string[]) => void;
   settings: Settings;
 }
 
-export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions, defaultCurrency, onAdd, onUpdate, onDelete, onSelectTransaction, onTransfer, onAdjustBalance, settings }) => {
+export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions, defaultCurrency, onAdd, onUpdate, onDelete, onSelectTransaction, onTransfer, onAdjustBalance, onReorder, settings }) => {
   const [editing, setEditing] = useState<Wallet | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Wallet | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [transferFrom, setTransferFrom] = useState<string | null>(null); // id, ou '' = à choisir
   const [adjusting, setAdjusting] = useState<Wallet | null>(null);
+  const [sharing, setSharing] = useState<Wallet | null>(null);
+  const [reordering, setReordering] = useState(false);
+  const [showArchives, setShowArchives] = useState(false);
   const viewing = wallets.find((w) => w.id === viewingId) ?? null;
 
   const active = wallets.filter((w) => !w.archived);
@@ -48,6 +56,11 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
           {formatMoney(walletBalance(w, transactions), w.currency)}
         </div>
         <WalletProgress wallet={w} balance={walletBalance(w, transactions)} />
+        {isShared(w) && (
+          <span className="flex items-center gap-1.5 mt-1.5 text-[11px] font-semibold text-slate-500">
+            <MemberStack wallet={w} /> Partagé à {activeMembers(w).length + 1}
+          </span>
+        )}
         {!w.includeInTotal && (
           <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[11px] font-semibold">
             Exclu du total
@@ -107,6 +120,20 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
           }}
         />
       )}
+      {sharing && (
+        <MembersSheet
+          wallet={sharing}
+          onClose={() => setSharing(null)}
+          onLeave={() => {
+            setSharing(null);
+            setDeleting(sharing);
+          }}
+          onSave={(members) => {
+            onUpdate(sharing.id, { members });
+            setSharing(null);
+          }}
+        />
+      )}
       {editing && (
         <WalletSheet
           wallet={editing === 'new' ? null : editing}
@@ -152,6 +179,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
           onRestore={() => onUpdate(viewing.id, { archived: false })}
           onTransfer={active.length > 1 && !viewing.archived ? () => setTransferFrom(viewing.id) : undefined}
           onAdjust={() => setAdjusting(viewing)}
+          onShare={() => setSharing(viewing)}
           onSelectTransaction={onSelectTransaction}
         />
         {sheets}
@@ -159,42 +187,135 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
     );
   }
 
+  // Archives : un écran à part, ouvert par le bouton « Archives »
+  if (showArchives && archived.length > 0) {
+    return (
+      <div className="px-5 pt-4 pb-8 animate-screen">
+        <div className="flex items-center gap-3 mb-2">
+          <button
+            onClick={() => setShowArchives(false)}
+            aria-label="Retour"
+            className="w-11 h-11 shrink-0 rounded-full bg-white border border-slate-100 flex items-center justify-center cursor-pointer"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h1 className="flex-1 text-xl font-bold text-slate-900">Archives</h1>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Hors du total et des listes, mais leur historique est gardé. Touche <ArchiveRestore className="inline w-3.5 h-3.5 -mt-0.5" /> pour en restaurer un.
+        </p>
+        <div className="space-y-3 stagger">{archived.map(card)}</div>
+        {sheets}
+      </div>
+    );
+  }
+
   return (
     <div className="px-5 pt-4 pb-8 animate-screen">
-      <h1 className="text-xl font-bold text-slate-900 mb-5">Portefeuilles</h1>
-
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setEditing('new')}
-          className="flex-1 py-3.5 rounded-3xl bg-white border border-slate-100 text-emerald-700 font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50"
-        >
-          <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center">
-            <Plus className="w-4 h-4" />
-          </span>
-          Ajouter
-        </button>
-        {active.length > 1 && (
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-xl font-bold text-slate-900">Portefeuilles</h1>
+        <div className="flex items-center gap-2">
+        {archived.length > 0 && !reordering && (
           <button
-            onClick={() => setTransferFrom('')}
-            className="flex-1 py-3.5 rounded-3xl bg-white border border-slate-100 text-slate-700 font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50"
+            onClick={() => setShowArchives(true)}
+            aria-label={`Archives (${archived.length})`}
+            title="Archives"
+            className="relative w-10 h-10 rounded-full bg-white border border-slate-100 text-slate-700 flex items-center justify-center cursor-pointer hover:bg-slate-50"
           >
-            <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center">
-              <ArrowLeftRight className="w-3.5 h-3.5" />
+            <Archive className="w-4 h-4" />
+            <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[#D8FB52] text-slate-900 text-[10px] font-extrabold flex items-center justify-center tabular-nums">
+              {archived.length}
             </span>
-            Transférer
           </button>
         )}
+        {active.length > 1 && (
+          <button
+            onClick={() => setReordering((r) => !r)}
+            aria-label={reordering ? 'Terminé' : 'Réorganiser'}
+            title={reordering ? undefined : 'Réorganiser'}
+            className={`flex items-center justify-center cursor-pointer transition ${
+              reordering
+                ? 'px-4 h-10 rounded-full bg-[#D8FB52] text-slate-900 text-xs font-bold'
+                : 'w-10 h-10 rounded-full bg-white border border-slate-100 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            {reordering ? 'Terminé' : <ArrowUpDown className="w-4 h-4" />}
+          </button>
+        )}
+        </div>
       </div>
 
-      <div className="space-y-3">
-        {active.map(card)}
-        {active.length === 0 && <p className="text-center text-sm text-slate-400 py-6">Aucun portefeuille actif</p>}
-      </div>
-
-      {archived.length > 0 && (
+      {reordering ? (
         <>
-          <h2 className="text-sm font-bold text-slate-500 mt-6 mb-3">Archivés</h2>
-          <div className="space-y-3">{archived.map(card)}</div>
+          <p className="text-xs text-slate-500 mb-3">
+            Maintiens un portefeuille et fais-le glisser, ou utilise les flèches. Cet ordre est repris partout dans l'app.
+          </p>
+          <SortableList
+            items={active}
+            getId={(w) => w.id}
+            onChange={onReorder}
+            renderItem={(w, { index, dragging, move }) => (
+              <div
+                className={`bg-white rounded-2xl border p-2.5 pl-2 flex items-center gap-2.5 transition-shadow ${
+                  dragging ? 'shadow-xl border-slate-300 scale-[1.02]' : 'border-slate-100'
+                }`}
+              >
+                <GripVertical className="w-5 h-5 text-slate-400 shrink-0" aria-hidden />
+                <IconBadge icon={w.icon} image={w.image} color={w.color} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-slate-900 truncate">{w.name}</div>
+                  <div className="text-xs font-semibold tabular-nums text-slate-500">{formatMoney(walletBalance(w, transactions), w.currency)}</div>
+                </div>
+                <button
+                  onClick={() => move(-1)}
+                  disabled={index === 0}
+                  aria-label={`Monter ${w.name}`}
+                  className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => move(1)}
+                  disabled={index === active.length - 1}
+                  aria-label={`Descendre ${w.name}`}
+                  className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          />
+        </>
+      ) : (
+        <>
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setEditing('new')}
+              className="flex-1 py-3.5 rounded-3xl bg-white border border-slate-100 text-emerald-700 font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50"
+            >
+              <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center">
+                <Plus className="w-4 h-4" />
+              </span>
+              Ajouter
+            </button>
+            {active.length > 1 && (
+              <button
+                onClick={() => setTransferFrom('')}
+                className="flex-1 py-3.5 rounded-3xl bg-white border border-slate-100 text-slate-700 font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50"
+              >
+                <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center">
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                </span>
+                Transférer
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {active.map(card)}
+            {active.length === 0 && <p className="text-center text-sm text-slate-400 py-6">Aucun portefeuille actif</p>}
+          </div>
+
         </>
       )}
 
@@ -222,7 +343,7 @@ const WalletProgress: React.FC<{ wallet: Wallet; balance: number }> = ({ wallet:
   return (
     <div className="mt-1.5">
       <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-        <div className={`h-full rounded-full ${bar}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
+        <div className={`h-full rounded-full animate-bar ${bar}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
       </div>
       <div className="text-[11px] leading-snug text-slate-500 mt-1">{label}</div>
     </div>
@@ -236,7 +357,23 @@ const DeleteDialog: React.FC<{
   onClose: () => void;
   onArchive: () => void;
   onDelete: () => void;
-}> = ({ wallet, txCount, onClose, onArchive, onDelete }) => (
+}> = ({ wallet, txCount, onClose, onArchive, onDelete }) => wallet.ownerId ? (
+  // Portefeuille partagé par quelqu'un d'autre : on le quitte (il reste pour les autres membres)
+  <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
+    <div className="w-full sm:max-w-[400px] bg-white rounded-t-[32px] sm:rounded-[32px] p-6 pb-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+      <h2 className="text-base font-bold mb-2">Quitter « {wallet.name} » ?</h2>
+      <p className="text-sm text-slate-600 mb-5">
+        Il disparaîtra de ton téléphone. Les autres membres le gardent, avec toutes ses opérations. Le propriétaire pourra te réinviter.
+      </p>
+      <button onClick={onDelete} className="w-full mb-2 py-3.5 rounded-2xl bg-red-50 text-red-600 font-bold text-sm cursor-pointer">
+        Quitter ce portefeuille
+      </button>
+      <button onClick={onClose} className="w-full py-3 rounded-2xl bg-slate-100 font-semibold text-sm cursor-pointer">
+        Annuler
+      </button>
+    </div>
+  </div>
+) : (
   <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
     <div className="w-full sm:max-w-[400px] bg-white rounded-t-[32px] sm:rounded-[32px] p-6 pb-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
       <h2 className="text-base font-bold mb-2">Supprimer « {wallet.name} » ?</h2>
@@ -449,7 +586,7 @@ const WalletSheet: React.FC<{
                     key={col}
                     onClick={() => setColor(col)}
                     aria-label={`Couleur ${col}`}
-                    className={`w-7 h-7 rounded-full cursor-pointer ${color === col ? 'ring-2 ring-offset-2 ring-slate-900' : ''}`}
+                    className={`w-7 h-7 rounded-full cursor-pointer ${color === col ? 'ring-2 ring-offset-2 ring-[var(--sel-ring)]' : ''}`}
                     style={{ backgroundColor: col }}
                   />
                 ))}
@@ -565,7 +702,7 @@ export const WalletKindSummary: React.FC<{ wallet: Wallet; balance: number }> = 
         </div>
         <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
           <div
-            className={`h-full rounded-full ${ratio >= 0.9 ? 'bg-red-500' : ratio >= 0.7 ? 'bg-amber-500' : 'bg-pink-500'}`}
+            className={`h-full rounded-full animate-bar ${ratio >= 0.9 ? 'bg-red-500' : ratio >= 0.7 ? 'bg-amber-500' : 'bg-pink-500'}`}
             style={{ width: `${Math.min(100, ratio * 100)}%` }}
           />
         </div>
@@ -597,7 +734,7 @@ export const WalletKindSummary: React.FC<{ wallet: Wallet; balance: number }> = 
           <Stat label="Objectif" value={money(w.goalAmount)} />
         </div>
         <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-          <div className={`h-full rounded-full ${ratio >= 1 ? 'bg-emerald-500' : 'bg-red-400'}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
+          <div className={`h-full rounded-full animate-bar ${ratio >= 1 ? 'bg-emerald-500' : 'bg-red-400'}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
         </div>
         <p className="text-xs text-slate-500 mt-2">
           {ratio >= 1 ? 'Objectif atteint 🎉' : `${Math.round(ratio * 100)} % de l'objectif.`} {pace}
@@ -612,7 +749,8 @@ export const WalletKindSummary: React.FC<{ wallet: Wallet; balance: number }> = 
 // Carte de l'accueil quand un portefeuille crédit / objectif est sélectionné
 export const HomeWalletCard: React.FC<{ wallet: Wallet; transactions: Transaction[] }> = ({ wallet, transactions }) => {
   const kind = wallet.kind ?? 'basic';
-  if (kind === 'basic') return null;
+  const shared = isShared(wallet);
+  if (kind === 'basic' && !shared) return null;
   const info = KINDS.find((k) => k.id === kind)!;
   return (
     <div className="bg-white rounded-3xl border border-slate-100 p-4">
@@ -620,10 +758,46 @@ export const HomeWalletCard: React.FC<{ wallet: Wallet; transactions: Transactio
         <IconBadge icon={wallet.icon} image={wallet.image} color={wallet.color} size="sm" />
         <div className="min-w-0">
           <div className="text-sm font-bold text-slate-900 truncate">{wallet.name}</div>
-          <div className="text-[11px] font-semibold text-slate-500">{info.title}</div>
+          <div className="text-[11px] font-semibold text-slate-500">{info.title}{shared && ` · partagé à ${activeMembers(wallet).length + 1}`}</div>
         </div>
+        {shared && (
+          <span className="ml-auto">
+            <MemberStack wallet={wallet} size="sm" />
+          </span>
+        )}
       </div>
       <WalletKindSummary wallet={wallet} balance={walletBalance(wallet, transactions)} />
+      {shared && <SharedMonthLine wallet={wallet} transactions={transactions} />}
+    </div>
+  );
+};
+
+// Accueil : ce que chacun a versé dans le portefeuille partagé ce mois-ci
+const SharedMonthLine: React.FC<{ wallet: Wallet; transactions: Transaction[] }> = ({ wallet, transactions }) => {
+  const now = new Date();
+  const put = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.walletId !== wallet.id || t.amount <= 0 || t.type === 'adjustment') continue;
+    if (!inThisMonth(t.createdAt, now)) continue;
+    const id = t.memberId || ME_ID;
+    put.set(id, (put.get(id) ?? 0) + t.amount);
+  }
+  const people = [ME_ID, ...activeMembers(wallet).map((m) => m.id)];
+  return (
+    <div className={(wallet.kind ?? 'basic') === 'basic' ? '' : 'mt-3 pt-3 border-t border-slate-100'}>
+      <div className="text-[11px] font-semibold text-slate-500 mb-1.5">Versé ce mois-ci</div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {people.map((id) => {
+          const m = memberOf(wallet, id);
+          return (
+            <span key={id} className="flex items-center gap-1.5 text-xs">
+              <MemberAvatar name={m.name} color={m.color} size="xs" />
+              <span className="font-semibold text-slate-700">{m.name}</span>
+              <span className="font-bold tabular-nums text-emerald-600">+{formatMoney(put.get(id) ?? 0, wallet.currency)}</span>
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -645,21 +819,21 @@ const WalletDetail: React.FC<{
   onRestore: () => void;
   onTransfer?: () => void;
   onAdjust: () => void;
+  onShare: () => void;
   onSelectTransaction: (tx: Transaction) => void;
-}> = ({ wallet: w, transactions, onBack, onEdit, onDelete, onRestore, onTransfer, onAdjust, onSelectTransaction }) => {
+}> = ({ wallet: w, transactions, onBack, onEdit, onDelete, onRestore, onTransfer, onAdjust, onShare, onSelectTransaction }) => {
   const balance = walletBalance(w, transactions);
   const money = (v: number) => formatMoney(v, w.currency);
   const kind = w.kind ?? 'basic';
   const kindInfo = KINDS.find((k) => k.id === kind)!;
 
   const now = new Date();
-  const month = transactions.filter((t) => {
-    const d = new Date(t.createdAt);
-    return countsInStats(t) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
+  const month = transactions.filter((t) => countsInStats(t) && inThisMonth(t.createdAt, now));
   const monthIn = month.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const monthOut = month.filter((t) => t.amount < 0).reduce((s, t) => s - t.amount, 0);
   const sorted = [...transactions].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Par paquets de 50 : un portefeuille importé peut avoir des milliers d'opérations
+  const [limit, setLimit] = useState(50);
 
   const kindBlock = <WalletKindSummary wallet={w} balance={balance} />;
 
@@ -698,6 +872,8 @@ const WalletDetail: React.FC<{
 
       {(kind === 'credit' || kind === 'goal') && <div className="bg-white rounded-3xl border border-slate-100 p-4 mb-3">{kindBlock}</div>}
 
+      {!w.archived && <SharingBlock wallet={w} transactions={transactions} onManage={onShare} />}
+
       <div className="bg-white rounded-3xl border border-slate-100 p-4 mb-3 flex gap-3">
         <Stat label="Entrées ce mois" value={`+${money(monthIn)}`} tone="text-emerald-600" />
         <Stat label="Sorties ce mois" value={`−${money(monthOut)}`} />
@@ -707,18 +883,28 @@ const WalletDetail: React.FC<{
         {onTransfer && action('Transférer', ArrowLeftRight, onTransfer)}
         {action('Ajuster', SlidersHorizontal, onAdjust)}
         {action('Modifier', Pencil, onEdit)}
-        {w.archived ? action('Restaurer', ArchiveRestore, onRestore) : action('Supprimer', Trash2, onDelete, true)}
+        {w.archived ? action('Restaurer', ArchiveRestore, onRestore) : action(w.ownerId ? 'Quitter' : 'Supprimer', Trash2, onDelete, true)}
       </div>
 
       <h2 className="text-sm font-bold text-slate-900 mb-2">Transactions</h2>
       {sorted.length === 0 ? (
         <p className="text-center text-sm text-slate-400 py-6">Aucune transaction dans ce portefeuille.</p>
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-100 px-3 py-1">
-          {sorted.map((t) => (
-            <TransactionItem key={t.id} transaction={t} onClick={onSelectTransaction} />
-          ))}
-        </div>
+        <>
+          <div className="bg-white rounded-3xl border border-slate-100 px-3 py-1">
+            {sorted.slice(0, limit).map((t) => (
+              <TransactionItem key={t.id} transaction={t} onClick={onSelectTransaction} />
+            ))}
+          </div>
+          {sorted.length > limit && (
+            <button
+              onClick={() => setLimit((l) => l + 50)}
+              className="w-full mt-3 py-3 rounded-2xl bg-white border border-slate-100 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              Voir plus ({sorted.length - limit} restantes)
+            </button>
+          )}
+        </>
       )}
     </div>
   );
@@ -760,10 +946,11 @@ const WalletSelect: React.FC<{ label: string; wallets: Wallet[]; value: string; 
         <button
           key={w.id}
           onClick={() => onChange(w.id)}
-          className={`min-w-0 flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-2xl border-2 text-center cursor-pointer transition ${
-            w.id === value ? 'border-slate-900 bg-[#D8FB52]/40' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
+          className={`relative min-w-0 flex flex-col items-center gap-0.5 px-1 py-2 rounded-2xl text-center cursor-pointer transition ${
+            w.id === value ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200/70'
           }`}
         >
+          {w.id === value && <SelCheck />}
           <IconBadge icon={w.icon} image={w.image} color={w.color} size="sm" />
           <span className="w-full text-[11px] font-bold text-slate-900 leading-tight truncate">{w.name}</span>
           <span className="w-full text-[10px] text-slate-500 tabular-nums truncate">{formatMoney(balanceOf(w), w.currency)}</span>

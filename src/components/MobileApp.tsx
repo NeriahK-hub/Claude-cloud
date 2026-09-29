@@ -1,16 +1,14 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { SharedProps } from './appProps';
 import { Header } from './Header';
 import { BalanceSection, HomeAction } from './BalanceSection';
 import { TransactionList } from './TransactionList';
 import { BottomNav, Page, TabType } from './BottomNav';
-import { TransactionHistoryView } from './TransactionHistoryView';
-import { StatisticView } from './StatisticView';
 import { WalletsView, HomeWalletCard } from './WalletsView';
-import { SettingsView } from './SettingsView';
-import { ProfileView } from './ProfileView';
-import { RistourneView, RistourneSummaryCard } from './RistourneView';
-import { CategoriesView } from './CategoriesView';
+import { isShared } from './Members';
+import { MonthReportCard } from './MonthReportCard';
+import { SyncIndicator } from './Account';
+import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView } from './pages';
 
 // Interface TÉLÉPHONE : plein écran, barre d'onglets en bas
 interface MobileAppProps extends SharedProps {
@@ -31,7 +29,41 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
     // pt : laisse la place à l'encoche et à l'heure du vrai téléphone
     <div className="min-h-dvh w-full max-w-md mx-auto bg-slate-50 pt-[env(safe-area-inset-top)]">
       <div className={isTab ? 'pb-28' : 'pb-6'}>
-        {page === 'ristourne' && <RistourneView onBack={() => onNavigate('home')} currency={settings.mainCurrency} />}
+        <Suspense fallback={null}>
+        {page === 'debts' && (
+          <DebtsView
+            transactions={allTransactions}
+            settings={settings}
+            onBack={() => onNavigate('home')}
+            onAdd={p.onAddDebt}
+            onSelectTransaction={onSelectTransaction}
+          />
+        )}
+        {page === 'budgets' && (
+          <BudgetsView
+            budgets={p.budgets}
+            transactions={allTransactions}
+            categories={categories}
+            settings={settings}
+            onAdd={p.onAddBudget}
+            onUpdate={p.onUpdateBudget}
+            onDelete={p.onDeleteBudget}
+            onBack={() => onNavigate('home')}
+            onSelectTransaction={onSelectTransaction}
+          />
+        )}
+        {page === 'ristourne' && <RistourneView
+            ristournes={p.ristournes}
+            wallets={wallets.filter((w) => !w.archived)}
+            defaultCurrency={settings.mainCurrency}
+            onBack={() => onNavigate('home')}
+            onCreate={p.onCreateRistourne}
+            onUpdate={p.onUpdateRistourne}
+            onDelete={p.onDeleteRistourne}
+            onPay={p.onPayRistourne}
+            onUnpay={p.onUnpayRistourne}
+            onReceive={p.onReceiveRistourne}
+          />}
 
         {page === 'categories' && (
           <CategoriesView
@@ -45,7 +77,9 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
 
         {page === 'history' && (
           <TransactionHistoryView
-            transactions={transactions}
+            transactions={allTransactions}
+            wallets={wallets}
+            initialWalletId={p.activeWallet?.id ?? 'all'}
             settings={settings}
             onBack={() => onNavigate('home')}
             onSelectTransaction={onSelectTransaction}
@@ -53,9 +87,10 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         )}
 
         {page === 'home' && (
-          <>
+          <div className="stagger">
             <Header
               title="Mon compte"
+              status={<SyncIndicator cloud={p.cloud} onClick={() => onNavigate('profile')} />}
               unreadCount={unreadCount}
               onOpenMenu={onOpenDrawer}
               onOpenNotifications={onOpenNotifications}
@@ -67,20 +102,26 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
               onOpenAccountPicker={onOpenAccountPicker}
               onActionClick={onQuickAction}
             />
-            {p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit') && (
+            {p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
               <div className="px-5 mb-3">
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               </div>
             )}
-            <div className="px-5 mb-2">
-              <RistourneSummaryCard onOpen={() => onNavigate('ristourne')} />
+            <div className="px-5 mb-3">
+              <MonthReportCard
+                allTransactions={allTransactions}
+                wallets={wallets}
+                activeWallet={p.activeWallet}
+                settings={settings}
+                onOpenReports={() => onNavigate('statistic')}
+              />
             </div>
             <TransactionList
               transactions={transactions}
               onSelectTransaction={onSelectTransaction}
               onViewAll={() => onNavigate('history')}
             />
-          </>
+          </div>
         )}
 
         {page === 'statistic' && (
@@ -107,12 +148,14 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
                 onTransfer={p.onTransfer}
                 settings={settings}
                 onAdjustBalance={p.onAdjustBalance}
+                onReorder={p.onReorderWallets}
           />
         )}
         {page === 'settings' && (
-          <SettingsView settings={settings} wallets={wallets} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
+          <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
         )}
-        {page === 'profile' && <ProfileView onOpenSettings={() => onNavigate('settings')} />}
+        {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} />}
+        </Suspense>
       </div>
 
       {isTab && (

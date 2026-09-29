@@ -1,133 +1,91 @@
-import React from 'react';
-import { Settings as SettingsIcon, User, Shield, Bell, HelpCircle, LogOut, ChevronRight, Smartphone, KeyRound, CreditCard } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone, HandCoins, PieChart } from 'lucide-react';
+import { Page } from './BottomNav';
+import { initialsOf, setProfileName, useProfile } from '../lib/profile';
+import type { Cloud } from '../lib/sync/useCloud';
+import { AccountCard } from './Account';
 
 interface ProfileViewProps {
-  onOpenSettings?: () => void;
-  onLogout?: () => void;
+  onNavigate: (page: Page) => void;
+  cloud: Cloud;
 }
 
-export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenSettings }) => {
-  return (
-    <div className="w-full min-h-screen bg-slate-50 px-5 pt-3 pb-28">
-      {/* Header */}
-      <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-5">
-        My Profile
-      </h1>
+// Profil : ton nom (utilisé dans l'app) et les raccourcis vers les réglages
+export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) => {
+  const { name } = useProfile();
+  const [editing, setEditing] = useState(!name);
+  const [draft, setDraft] = useState(name);
 
-      {/* User Card */}
-      <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-2xs flex items-center gap-4 mb-5">
-        <div className="w-16 h-16 rounded-full bg-[#16382F] text-white flex items-center justify-center font-extrabold text-xl shadow-xs ring-4 ring-slate-100">
-          MB
+  const save = () => {
+    setProfileName(draft.trim());
+    setEditing(false);
+  };
+
+  const link = (label: string, hint: string, Icon: typeof Tags, page: Page) => (
+    <button
+      onClick={() => onNavigate(page)}
+      className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left"
+    >
+      <span className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+        <Icon className="w-4 h-4 text-slate-700" />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-semibold text-slate-900">{label}</span>
+        <span className="block text-xs text-slate-500 truncate">{hint}</span>
+      </span>
+      <ChevronRight className="w-4 h-4 text-slate-400" />
+    </button>
+  );
+
+  return (
+    <div className="w-full px-5 pt-3 pb-28 animate-screen">
+      <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-5">Profil</h1>
+
+      <div className="bg-white rounded-3xl p-5 border border-slate-100 flex items-center gap-4 mb-4">
+        <div className="w-16 h-16 rounded-full bg-[#16382F] text-white flex items-center justify-center font-extrabold text-xl shrink-0">
+          {initialsOf(name) || '?'}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-slate-900 tracking-tight truncate">
-              Mikel Borle
-            </h2>
-            <span className="px-2 py-0.5 rounded-full bg-[#D8FB52] text-slate-950 text-[10px] font-extrabold tracking-tight">
-              PRO
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 mt-0.5 truncate">
-            mikel.borle@aetherpay.me
-          </p>
-          <p className="text-xs font-mono text-slate-500 mt-0.5">
-            +1 (555) 349-2810
-          </p>
-        </div>
-      </div>
-
-      {/* Settings Sections */}
-      <div className="space-y-4">
-        <div className="bg-white rounded-2xl p-2 border border-slate-100 shadow-2xs">
-          <button
-            onClick={onOpenSettings}
-            className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-xs"
-          >
-            <div className="flex items-center gap-3">
-              <SettingsIcon className="w-4 h-4 text-slate-700" />
-              <span className="font-bold text-slate-800">Paramètres (apparence, devises, taux)</span>
+          {editing ? (
+            <div className="flex gap-2">
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && save()}
+                placeholder="Ton prénom et nom"
+                autoFocus
+                className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
+              />
+              <button onClick={save} aria-label="Enregistrer le nom" className="w-10 h-10 rounded-xl bg-[#D8FB52] text-slate-900 flex items-center justify-center cursor-pointer">
+                <Check className="w-4 h-4" />
+              </button>
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          </button>
-        </div>
-
-        {/* Security & Access */}
-        <div className="bg-white rounded-2xl p-2 border border-slate-100 shadow-2xs">
-          <div className="px-3 pt-2 pb-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            Security & Preferences
-          </div>
-          <div className="divide-y divide-slate-100 text-xs">
-            <button className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer">
-              <div className="flex items-center gap-3">
-                <KeyRound className="w-4 h-4 text-slate-700" />
-                <span className="font-bold text-slate-800">Face ID & Biometrics</span>
-              </div>
-              <span className="text-xs font-semibold text-emerald-600">Enabled</span>
+          ) : (
+            <button onClick={() => { setDraft(name); setEditing(true); }} className="flex items-center gap-2 text-left cursor-pointer">
+              <span className="text-base font-bold text-slate-900 truncate">{name}</span>
+              <Pencil className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             </button>
-
-            <button className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer">
-              <div className="flex items-center gap-3">
-                <Shield className="w-4 h-4 text-slate-700" />
-                <span className="font-bold text-slate-800">Two-Factor Authentication</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-400" />
-            </button>
-
-            <button className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer">
-              <div className="flex items-center gap-3">
-                <Bell className="w-4 h-4 text-slate-700" />
-                <span className="font-bold text-slate-800">Push Notifications</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-400" />
-            </button>
-          </div>
-        </div>
-
-        {/* Banking Limits */}
-        <div className="bg-white rounded-2xl p-2 border border-slate-100 shadow-2xs">
-          <div className="px-3 pt-2 pb-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            Limits & Accounts
-          </div>
-          <div className="divide-y divide-slate-100 text-xs">
-            <button className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer">
-              <div className="flex items-center gap-3">
-                <CreditCard className="w-4 h-4 text-slate-700" />
-                <span className="font-bold text-slate-800">Daily Transfer Limit</span>
-              </div>
-              <span className="font-mono font-bold text-slate-900">—</span>
-            </button>
-
-            <button className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer">
-              <div className="flex items-center gap-3">
-                <Smartphone className="w-4 h-4 text-slate-700" />
-                <span className="font-bold text-slate-800">Connected Devices</span>
-              </div>
-              <span className="text-slate-500 font-medium">2 Active</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Help & Support */}
-        <div className="bg-white rounded-2xl p-2 border border-slate-100 shadow-2xs">
-          <div className="divide-y divide-slate-100 text-xs">
-            <button className="w-full flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer">
-              <div className="flex items-center gap-3">
-                <HelpCircle className="w-4 h-4 text-slate-700" />
-                <span className="font-bold text-slate-800">24/7 Concierge Support</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-400" />
-            </button>
-
-            <button className="w-full flex items-center justify-between p-3 hover:bg-rose-50 text-rose-600 rounded-xl transition cursor-pointer">
-              <div className="flex items-center gap-3">
-                <LogOut className="w-4 h-4 text-rose-600" />
-                <span className="font-bold">Log Out</span>
-              </div>
-            </button>
-          </div>
+          )}
+          {!cloud.user && (
+            <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1.5">
+              <Smartphone className="w-3.5 h-3.5 shrink-0" /> Données enregistrées sur cet appareil
+            </p>
+          )}
         </div>
       </div>
+
+      <AccountCard cloud={cloud} />
+
+      <div className="bg-white rounded-3xl p-2 border border-slate-100">
+        {link('Paramètres', 'Apparence, devises, taux, import / export', SettingsIcon, 'settings')}
+        {link('Catégories', 'Créer, modifier, ranger en sous-catégories', Tags, 'categories')}
+        {link('Portefeuilles', 'Ajouter, réorganiser, partager', Wallet, 'wallets')}
+        {link('Historique', 'Toutes les transactions, par période', History, 'history')}
+        {link('Dettes et prêts', "Qui te doit, à qui tu dois, ce qu'il reste", HandCoins, 'debts')}
+        {link('Budgets', 'Limites par mois et par catégorie', PieChart, 'budgets')}
+      </div>
+
+      <p className="text-center text-[11px] text-slate-400 mt-6">Wallo</p>
     </div>
   );
 };

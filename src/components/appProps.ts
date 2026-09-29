@@ -1,6 +1,9 @@
-import { Settings, Transaction, Wallet } from '../types';
+import { Budget, Ristourne, RistourneMember, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { BalanceInfo } from '../lib/money';
+import { Backup, ImportPlan } from '../lib/importExport';
+import type { Cloud } from '../lib/sync/useCloud';
+import type { DebtPreset } from './DebtsView';
 import { HomeAction } from './BalanceSection';
 import { Page } from './BottomNav';
 
@@ -32,4 +35,20 @@ export interface SharedProps {
   // fromAmount et fee dans la devise de « from », toAmount dans celle de « to »
   onTransfer: (fromId: string, toId: string, fromAmount: number, toAmount: number, note: string, fee: number) => void;
   onAdjustBalance: (walletId: string, newBalance: number) => void;
+  onReorderWallets: (ids: string[]) => void;
+  budgets: Budget[];
+  onAddBudget: (b: Omit<Budget, 'id' | 'createdAt'>) => void;
+  onUpdateBudget: (id: string, changes: Partial<Budget>) => void;
+  onDeleteBudget: (id: string) => void;
+  cloud: Cloud;
+  onAddDebt: (preset?: DebtPreset) => void;
+  ristournes: Ristourne[];
+  onCreateRistourne: (r: Omit<Ristourne, 'id' | 'payments'>) => string;
+  onUpdateRistourne: (id: string, changes: Partial<Ristourne>) => void;
+  onDeleteRistourne: (id: string) => void;
+  onPayRistourne: (r: Ristourne, m: RistourneMember, turn: number, walletId: string | null) => void;
+  onUnpayRistourne: (r: Ristourne, paymentId: string) => void;
+  onReceiveRistourne: (r: Ristourne, turn: number, walletId: string) => void;
+  onImport: (plan: ImportPlan, replace: boolean) => void;
+  onRestore: (backup: Backup) => void;
 }

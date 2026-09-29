@@ -1,6 +1,0 @@
-{
-  "name": "AetherPay - Modern Banking & Wallet App",
-  "description": "Intuitive mobile & desktop financial dashboard with interactive money transfers, custom keypad, transaction history, and account management.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
