@@ -12,6 +12,7 @@ import { SettingsView } from './SettingsView';
 import { ProfileView } from './ProfileView';
 import { RistourneView } from './RistourneView';
 import { CategoriesView } from './CategoriesView';
+import { BudgetsView } from './BudgetsView';
 
 // Interface TÉLÉPHONE : plein écran, barre d'onglets en bas
 interface MobileAppProps extends SharedProps {
@@ -32,6 +33,19 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
     // pt : laisse la place à l'encoche et à l'heure du vrai téléphone
     <div className="min-h-dvh w-full max-w-md mx-auto bg-slate-50 pt-[env(safe-area-inset-top)]">
       <div className={isTab ? 'pb-28' : 'pb-6'}>
+        {page === 'budgets' && (
+          <BudgetsView
+            budgets={p.budgets}
+            transactions={allTransactions}
+            categories={categories}
+            settings={settings}
+            onAdd={p.onAddBudget}
+            onUpdate={p.onUpdateBudget}
+            onDelete={p.onDeleteBudget}
+            onBack={() => onNavigate('home')}
+            onSelectTransaction={onSelectTransaction}
+          />
+        )}
         {page === 'ristourne' && <RistourneView onBack={() => onNavigate('home')} currency={settings.mainCurrency} />}
 
         {page === 'categories' && (
@@ -109,7 +123,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
           />
         )}
         {page === 'settings' && (
-          <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
+          <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
         )}
         {page === 'profile' && <ProfileView onNavigate={onNavigate} />}
       </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon } from 'lucide-react';
+import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon, PieChart } from 'lucide-react';
 import { SharedProps } from './appProps';
 import { WalletsView, HomeWalletCard } from './WalletsView';
 import { isShared } from './Members';
@@ -14,6 +14,7 @@ import { StatisticView } from './StatisticView';
 import { ProfileView } from './ProfileView';
 import { RistourneView } from './RistourneView';
 import { CategoriesView } from './CategoriesView';
+import { BudgetsView } from './BudgetsView';
 
 // Interface ORDINATEUR : menu à gauche, contenu en grille à droite
 type DesktopAppProps = SharedProps;
@@ -22,6 +23,7 @@ const MENU: { id: Page; label: string; icon: React.ElementType }[] = [
   { id: 'home', label: 'Accueil', icon: Home },
   { id: 'history', label: 'Historique', icon: History },
   { id: 'statistic', label: 'Statistiques', icon: BarChart2 },
+  { id: 'budgets', label: 'Budgets', icon: PieChart },
   { id: 'ristourne', label: 'Ristourne', icon: Users },
   { id: 'categories', label: 'Catégories', icon: Tags },
   { id: 'wallets', label: 'Portefeuilles', icon: Wallet },
@@ -204,6 +206,19 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 onSelectTransaction={onSelectTransaction}
               />
             )}
+            {page === 'budgets' && (
+              <BudgetsView
+                budgets={p.budgets}
+                transactions={allTransactions}
+                categories={categories}
+                settings={settings}
+                onAdd={p.onAddBudget}
+                onUpdate={p.onUpdateBudget}
+                onDelete={p.onDeleteBudget}
+                onBack={() => onNavigate('home')}
+                onSelectTransaction={onSelectTransaction}
+              />
+            )}
             {page === 'ristourne' && <RistourneView onBack={() => onNavigate('home')} currency={main} />}
             {page === 'categories' && (
               <CategoriesView
@@ -242,7 +257,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
               />
             )}
             {page === 'settings' && (
-              <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
+              <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
             )}
             {page === 'profile' && <ProfileView onNavigate={onNavigate} />}
           </div>

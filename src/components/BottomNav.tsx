@@ -4,7 +4,7 @@ import { Home, BarChart2, Wallet, User, Plus } from 'lucide-react';
 export type TabType = 'home' | 'statistic' | 'wallets' | 'profile';
 
 // Toutes les pages de l'app (les onglets + les écrans sans onglet)
-export type Page = TabType | 'history' | 'ristourne' | 'categories' | 'settings';
+export type Page = TabType | 'history' | 'ristourne' | 'categories' | 'settings' | 'budgets';
 
 interface BottomNavProps {
   activeTab: TabType;

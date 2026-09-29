@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Transaction, NotificationItem, Wallet, Settings } from './types';
+import React, { useEffect, useState } from 'react';
+import { Transaction, NotificationItem, Wallet, Settings, Budget } from './types';
 import { usePersistentState } from './hooks/usePersistentState';
 import { convertBetween, formatMoney, makeBalance, toMain, totalInMain, walletBalance } from './lib/money';
 import { HomeAction } from './components/BalanceSection';
@@ -9,6 +9,7 @@ import { useIsDesktop } from './hooks/useIsDesktop';
 import { Category, DEFAULT_CATEGORIES } from './data/categories';
 import { Backup, ImportPlan } from './lib/importExport';
 import { replaceCustomIcons } from './lib/customIcons';
+import { budgetStatus } from './lib/budgets';
 
 // Les deux interfaces
 import { MobileApp } from './components/MobileApp';
@@ -43,6 +44,7 @@ export default function App() {
   const [categories, setCategories] = usePersistentState<Category[]>('ap.categories', DEFAULT_CATEGORIES);
   const [storedSettings, setSettings] = usePersistentState<Settings>('ap.settings', DEFAULT_SETTINGS);
   const [activeWalletId, setActiveWalletId] = usePersistentState<string>('ap.activeWallet', 'all');
+  const [budgets, setBudgets] = usePersistentState<Budget[]>('ap.budgets', []);
   const [notifications, setNotifications] = usePersistentState<NotificationItem[]>('ap.notifications', WELCOME);
 
   // Réglages : on complète avec les valeurs par défaut si la donnée sauvegardée est incomplète
@@ -97,7 +99,7 @@ export default function App() {
         openAdd(action);
         break;
       case 'budget':
-        showToast('Les budgets arrivent bientôt');
+        navigate('budgets');
         break;
       case 'ristourne':
         navigate('ristourne');
@@ -321,6 +323,52 @@ export default function App() {
     );
     showToast(`Catégorie « ${changes.name} » modifiée`);
   };
+  // Budgets
+  const handleAddBudget = (b: Omit<Budget, 'id' | 'createdAt'>) => {
+    setBudgets((prev) => [...prev, { ...b, id: `budget-${Date.now()}`, createdAt: new Date().toISOString() }]);
+    showToast('Budget créé');
+  };
+  const handleUpdateBudget = (id: string, changes: Partial<Budget>) => {
+    setBudgets((prev) => prev.map((b) => (b.id === id ? { ...b, ...changes } : b)));
+    showToast('Budget modifié');
+  };
+  const handleDeleteBudget = (id: string) => {
+    setBudgets((prev) => prev.filter((b) => b.id !== id));
+    showToast('Budget supprimé');
+  };
+
+  // Alerte quand un budget du mois atteint 80 %, puis 100 % (une seule fois par budget, par mois et par seuil)
+  useEffect(() => {
+    const now = new Date();
+    const month = `${now.getFullYear()}-${now.getMonth() + 1}`;
+    const fresh: NotificationItem[] = [];
+    for (const b of budgets) {
+      const cat = categories.find((c) => c.id === b.categoryId);
+      if (b.categoryId && !cat) continue;
+      const st = budgetStatus(b, transactions, categories, settings);
+      const level = st.ratio >= 1 ? 100 : st.ratio >= 0.8 ? 80 : 0;
+      const id = `budget-${b.id}-${month}-${level}`;
+      if (!level || notifications.some((n) => n.id === id)) continue;
+      const name = cat?.name ?? 'Toutes les dépenses';
+      fresh.push({
+        id,
+        type: 'budget',
+        read: false,
+        time: now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        title: level === 100 ? `Budget dépassé : ${name}` : `Budget bientôt atteint : ${name}`,
+        message:
+          level === 100
+            ? `Tu as dépensé ${formatMoney(st.spent, b.currency)} sur ${formatMoney(b.amount, b.currency)} ce mois-ci.`
+            : `${Math.round(st.ratio * 100)} % utilisé : il reste ${formatMoney(st.left, b.currency)} pour ce mois.`,
+      });
+    }
+    if (fresh.length > 0) {
+      setNotifications((prev) => [...fresh, ...prev].slice(0, 50));
+      showToast(fresh[0].title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [budgets, transactions, categories]);
+
   const handleDeleteCategory = (id: string) => {
     // On supprime aussi ses sous-catégories
     setCategories((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
@@ -352,6 +400,7 @@ export default function App() {
     setCategories(b.categories);
     setSettings({ ...DEFAULT_SETTINGS, ...b.settings });
     replaceCustomIcons(b.customIcons);
+    setBudgets(b.budgets ?? []);
     setActiveWalletId('all');
     showToast('Sauvegarde restaurée');
   };
@@ -384,6 +433,10 @@ export default function App() {
     onTransfer: handleTransfer,
     onAdjustBalance: handleAdjustBalance,
     onReorderWallets: handleReorderWallets,
+    budgets,
+    onAddBudget: handleAddBudget,
+    onUpdateBudget: handleUpdateBudget,
+    onDeleteBudget: handleDeleteBudget,
     onImport: handleImport,
     onRestore: handleRestore,
   };

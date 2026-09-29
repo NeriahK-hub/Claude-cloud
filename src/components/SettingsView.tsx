@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronDown, Sun, Moon, SmartphoneIcon } from 'lucide-react';
-import { Settings, Transaction, Wallet } from '../types';
+import { Budget, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { Backup, ImportPlan } from '../lib/importExport';
 import { DataSection } from './DataSection';
@@ -15,6 +15,7 @@ interface SettingsViewProps {
   wallets: Wallet[];
   transactions: Transaction[];
   categories: Category[];
+  budgets: Budget[];
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
   onChange: (s: Settings) => void;
@@ -59,7 +60,7 @@ const THEMES: { id: ThemePref; label: string; Icon: typeof Sun }[] = [
   { id: 'dark', label: 'Sombre', Icon: Moon },
 ];
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, onImport, onRestore, onChange, onBack }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, budgets, onImport, onRestore, onChange, onBack }) => {
   const [theme, setTheme] = useState(getThemePref);
   const needed = currenciesNeedingRate(wallets, settings);
   // Texte tapé dans les champs de taux (on garde le texte pour ne pas gêner la saisie)
@@ -101,6 +102,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
           wallets={wallets}
           transactions={transactions}
           categories={categories}
+          budgets={budgets}
           settings={settings}
           onImport={onImport}
           onRestore={onRestore}

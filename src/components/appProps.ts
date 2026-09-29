@@ -1,4 +1,4 @@
-import { Settings, Transaction, Wallet } from '../types';
+import { Budget, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { BalanceInfo } from '../lib/money';
 import { Backup, ImportPlan } from '../lib/importExport';
@@ -34,6 +34,10 @@ export interface SharedProps {
   onTransfer: (fromId: string, toId: string, fromAmount: number, toAmount: number, note: string, fee: number) => void;
   onAdjustBalance: (walletId: string, newBalance: number) => void;
   onReorderWallets: (ids: string[]) => void;
+  budgets: Budget[];
+  onAddBudget: (b: Omit<Budget, 'id' | 'createdAt'>) => void;
+  onUpdateBudget: (id: string, changes: Partial<Budget>) => void;
+  onDeleteBudget: (id: string) => void;
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
 }

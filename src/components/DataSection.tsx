@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Upload, FileSpreadsheet, DatabaseBackup, X, AlertTriangle, Loader2 } from 'lucide-react';
-import { Settings, Transaction, Wallet } from '../types';
+import { Budget, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { Backup, exportBackup, exportExcel, ImportPlan, planImport, readBackup, readImportFile, ReadResult } from '../lib/importExport';
 
@@ -8,6 +8,7 @@ interface DataSectionProps {
   wallets: Wallet[];
   transactions: Transaction[];
   categories: Category[];
+  budgets: Budget[];
   settings: Settings;
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
@@ -16,7 +17,7 @@ interface DataSectionProps {
 const fmtDate = (d: Date | null) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 
 // Paramètres > Mes données : importer (Money Lover, Excel, CSV, sauvegarde) et exporter
-export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions, categories, settings, onImport, onRestore }) => {
+export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions, categories, budgets, settings, onImport, onRestore }) => {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'read' | 'excel' | null>(null);
   const [error, setError] = useState('');
@@ -79,7 +80,7 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
             <span className="block text-xs font-medium text-slate-500">{transactions.length} transactions, format Money Lover</span>
           </span>
         </button>
-        <button onClick={() => exportBackup({ wallets, transactions, categories, settings })} disabled={!!busy} className={btn}>
+        <button onClick={() => exportBackup({ wallets, transactions, categories, settings, budgets })} disabled={!!busy} className={btn}>
           <DatabaseBackup className="w-5 h-5 text-indigo-600" />
           <span className="flex-1">
             Sauvegarde complète (.json)
@@ -162,7 +163,7 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
         <Sheet title="Restaurer la sauvegarde ?" onClose={() => setBackup(null)}>
           <p className="text-sm text-slate-600 mb-3">
             Sauvegarde du {fmtDate(new Date(backup.exportedAt))} : {backup.wallets.length} portefeuilles, {backup.transactions.length} transactions,{' '}
-            {backup.categories.length} catégories.
+            {backup.categories.length} catégories{backup.budgets?.length ? `, ${backup.budgets.length} budgets` : ''}.
           </p>
           <Note warn>Toutes tes données actuelles (portefeuilles, transactions, catégories, réglages) seront remplacées.</Note>
           <div className="flex gap-2 mt-4">

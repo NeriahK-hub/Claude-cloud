@@ -2,7 +2,7 @@
 // - Import : fichier Excel (.xlsx) ou CSV au format Money Lover (Date, Catégorie, Montant, Monnaie,
 //   Portefeuille, Remarque, Avec, Exclure du rapport…), en français ou en anglais.
 // - Export : même format Excel (réimportable ici ou ailleurs) + sauvegarde complète en JSON.
-import { Settings, Transaction, Wallet } from '../types';
+import { Budget, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { convertBetween, countsInStats, rateToMain, toMain } from './money';
 import { CustomIcon, getAllCustomIcons } from './customIcons';
@@ -651,6 +651,7 @@ export interface Backup {
   categories: Category[];
   settings: Settings;
   customIcons: CustomIcon[];
+  budgets?: Budget[]; // absent dans les sauvegardes d'avant les budgets
 }
 
 export function exportBackup(data: Omit<Backup, 'app' | 'version' | 'exportedAt' | 'customIcons'>) {

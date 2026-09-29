@@ -61,11 +61,20 @@ export interface Settings {
   rates: Record<string, number>;
 }
 
+// Budget mensuel : pour une catégorie (sous-catégories comprises) ou pour toutes les dépenses
+export interface Budget {
+  id: string;
+  categoryId: string | null; // null = toutes les dépenses
+  amount: number; // par mois
+  currency: string;
+  createdAt: string;
+}
+
 export interface NotificationItem {
   id: string;
   title: string;
   message: string;
   time: string;
   read: boolean;
-  type: 'transaction' | 'promo' | 'security';
+  type: 'transaction' | 'promo' | 'security' | 'budget';
 }
