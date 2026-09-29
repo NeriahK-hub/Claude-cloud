@@ -98,13 +98,20 @@ export interface RistournePayment {
   paidAt: string; // ISO
 }
 
-// Budget mensuel : pour une catégorie (sous-catégories comprises) ou pour toutes les dépenses
+// Budget : pour une catégorie (sous-catégories comprises) ou pour toutes les dépenses.
+// Semaine / mois / trimestre / année : recommence automatiquement à chaque période.
+// Personnalisé : une seule période, du « from » au « to ».
+export type BudgetPeriod = 'week' | 'month' | 'quarter' | 'year' | 'custom';
+
 export interface Budget {
   id: string;
   categoryId: string | null; // null = toutes les dépenses
-  amount: number; // par mois
+  amount: number; // par période
   currency: string;
   createdAt: string;
+  period?: BudgetPeriod; // absent = 'month' (budgets d'avant)
+  from?: string; // personnalisé : AAAA-MM-JJ (inclus)
+  to?: string; // personnalisé : AAAA-MM-JJ (inclus)
 }
 
 export interface NotificationItem {

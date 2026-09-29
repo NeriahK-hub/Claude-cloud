@@ -202,6 +202,9 @@ create table public.budgets (
   category_id text, -- null = toutes les dépenses
   amount numeric not null check (amount > 0),
   currency text not null,
+  period text not null default 'month' check (period in ('week', 'month', 'quarter', 'year', 'custom')),
+  start_date date, -- budget personnalisé : du…
+  end_date date, -- … au (inclus)
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz

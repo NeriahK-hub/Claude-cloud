@@ -20,7 +20,7 @@ export const DisplaySettings: React.FC<{ currency: string }> = ({ currency }) =>
   const today = new Date();
 
   // Exemple de montant tel qu'il s'afficherait avec un réglage donné
-  const sample = (changes: Partial<DisplayPrefs>, v = 1234567.5) => formatMoney(v, currency, { ...prefs, ...changes });
+  const sample = (changes: Partial<DisplayPrefs>, v = 1234.5) => formatMoney(v, currency, { ...prefs, ...changes });
   const sampleDate = (date: DisplayPrefs['date']) => formatDate(today, false, date);
 
   const rows: { key: keyof DisplayPrefs; label: string; value: string; choices: Choice<DisplayPrefs[keyof DisplayPrefs]>[]; grid?: boolean }[] = [
@@ -78,8 +78,8 @@ export const DisplaySettings: React.FC<{ currency: string }> = ({ currency }) =>
             onClick={() => setOpen(r.key)}
             className="w-full flex items-center justify-between gap-3 px-1 py-3 text-left cursor-pointer"
           >
-            <span className="text-sm text-slate-800">{r.label}</span>
-            <span className="flex items-center gap-1 min-w-0">
+            <span className="text-sm text-slate-800 min-w-0">{r.label}</span>
+            <span className="flex items-center gap-1 shrink-0 max-w-[55%]">
               <span className="text-sm font-semibold text-emerald-600 truncate tabular-nums">{r.value}</span>
               <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
             </span>

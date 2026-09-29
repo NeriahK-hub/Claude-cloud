@@ -61,13 +61,14 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
     }
   };
 
-  const btn = 'w-full px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold flex items-center gap-3 cursor-pointer disabled:opacity-50 text-left';
+  const base = 'w-full px-4 py-3 rounded-2xl text-sm font-semibold flex items-center gap-3 cursor-pointer disabled:opacity-50 text-left';
+  const btn = `${base} bg-slate-100 hover:bg-slate-200`;
 
   return (
     <>
       <input ref={input} type="file" accept=".xlsx,.csv,.json,.txt" onChange={onPick} className="hidden" />
       <div className="space-y-2">
-        <button onClick={() => input.current?.click()} disabled={!!busy} className={`${btn} !bg-[#D8FB52] text-slate-900`}>
+        <button onClick={() => input.current?.click()} disabled={!!busy} className={`${base} bg-[#D8FB52] hover:bg-[#cbed3b] text-slate-900`}>
           {busy === 'read' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
           <span className="flex-1">
             Importer un fichier

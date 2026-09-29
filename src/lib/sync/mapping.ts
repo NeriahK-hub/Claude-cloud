@@ -141,6 +141,9 @@ export const budgetRow = (b: Budget): Row => ({
   amount: b.amount,
   currency: b.currency,
   created_at: iso(b.createdAt),
+  period: b.period ?? 'month',
+  start_date: b.period === 'custom' ? b.from ?? null : null,
+  end_date: b.period === 'custom' ? b.to ?? null : null,
 });
 
 // ---------- Base -> local ----------
@@ -258,6 +261,9 @@ export const budgetFromRow = (r: Row): Budget => ({
   amount: Number(r.amount),
   currency: String(r.currency),
   createdAt: iso(r.created_at),
+  period: (r.period as Budget['period']) ?? 'month',
+  from: r.start_date ? String(r.start_date).slice(0, 10) : undefined,
+  to: r.end_date ? String(r.end_date).slice(0, 10) : undefined,
 });
 
 // ---------- Ristournes ----------

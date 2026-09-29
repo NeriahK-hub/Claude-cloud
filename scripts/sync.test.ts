@@ -172,14 +172,17 @@ async function main() {
   a2.data = {
     ...a2.data,
     transactions: a2.data.transactions.filter((x) => x.id !== deleted.id).map((x) => (x.id === victim.id ? { ...x, title: 'Titre modifié' } : x)),
-    budgets: [{ id: uuid(), categoryId: 'food', amount: 150000, currency: 'CDF', createdAt: new Date().toISOString() }],
+    budgets: [
+      { id: uuid(), categoryId: 'food', amount: 150000, currency: 'CDF', createdAt: new Date().toISOString() },
+      { id: uuid(), categoryId: 'transport', amount: 20000, currency: 'CDF', createdAt: new Date().toISOString(), period: 'custom', from: '2026-10-01', to: '2026-10-15' },
+    ],
   };
   const r4 = await a2.sync();
-  check(r4.status === 'done' && r4.pushed === 3, `2e appareil envoie 3 changements (${r4.status === 'done' ? r4.pushed : '?'})`);
+  check(r4.status === 'done' && r4.pushed === 4, `2e appareil envoie 4 changements (${r4.status === 'done' ? r4.pushed : '?'})`);
   await a1.sync();
   check(a1.data.transactions.find((x) => x.id === victim.id)?.title === 'Titre modifié', '1er appareil : titre modifié reçu');
   check(!a1.data.transactions.some((x) => x.id === deleted.id), '1er appareil : suppression reçue');
-  check(a1.data.budgets.length === 1, '1er appareil : budget reçu');
+  check(a1.data.budgets.length === 2 && a1.data.budgets.some((b) => b.period === 'custom' && b.from === '2026-10-01' && b.to === '2026-10-15'), '1er appareil : budgets reçus (dont un personnalisé, avec ses dates)');
   const r4b = await a1.sync();
   check(r4b.status === 'done' && r4b.pushed === 0, '1er appareil : rien à renvoyer après réception');
 

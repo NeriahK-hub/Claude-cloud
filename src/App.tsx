@@ -16,7 +16,7 @@ import { applyList } from './lib/sync/engine';
 import type { SyncData } from './lib/sync/mapping';
 import { MergeDialog } from './components/Account';
 import type { DebtPreset } from './components/DebtsView';
-import { budgetStatus } from './lib/budgets';
+import { budgetStatus, periodOf } from './lib/budgets';
 import { uuid } from './lib/ids';
 
 // Les deux interfaces
@@ -418,17 +418,18 @@ export default function App() {
     showToast('Budget supprimé');
   };
 
-  // Alerte quand un budget du mois atteint 80 %, puis 100 % (une seule fois par budget, par mois et par seuil)
+  // Alerte quand un budget atteint 80 %, puis 100 % (une seule fois par budget, par période et par seuil)
   useEffect(() => {
     const now = new Date();
-    const month = `${now.getFullYear()}-${now.getMonth() + 1}`;
     const fresh: NotificationItem[] = [];
     for (const b of budgets) {
       const cat = categories.find((c) => c.id === b.categoryId);
       if (b.categoryId && !cat) continue;
       const st = budgetStatus(b, transactions, categories, settings);
+      if (now < st.start || now >= st.end) continue; // budget personnalisé pas en cours
       const level = st.ratio >= 1 ? 100 : st.ratio >= 0.8 ? 80 : 0;
-      const id = `budget-${b.id}-${month}-${level}`;
+      const when = { week: 'cette semaine', month: 'ce mois-ci', quarter: 'ce trimestre', year: 'cette année', custom: 'sur la période' }[periodOf(b)];
+      const id = `budget-${b.id}-${st.start.toISOString().slice(0, 10)}-${level}`;
       if (!level || notifications.some((n) => n.id === id)) continue;
       const name = cat?.name ?? 'Toutes les dépenses';
       fresh.push({
@@ -439,8 +440,8 @@ export default function App() {
         title: level === 100 ? `Budget dépassé : ${name}` : `Budget bientôt atteint : ${name}`,
         message:
           level === 100
-            ? `Tu as dépensé ${formatMoney(st.spent, b.currency)} sur ${formatMoney(b.amount, b.currency)} ce mois-ci.`
-            : `${Math.round(st.ratio * 100)} % utilisé : il reste ${formatMoney(st.left, b.currency)} pour ce mois.`,
+            ? `Tu as dépensé ${formatMoney(st.spent, b.currency)} sur ${formatMoney(b.amount, b.currency)} ${when}.`
+            : `${Math.round(st.ratio * 100)} % utilisé : il reste ${formatMoney(st.left, b.currency)} ${when}.`,
       });
     }
     if (fresh.length > 0) {

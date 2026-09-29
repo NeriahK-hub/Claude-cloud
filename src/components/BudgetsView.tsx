@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, Layers, Pencil, Trash2, PieChart, Delete } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, Layers, Pencil, Trash2, PieChart, Delete, CalendarDays } from 'lucide-react';
 import { Budget, Settings, Transaction } from '../types';
 import { Category } from '../data/categories';
 import { IconBadge } from './AppIcon';
 import { TransactionItem } from './TransactionItem';
 import { formatMoney } from '../lib/money';
-import { budgetStatus, budgetTone, BudgetStatus, monthRange, pastSpending, roundBudget } from '../lib/budgets';
+import { budgetRange, budgetStatus, budgetTone, BudgetStatus, pastSpending, periodOf, PERIODS, rangeText, roundBudget } from '../lib/budgets';
+import { BudgetPeriod } from '../types';
 import { monthTitle } from '../lib/periods';
 import { haptic } from '../lib/haptics';
 
@@ -41,13 +42,22 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
 
   // Budgets dont la catégorie existe encore
   const valid = budgets.filter((b) => b.categoryId === null || categories.some((c) => c.id === b.categoryId));
+  // Onglets : les périodes qui ont des budgets (le mois d'abord s'il y en a)
+  const kinds = PERIODS.map((p) => p.id).filter((k) => valid.some((b) => periodOf(b) === k));
+  const [tabPick, setTab] = useState<BudgetPeriod | null>(null);
+  const tab: BudgetPeriod = tabPick && kinds.includes(tabPick) ? tabPick : kinds.includes('month') ? 'month' : kinds[0] ?? 'month';
   const rows = useMemo(
     () =>
       valid
+        .filter((b) => periodOf(b) === tab)
         .map((b) => ({ b, cat: categories.find((c) => c.id === b.categoryId), st: budgetStatus(b, transactions, categories, settings, offset) }))
         .sort((x, y) => (x.b.categoryId === null ? -1 : y.b.categoryId === null ? 1 : y.st.ratio - x.st.ratio)),
-    [valid, categories, transactions, settings, offset]
+    [valid, categories, transactions, settings, offset, tab]
   );
+  const info = PERIODS.find((p) => p.id === tab)!;
+  const custom = tab === 'custom';
+  const range = custom ? null : budgetRange({ period: tab }, offset);
+  const periodLabel = custom ? '' : tab === 'month' ? monthLabel(offset) : rangeText(range!);
 
   // Total : le budget « toutes les dépenses » s'il existe, sinon la somme des catégories
   const global = rows.find((r) => r.b.categoryId === null);
@@ -59,8 +69,9 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
 
   // Mois en cours : jours restants et montant possible par jour
   const now = new Date();
-  const end = monthRange(0).end!;
+  const end = custom ? rows[0]?.st.end ?? now : budgetRange({ period: tab }, 0).end;
   const daysLeft = Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 86400000));
+  const isNow = custom ? rows.every((r) => r.st.start <= now && now < r.st.end) : offset === 0;
   const viewing = rows.find((r) => r.b.id === viewingId);
 
   return (
@@ -80,28 +91,50 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
         )}
       </div>
 
-      {/* Mois affiché */}
-      <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-100 p-1.5 mb-3">
-        <button onClick={() => setOffset((o) => o - 1)} aria-label="Mois précédent" className="w-9 h-9 rounded-xl hover:bg-slate-100 flex items-center justify-center cursor-pointer">
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        <span className="text-sm font-bold text-slate-900">{offset === 0 ? `Ce mois-ci · ${monthLabel(0)}` : monthLabel(offset)}</span>
-        <button
-          onClick={() => setOffset((o) => Math.min(0, o + 1))}
-          disabled={offset === 0}
-          aria-label="Mois suivant"
-          className="w-9 h-9 rounded-xl hover:bg-slate-100 flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-default"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
+      {/* Périodes : onglets (seulement s'il y a des budgets de plusieurs périodes) */}
+      {kinds.length > 1 && (
+        <div className="flex gap-1 p-1 rounded-2xl bg-slate-200/60 mb-2 overflow-x-auto no-scrollbar">
+          {kinds.map((k) => (
+            <button
+              key={k}
+              onClick={() => {
+                haptic();
+                setTab(k);
+                setOffset(0);
+              }}
+              aria-pressed={tab === k}
+              className={`flex-1 shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap cursor-pointer ${tab === k ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
+            >
+              {{ week: 'Semaine', month: 'Mois', quarter: 'Trimestre', year: 'Année', custom: 'Personnalisé' }[k]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Période affichée (on remonte le temps avec ‹) */}
+      {!custom && (
+        <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-100 p-1.5 mb-3">
+          <button onClick={() => { haptic(); setOffset((o) => o - 1); }} aria-label="Période précédente" className="w-9 h-9 rounded-xl hover:bg-slate-100 flex items-center justify-center cursor-pointer">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm font-bold text-slate-900">{offset === 0 ? `${info.now} · ${periodLabel}` : periodLabel}</span>
+          <button
+            onClick={() => { haptic(); setOffset((o) => Math.min(0, o + 1)); }}
+            disabled={offset === 0}
+            aria-label="Période suivante"
+            className="w-9 h-9 rounded-xl hover:bg-slate-100 flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-default"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="bg-white rounded-3xl border border-slate-100 p-6 text-center">
           <span className="w-14 h-14 mx-auto rounded-full bg-[#D8FB52]/40 flex items-center justify-center mb-3">
             <PieChart className="w-7 h-7 text-slate-900" />
           </span>
-          <h2 className="text-base font-bold text-slate-900">Fixe-toi une limite par mois</h2>
+          <h2 className="text-base font-bold text-slate-900">Fixe-toi une limite</h2>
           <p className="text-sm text-slate-500 mt-1 mb-4">
             Par exemple 150 000 CDF pour l'alimentation. Wallo te montre ce qu'il reste et te prévient quand tu approches de la limite.
           </p>
@@ -124,9 +157,9 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
             <p className={`text-xs mt-2 ${total - spent < 0 ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>
               {total - spent < 0
                 ? `Dépassé de ${money(spent - total)}.`
-                : offset === 0
+                : isNow
                   ? `Il reste ${money(total - spent)} pour ${daysLeft} jour${daysLeft > 1 ? 's' : ''}, soit environ ${money((total - spent) / daysLeft)} par jour.`
-                  : `${money(total - spent)} non dépensés ce mois-là.`}
+                  : `${money(total - spent)} non dépensés sur cette période.`}
             </p>
           </div>
 
@@ -148,6 +181,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
                   <Bar ratio={st.ratio} />
                   <div className="text-[11px] tabular-nums text-slate-500 mt-1">
                     {money(st.spent, b.currency)} sur {money(b.amount, b.currency)} · {Math.round(st.ratio * 100)} %
+                    {custom && ` · ${rangeText(st)}`}
                   </div>
                 </div>
               </button>
@@ -161,7 +195,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
           budget={viewing.b}
           cat={viewing.cat}
           status={viewing.st}
-          month={monthLabel(offset)}
+          month={viewing.b.period === 'custom' ? rangeText(viewing.st) : `${PERIODS.find((p) => p.id === periodOf(viewing.b))!.now} · ${rangeText(viewing.st)}`}
           onClose={() => setViewingId(null)}
           onEdit={() => {
             setEditing(viewing.b);
@@ -178,7 +212,8 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
       {editing && (
         <BudgetSheet
           budget={editing === 'new' ? null : editing}
-          taken={valid.map((b) => b.categoryId)}
+          budgets={valid}
+          defaultPeriod={tab}
           categories={categories}
           transactions={transactions}
           settings={settings}
@@ -297,16 +332,27 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
 
 const BudgetSheet: React.FC<{
   budget: Budget | null;
-  taken: (string | null)[];
+  budgets: Budget[];
+  defaultPeriod: BudgetPeriod;
   categories: Category[];
   transactions: Transaction[];
   settings: Settings;
   onClose: () => void;
   onSave: (b: Omit<Budget, 'id' | 'createdAt'>) => void;
-}> = ({ budget, taken, categories, transactions, settings, onClose, onSave }) => {
+}> = ({ budget, budgets, defaultPeriod, categories, transactions, settings, onClose, onSave }) => {
   const [categoryId, setCategoryId] = useState<string | null | undefined>(budget ? budget.categoryId : undefined);
   const [amount, setAmount] = useState(budget ? String(budget.amount) : '');
-  const [picking, setPicking] = useState(!budget); // nouveau budget : on choisit d'abord la catégorie
+  const [panel, setPanel] = useState<'category' | 'period' | null>(budget ? null : 'category'); // nouveau : d'abord la catégorie
+  const picking = panel === 'category';
+  const setPicking = (on: boolean | ((x: boolean) => boolean)) => setPanel((p) => ((typeof on === 'function' ? on(p === 'category') : on) ? 'category' : null));
+  const [period, setPeriod] = useState<BudgetPeriod>(budget ? periodOf(budget) : defaultPeriod);
+  const [from, setFrom] = useState(budget?.from ?? '');
+  const [to, setTo] = useState(budget?.to ?? '');
+  const [customDraft, setCustomDraft] = useState(period === 'custom');
+  // Une catégorie n'a qu'un budget par période (semaine, mois…) ; les budgets personnalisés sont libres
+  const taken = period === 'custom' ? [] : budgets.filter((b) => b.id !== budget?.id && periodOf(b) === period).map((b) => b.categoryId);
+  const periodInfo = PERIODS.find((p) => p.id === period)!;
+  const customOk = period !== 'custom' || (!!from && !!to && to >= from);
   const currency = budget?.currency ?? settings.mainCurrency;
   // Catégories principales de dépenses pas encore budgétées (+ celle du budget modifié)
   const choices = categories.filter(
@@ -314,9 +360,12 @@ const BudgetSheet: React.FC<{
   );
   const globalFree = !taken.includes(null) || budget?.categoryId === null;
   const cat = categories.find((c) => c.id === categoryId);
-  const past = categoryId !== undefined ? pastSpending(categoryId, transactions, categories, settings) : null;
+  const past = categoryId !== undefined ? pastSpending(categoryId, transactions, categories, settings, period, { from, to }) : null;
   const value = parseFloat(amount) || 0;
-  const valid = categoryId !== undefined && value > 0;
+  const valid = categoryId !== undefined && value > 0 && customOk && !taken.includes(categoryId ?? null);
+  const save = () =>
+    valid &&
+    onSave({ categoryId: categoryId ?? null, amount: value, currency, period, from: period === 'custom' ? from : undefined, to: period === 'custom' ? to : undefined });
 
   const press = (k: string) => {
     haptic();
@@ -333,12 +382,12 @@ const BudgetSheet: React.FC<{
   // Clavier physique (ordinateur)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') return picking && budget ? setPicking(false) : onClose();
-      if (picking) return;
+      if (e.key === 'Escape') return panel && categoryId !== undefined ? setPanel(null) : onClose();
+      if (panel) return;
       if (/^[0-9]$/.test(e.key)) press(e.key);
       else if (e.key === '.' || e.key === ',') press('.');
       else if (e.key === 'Backspace') press('del');
-      else if (e.key === 'Enter' && valid) onSave({ categoryId: categoryId ?? null, amount: value, currency });
+      else if (e.key === 'Enter') save();
       else return;
       e.preventDefault();
     };
@@ -402,7 +451,7 @@ const BudgetSheet: React.FC<{
             <span className={`text-[38px] leading-none font-extrabold tracking-tight tabular-nums ${amount ? 'text-slate-900' : 'text-slate-300'}`}>{shown}</span>
             <span className="px-2.5 py-1 rounded-full bg-slate-100 text-sm font-bold text-slate-700">{currency}</span>
           </div>
-          <p className="mt-1.5 text-xs text-slate-500">par mois</p>
+          <p className="mt-1.5 text-xs text-slate-500">{period === 'custom' ? (customOk && from ? `du ${rangeText(budgetRange({ period, from, to }))}` : 'sur la période choisie') : periodInfo.per}</p>
         </div>
 
         {/* Pour quoi ? */}
@@ -423,8 +472,94 @@ const BudgetSheet: React.FC<{
           {!budget && <ChevronDown className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${picking ? 'rotate-180' : ''}`} />}
         </button>
 
+        <button
+          onClick={() => {
+            haptic();
+            setPanel((p) => (p === 'period' ? null : 'period'));
+          }}
+          className={`w-full mt-2 flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-2xl text-left border-2 cursor-pointer transition ${
+            panel === 'period' ? 'border-slate-900 bg-white' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
+          }`}
+        >
+          <span className="w-9 h-9 rounded-full bg-white flex items-center justify-center shrink-0">
+            <CalendarDays className="w-4 h-4 text-slate-700" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[10px] font-semibold text-slate-500">Période</span>
+            <span className="block text-sm font-bold text-slate-900 truncate">
+              {period === 'custom'
+                ? customOk && from
+                  ? `Du ${rangeText(budgetRange({ period, from, to }))}`
+                  : 'Personnalisé : choisis les dates'
+                : `${periodInfo.every} · ${rangeText(budgetRange({ period }))}`}
+            </span>
+          </span>
+          <ChevronDown className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${panel === 'period' ? 'rotate-180' : ''}`} />
+        </button>
+
         <div className="mt-2 min-h-[300px]">
-          {picking ? (
+          {panel === 'period' ? (
+            <div className="animate-fade-in space-y-1.5">
+              {PERIODS.filter((p) => p.id !== 'custom').map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    haptic();
+                    setPeriod(p.id);
+                    setCustomDraft(false);
+                    setPanel(categoryId === undefined ? 'category' : null);
+                  }}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl text-left cursor-pointer border-2 ${
+                    period === p.id ? 'border-slate-900 bg-[#D8FB52]/40' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
+                  }`}
+                >
+                  <span>
+                    <span className="block text-sm font-bold text-slate-900">
+                      {p.now} ({rangeText(budgetRange({ period: p.id }))})
+                    </span>
+                    <span className="block text-[11px] text-slate-500">Recommence automatiquement {p.every.toLowerCase()}</span>
+                  </span>
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  haptic();
+                  setCustomDraft(true);
+                }}
+                className={`w-full px-4 py-3 rounded-2xl text-left cursor-pointer border-2 ${
+                  customDraft ? 'border-slate-900 bg-[#D8FB52]/40' : 'border-transparent bg-slate-100 hover:bg-slate-200/70'
+                }`}
+              >
+                <span className="block text-sm font-bold text-slate-900">Personnalisé</span>
+                <span className="block text-[11px] text-slate-500">Une seule période : tu choisis les dates</span>
+              </button>
+              {customDraft && (
+                <div className="p-3 rounded-2xl bg-slate-100 animate-fade-in">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-xs font-semibold text-slate-500">
+                      Du
+                      <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-full mt-1 px-3 py-2.5 rounded-xl bg-white text-sm outline-none" />
+                    </label>
+                    <label className="text-xs font-semibold text-slate-500">
+                      Au
+                      <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className="w-full mt-1 px-3 py-2.5 rounded-xl bg-white text-sm outline-none" />
+                    </label>
+                  </div>
+                  <button
+                    disabled={!from || !to || to < from}
+                    onClick={() => {
+                      haptic();
+                      setPeriod('custom');
+                      setPanel(categoryId === undefined ? 'category' : null);
+                    }}
+                    className="w-full mt-2 py-2.5 rounded-xl bg-[#D8FB52] text-slate-900 text-sm font-bold cursor-pointer disabled:opacity-40"
+                  >
+                    Valider ces dates
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : picking ? (
             <div className="animate-fade-in">
               <p className="text-xs text-slate-500 mb-2">Les sous-catégories comptent dans leur catégorie.</p>
               <div className="grid grid-cols-4 gap-1.5">
@@ -456,10 +591,18 @@ const BudgetSheet: React.FC<{
               </div>
               <button
                 disabled={!valid}
-                onClick={() => onSave({ categoryId: categoryId ?? null, amount: value, currency })}
+                onClick={save}
                 className="w-full mt-2 py-3.5 rounded-2xl bg-[#D8FB52] disabled:bg-slate-100 disabled:text-slate-400 text-slate-900 font-bold text-sm cursor-pointer disabled:cursor-default"
               >
-                {categoryId === undefined ? 'Choisis une catégorie' : !(value > 0) ? 'Saisis un montant' : `Enregistrer ${formatMoney(value, currency)} par mois`}
+                {categoryId === undefined
+                  ? 'Choisis une catégorie'
+                  : taken.includes(categoryId ?? null)
+                    ? 'Cette catégorie a déjà un budget pour cette période'
+                    : !customOk
+                      ? 'Choisis les dates'
+                      : !(value > 0)
+                        ? 'Saisis un montant'
+                        : `Enregistrer ${formatMoney(value, currency)}${period === 'custom' ? '' : ` ${periodInfo.per}`}`}
               </button>
             </>
           )}
