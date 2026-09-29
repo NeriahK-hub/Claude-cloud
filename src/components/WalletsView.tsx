@@ -8,6 +8,7 @@ import { IconPicker, COLOR_CHOICES } from './IconPicker';
 import { CurrencyPicker } from './CurrencyPicker';
 import { currencyInfo } from '../data/currencies';
 import { convertBetween, countsInStats, formatMoney, walletBalance } from '../lib/money';
+import { inThisMonth } from '../lib/periods';
 import { isShared, MembersSheet, MemberStack, SharingBlock, activeMembers, memberOf, MemberAvatar, ME_ID } from './Members';
 
 interface WalletsViewProps {
@@ -738,9 +739,8 @@ const SharedMonthLine: React.FC<{ wallet: Wallet; transactions: Transaction[] }>
   const now = new Date();
   const put = new Map<string, number>();
   for (const t of transactions) {
-    const d = new Date(t.createdAt);
     if (t.walletId !== wallet.id || t.amount <= 0 || t.type === 'adjustment') continue;
-    if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) continue;
+    if (!inThisMonth(t.createdAt, now)) continue;
     const id = t.memberId || ME_ID;
     put.set(id, (put.get(id) ?? 0) + t.amount);
   }
@@ -790,10 +790,7 @@ const WalletDetail: React.FC<{
   const kindInfo = KINDS.find((k) => k.id === kind)!;
 
   const now = new Date();
-  const month = transactions.filter((t) => {
-    const d = new Date(t.createdAt);
-    return countsInStats(t) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
+  const month = transactions.filter((t) => countsInStats(t) && inThisMonth(t.createdAt, now));
   const monthIn = month.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const monthOut = month.filter((t) => t.amount < 0).reduce((s, t) => s - t.amount, 0);
   const sorted = [...transactions].sort((a, b) => b.createdAt.localeCompare(a.createdAt));

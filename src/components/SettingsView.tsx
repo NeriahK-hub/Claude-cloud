@@ -9,6 +9,7 @@ import { currencyInfo } from '../data/currencies';
 import { currenciesNeedingRate } from '../lib/money';
 import { getThemePref, setThemePref, ThemePref } from '../lib/theme';
 import { CustomIconsSection } from './CustomIconsSection';
+import { DisplaySettings } from './DisplaySettings';
 import { hapticsEnabled, setHapticsEnabled } from '../lib/haptics';
 
 interface SettingsViewProps {
@@ -145,6 +146,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
             className="toggle shrink-0"
           />
         </label>
+      </Section>
+
+      <Section title="Affichage">
+        <DisplaySettings currency={settings.mainCurrency} />
       </Section>
 
       <Section title="Devise principale" hint="Le solde de l'accueil est affiché dans cette devise.">

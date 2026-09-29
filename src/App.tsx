@@ -10,6 +10,7 @@ import { Category, DEFAULT_CATEGORIES } from './data/categories';
 import { Backup, ImportPlan } from './lib/importExport';
 import { getAllCustomIcons, replaceCustomIcons, useCustomIcons } from './lib/customIcons';
 import { setProfileName, useProfile } from './lib/profile';
+import { useDisplayPrefs } from './lib/display';
 import { useCloud } from './lib/sync/useCloud';
 import { applyList } from './lib/sync/engine';
 import type { SyncData } from './lib/sync/mapping';
@@ -120,7 +121,7 @@ export default function App() {
   };
 
   // Enregistrer une dépense ou un revenu
-  const handleAddTransaction = (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string) => {
+  const handleAddTransaction = (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string, excludeFromReport?: boolean) => {
     const wallet = wallets.find((w) => w.id === walletId);
     if (!wallet) return;
     const isExpense = addMode === 'expense' || (addMode === 'debt' && category.direction === 'out');
@@ -150,6 +151,7 @@ export default function App() {
       status: 'completed',
       memberId,
       withPerson,
+      excludeFromReport,
     };
 
     setTransactions((prev) => [newTx, ...prev]);
@@ -419,6 +421,7 @@ export default function App() {
 
   // ---------- Compte en ligne et synchro ----------
   const profile = useProfile();
+  useDisplayPrefs(); // un réglage d'affichage change : toute l'app se redessine
   const customIcons = useCustomIcons();
   const dataRef = useRef<SyncData>(null!);
   dataRef.current = { wallets, transactions, categories, budgets, settings, profileName: profile.name, customIcons };

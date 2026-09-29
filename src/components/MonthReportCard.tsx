@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Settings, Transaction, Wallet } from '../types';
 import { countsInStats, formatMoney, toMain } from '../lib/money';
+import { inPeriod, periodRange } from '../lib/periods';
+import { formatDate, useDisplayPrefs } from '../lib/display';
 import { haptic } from '../lib/haptics';
 
 interface MonthReportCardProps {
@@ -50,26 +52,27 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
   const [boxRef, width] = useWidth<HTMLDivElement>();
   const main = settings.mainCurrency;
 
+  const prefs = useDisplayPrefs(); // premier jour du mois, format de date
   const data = useMemo(() => {
     const scope = activeWallet ? [activeWallet] : wallets.filter((w) => w.includeInTotal && !w.archived);
     const ids = new Set(scope.map((w) => w.id));
     const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    const daysIn = (yy: number, mm: number) => new Date(yy, mm + 1, 0).getDate();
-    const days = daysIn(y, m);
-    const today = now.getDate();
+    // Nombre de jours entre deux dates (sans se tromper aux changements d'heure)
+    const dayIndex = (from: Date, to: Date) =>
+      Math.round((Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) - Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) / 86400000);
+    const range = (offset: number) => periodRange({ kind: 'month', offset }, now) as { start: Date; end: Date };
+    const cur = range(0);
+    const days = dayIndex(cur.start, cur.end);
+    const today = Math.min(days, dayIndex(cur.start, now) + 1);
 
     // Montant par jour du mois, pour un mois donné (décalage 0 = ce mois-ci)
     const perDay = (offset: number, s: Side) => {
-      const d0 = new Date(y, m + offset, 1);
-      const n = daysIn(d0.getFullYear(), d0.getMonth());
-      const arr = new Array<number>(n).fill(0);
+      const r = range(offset);
+      const arr = new Array<number>(dayIndex(r.start, r.end)).fill(0);
       for (const t of allTransactions) {
         if (!ids.has(t.walletId) || !countsInStats(t) || (s === 'expense' ? t.amount >= 0 : t.amount <= 0)) continue;
-        const d = new Date(t.createdAt);
-        if (d.getFullYear() !== d0.getFullYear() || d.getMonth() !== d0.getMonth()) continue;
-        arr[d.getDate() - 1] += Math.abs(toMain(t.amount, t.currency, settings));
+        if (!inPeriod(t.createdAt, r)) continue;
+        arr[dayIndex(r.start, new Date(t.createdAt))] += Math.abs(toMain(t.amount, t.currency, settings));
       }
       return arr;
     };
@@ -86,8 +89,9 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
       const average = Array.from({ length: days }, (_, i) => (past[0][i] + past[1][i] + past[2][i]) / 3);
       return { current, average, total: current[today - 1] ?? 0 };
     };
-    return { days, today, y, m, expense: build('expense'), income: build('income') };
-  }, [allTransactions, wallets, activeWallet, settings]);
+    return { days, today, start: cur.start, expense: build('expense'), income: build('income') };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTransactions, wallets, activeWallet, settings, prefs]);
 
   const series = data[side];
   const hasData = series.total > 0 || series.average.some((v) => v > 0);
@@ -95,7 +99,7 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
   const cur = day < series.current.length ? series.current[day] : null;
   const avg = series.average[day] ?? 0;
   const money = (v: number) => formatMoney(v, main);
-  const dateLabel = (i: number) => `${String(i + 1).padStart(2, '0')}/${String(data.m + 1).padStart(2, '0')}`;
+  const dateLabel = (i: number) => formatDate(new Date(data.start.getFullYear(), data.start.getMonth(), data.start.getDate() + i), true);
 
   // Écart avec la moyenne à la même date (aujourd'hui)
   const avgToday = series.average[data.today - 1] ?? 0;

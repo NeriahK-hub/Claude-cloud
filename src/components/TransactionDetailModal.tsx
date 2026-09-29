@@ -5,6 +5,7 @@ import { Category, categoriesFor } from '../data/categories';
 import { IconBadge } from './AppIcon';
 import { formatMoney, dayLabel, timeLabel } from '../lib/money';
 import { isShared, memberOf, MemberAvatar, MemberChips, ME_ID } from './Members';
+import { useDisplayPrefs } from '../lib/display';
 
 interface TransactionDetailModalProps {
   transaction: Transaction | null;
@@ -241,6 +242,8 @@ const EditForm: React.FC<{
   const [when, setWhen] = useState(toLocalInput(tx.createdAt));
   const [memberId, setMemberId] = useState(tx.memberId ?? ME_ID);
   const [person, setPerson] = useState(tx.withPerson ?? '');
+  const [exclude, setExclude] = useState(!!tx.excludeFromReport);
+  const { excludeOption } = useDisplayPrefs();
   const isDebt = categories.find((c) => c.id === (categoryId || tx.categoryId))?.type === 'debt';
   const editWallet = wallets.find((w) => w.id === walletId);
 
@@ -255,6 +258,7 @@ const EditForm: React.FC<{
       createdAt: new Date(when).toISOString(),
       memberId: isShared(editWallet) && memberId !== ME_ID ? memberId : undefined,
       withPerson: isDebt ? person.trim() || undefined : tx.withPerson,
+      excludeFromReport: simple && exclude ? true : undefined,
     };
     if (value !== Math.abs(tx.amount)) {
       // Le montant d'origine (autre devise) ne correspond plus
@@ -324,6 +328,16 @@ const EditForm: React.FC<{
         <div className="mt-3">
           <MemberChips wallet={editWallet} value={memberId} onChange={setMemberId} label={isOut ? 'Fait par' : 'Versé par'} />
         </div>
+      )}
+
+      {simple && (excludeOption || tx.excludeFromReport) && (
+        <label className="flex items-center justify-between gap-3 mt-3 cursor-pointer">
+          <span>
+            <span className="block text-sm font-semibold text-slate-700">Exclure du rapport</span>
+            <span className="block text-xs text-slate-400">Compte dans le solde, mais pas dans les statistiques ni les budgets.</span>
+          </span>
+          <input type="checkbox" role="switch" checked={exclude} onChange={(e) => setExclude(e.target.checked)} className="toggle shrink-0" />
+        </label>
       )}
 
       <label className={label}>Date et heure</label>

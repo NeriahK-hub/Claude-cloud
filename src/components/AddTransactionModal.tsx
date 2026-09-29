@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Delete, Settings2, ChevronDown, ChevronLeft, ArrowUpRight, ArrowDownLeft, X } from 'lucide-react';
+import { Delete, Settings2, ChevronDown, ChevronLeft, ArrowUpRight, ArrowDownLeft, X, EyeOff } from 'lucide-react';
 import { Category, categoriesFor } from '../data/categories';
 import { isShared, MemberChips, ME_ID } from './Members';
+import { useDisplayPrefs } from '../lib/display';
 import { IconBadge } from './AppIcon';
 import { Settings, Wallet } from '../types';
 import { CURRENCIES } from '../data/currencies';
@@ -18,7 +19,7 @@ interface AddTransactionModalProps {
   defaultWalletId: string;
   onClose: () => void;
   onChangeMode: (m: AddMode) => void;
-  onSave: (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string) => void;
+  onSave: (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string, excludeFromReport?: boolean) => void;
   onManageCategories: () => void;
   // Ouverture pré-remplie (ex. « Il me rembourse » depuis Dettes et prêts)
   preset?: { categoryId?: string; withPerson?: string; amount?: number; currency?: string } | null;
@@ -60,6 +61,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const [currency, setCurrency] = useState('');
   const [memberId, setMemberId] = useState(ME_ID); // portefeuille partagé : qui fait l'opération
   const [person, setPerson] = useState(''); // Dette / Prêt : avec qui
+  const [exclude, setExclude] = useState(false); // exclure du rapport (si l'option est activée)
+  const { excludeOption } = useDisplayPrefs();
   const [panel, setPanel] = useState<Panel>(null);
   const [subOf, setSubOf] = useState<string | null>(null); // panneau catégorie : sous-catégories de…
 
@@ -77,6 +80,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       setAmount(preset?.amount ? String(Math.round(preset.amount * 100) / 100) : '');
       setNote('');
       setPerson(preset?.withPerson ?? '');
+      setExclude(false);
       setMemberId(ME_ID);
       setWalletId(defaultWalletId);
       setCurrency(preset?.currency ?? wallets.find((w) => w.id === defaultWalletId)?.currency ?? '');
@@ -120,7 +124,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
   const save = () => {
     if (!canSave || !selected || !wallet) return;
-    onSave(value, selected, note, wallet.id, cur, isShared(wallet) && memberId !== ME_ID ? memberId : undefined, mode === 'debt' ? person.trim() || undefined : undefined);
+    onSave(value, selected, note, wallet.id, cur, isShared(wallet) && memberId !== ME_ID ? memberId : undefined, mode === 'debt' ? person.trim() || undefined : undefined, excludeOption && exclude ? true : undefined);
     onClose();
   };
 
@@ -381,6 +385,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   <MemberChips wallet={wallet} value={memberId} onChange={setMemberId} label={direction === 'in' ? 'Versé par' : 'Fait par'} />
                 </div>
               )}
+              <div className="flex gap-2 items-start">
+              <div className="flex-1 min-w-0">
               {mode === 'debt' ? (
                 <>
                   {/* Dette / Prêt : avec qui (suggestions = noms déjà utilisés) */}
@@ -407,6 +413,21 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   className="w-full mb-2 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
                 />
               )}
+              </div>
+              {excludeOption && (
+                <button
+                  type="button"
+                  onClick={() => setExclude((x) => !x)}
+                  aria-pressed={exclude}
+                  title="Exclure du rapport"
+                  className={`shrink-0 h-9 px-3 rounded-2xl text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+                    exclude ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <EyeOff className="w-3.5 h-3.5" /> Hors rapport
+                </button>
+              )}
+              </div>
               <div className="grid grid-cols-3 gap-1.5">
                 {KEYS.map((k) => (
                   <button

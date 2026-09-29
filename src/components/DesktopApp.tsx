@@ -15,6 +15,7 @@ import { ProfileView } from './ProfileView';
 import { RistourneView } from './RistourneView';
 import { CategoriesView } from './CategoriesView';
 import { MonthReportCard } from './MonthReportCard';
+import { inThisMonth } from '../lib/periods';
 import { BudgetsView } from './BudgetsView';
 import { DebtsView } from './DebtsView';
 
@@ -42,10 +43,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
   } = p;
   const main = settings.mainCurrency;
   const now = new Date();
-  const thisMonth = transactions.filter((t) => {
-    const d = new Date(t.createdAt);
-    return countsInStats(t) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
+  const thisMonth = transactions.filter((t) => countsInStats(t) && inThisMonth(t.createdAt, now));
   const spent = thisMonth.filter((t) => t.amount < 0).reduce((s, t) => s - toMain(t.amount, t.currency, settings), 0);
   const earned = thisMonth.filter((t) => t.amount > 0).reduce((s, t) => s + toMain(t.amount, t.currency, settings), 0);
   const pageTitle = MENU.find((m) => m.id === page)?.label ?? '';

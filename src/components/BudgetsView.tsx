@@ -6,6 +6,7 @@ import { IconBadge } from './AppIcon';
 import { TransactionItem } from './TransactionItem';
 import { formatMoney } from '../lib/money';
 import { budgetStatus, budgetTone, BudgetStatus, monthRange, pastSpending, roundBudget } from '../lib/budgets';
+import { monthTitle } from '../lib/periods';
 
 interface BudgetsViewProps {
   budgets: Budget[];
@@ -19,11 +20,7 @@ interface BudgetsViewProps {
   onSelectTransaction: (tx: Transaction) => void;
 }
 
-const monthLabel = (offset: number) => {
-  const d = monthRange(offset).start!;
-  const s = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-  return s.charAt(0).toUpperCase() + s.slice(1);
-};
+const monthLabel = (offset: number) => monthTitle(offset);
 
 // Budgets du mois : combien on a prévu, combien on a dépensé, combien il reste
 export const BudgetsView: React.FC<BudgetsViewProps> = ({
