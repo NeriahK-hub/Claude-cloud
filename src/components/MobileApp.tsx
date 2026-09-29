@@ -13,6 +13,7 @@ import { ProfileView } from './ProfileView';
 import { RistourneView } from './RistourneView';
 import { CategoriesView } from './CategoriesView';
 import { MonthReportCard } from './MonthReportCard';
+import { SyncIndicator } from './Account';
 import { BudgetsView } from './BudgetsView';
 
 // Interface TÉLÉPHONE : plein écran, barre d'onglets en bas
@@ -74,6 +75,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
           <div className="stagger">
             <Header
               title="Mon compte"
+              status={<SyncIndicator cloud={p.cloud} onClick={() => onNavigate('profile')} />}
               unreadCount={unreadCount}
               onOpenMenu={onOpenDrawer}
               onOpenNotifications={onOpenNotifications}
@@ -137,7 +139,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         {page === 'settings' && (
           <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
         )}
-        {page === 'profile' && <ProfileView onNavigate={onNavigate} />}
+        {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} />}
       </div>
 
       {isTab && (

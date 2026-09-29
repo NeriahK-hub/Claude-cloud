@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone } from 'lucide-react';
 import { Page } from './BottomNav';
 import { initialsOf, setProfileName, useProfile } from '../lib/profile';
+import type { Cloud } from '../lib/sync/useCloud';
+import { AccountCard } from './Account';
 
 interface ProfileViewProps {
   onNavigate: (page: Page) => void;
+  cloud: Cloud;
 }
 
 // Profil : ton nom (utilisé dans l'app) et les raccourcis vers les réglages
-export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
+export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) => {
   const { name } = useProfile();
   const [editing, setEditing] = useState(!name);
   const [draft, setDraft] = useState(name);
@@ -63,11 +66,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate }) => {
               <Pencil className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             </button>
           )}
-          <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1.5">
-            <Smartphone className="w-3.5 h-3.5 shrink-0" /> Données enregistrées sur cet appareil
-          </p>
+          {!cloud.user && (
+            <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1.5">
+              <Smartphone className="w-3.5 h-3.5 shrink-0" /> Données enregistrées sur cet appareil
+            </p>
+          )}
         </div>
       </div>
+
+      <AccountCard cloud={cloud} />
 
       <div className="bg-white rounded-3xl p-2 border border-slate-100">
         {link('Paramètres', 'Apparence, devises, taux, import / export', SettingsIcon, 'settings')}

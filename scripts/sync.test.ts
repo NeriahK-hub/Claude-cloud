@@ -146,6 +146,7 @@ async function main() {
   // 2. Resynchro sans rien changer : rien à renvoyer (les empreintes sont stables aller-retour)
   const r2 = await a1.sync();
   check(r2.status === 'done' && r2.pushed === 0, `2e synchro : rien renvoyé (${r2.status === 'done' ? r2.pushed : '?'} envoyés)`);
+  check(r2.status === 'done' && !r2.patch.transactions && !r2.patch.categories && !r2.patch.settings, '2e synchro : rien à réappliquer sur le téléphone (pas de boucle)');
 
   // 3. Alice installe l'app sur un 2e appareil (vide) : elle récupère tout
   const a2 = new Device('Alice-ordinateur', fresh(), pgRemote(ALICE, 'alice@test.cd'));
@@ -213,6 +214,18 @@ async function main() {
   const b2 = new Device('Bob-tablette', { ...fresh(), transactions: [{ ...bobTx, id: uuid(), walletId: 'wallet-cash' }] }, pgRemote(BOB, 'bob@test.cd'));
   const r8 = await b2.sync();
   check(r8.status === 'needs-decision', 'téléphone déjà rempli + compte rempli : on demande fusionner / remplacer');
+
+  // 8b. Bob quitte le portefeuille de lui-même -> ses opérations restent chez Alice
+  const before = await count(`select count(*) n from transactions where wallet_id = '${cash.id}' and deleted_at is null`);
+  const bobCopy = b1.data;
+  b1.data = { ...b1.data, wallets: [], transactions: [] };
+  await b1.sync();
+  check((await count(`select count(*) n from transactions where wallet_id = '${cash.id}' and deleted_at is null`)) === before, 'Bob quitte : aucune opération supprimée pour Alice');
+  check((await count(`select count(*) n from wallet_members where user_id = '${BOB}' and status = 'removed'`)) === 1, 'Bob quitte : il n\'est plus membre');
+  // Alice le réinvite pour la suite du test
+  await db.query(`update wallet_members set status = 'active' where user_id = '${BOB}'`);
+  b1.data = bobCopy;
+  await b1.sync();
 
   // 9. Alice retire Bob -> le portefeuille disparaît de chez Bob
   a1.data = { ...a1.data, wallets: a1.data.wallets.map((w) => (w.id === cash.id ? { ...w, members: w.members!.map((m) => ({ ...m, removed: true })) } : w)) };

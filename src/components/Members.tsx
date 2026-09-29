@@ -129,7 +129,7 @@ export const SharingBlock: React.FC<{ wallet: Wallet; transactions: Transaction[
         <Users className="w-4 h-4 text-slate-500" />
         <span className="flex-1 text-sm font-bold text-slate-900">Partagé à {members.length + 1}</span>
         <button onClick={onManage} className="text-xs font-bold text-slate-700 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 cursor-pointer">
-          Gérer
+          {w.ownerId ? 'Membres' : 'Gérer'}
         </button>
       </div>
 
@@ -166,7 +166,9 @@ export const MembersSheet: React.FC<{
   wallet: Wallet;
   onClose: () => void;
   onSave: (members: WalletMember[]) => void;
-}> = ({ wallet, onClose, onSave }) => {
+  onLeave?: () => void; // portefeuille d'un autre : on peut seulement le quitter
+}> = ({ wallet, onClose, onSave, onLeave }) => {
+  const readOnly = !!wallet.ownerId; // je ne suis pas le propriétaire
   const [members, setMembers] = useState<WalletMember[]>(wallet.members ?? []);
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
@@ -192,7 +194,7 @@ export const MembersSheet: React.FC<{
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-base font-bold">Partager « {wallet.name} »</h2>
+          <h2 className="text-base font-bold">{readOnly ? 'Membres de' : 'Partager'} « {wallet.name} »</h2>
           <button onClick={onClose} aria-label="Fermer" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
             <X className="w-4 h-4" />
           </button>
@@ -203,7 +205,7 @@ export const MembersSheet: React.FC<{
           <div className="flex items-center gap-2.5 px-3 py-2.5">
             <MemberAvatar name={ME.name} color={ME.color} />
             <span className="flex-1 text-sm font-semibold">Moi</span>
-            <span className="text-[11px] font-semibold text-slate-400">Propriétaire</span>
+            {!readOnly && <span className="text-[11px] font-semibold text-slate-400">Propriétaire</span>}
           </div>
           {visible.map((m) => (
             <div key={m.id} className="flex items-center gap-2.5 px-3 py-2.5">
@@ -212,17 +214,35 @@ export const MembersSheet: React.FC<{
                 <span className="block text-sm font-semibold truncate">{m.name}</span>
                 {m.contact && <span className="block text-[11px] text-slate-400 truncate">{m.contact}</span>}
               </span>
-              <button onClick={() => remove(m.id)} aria-label={`Retirer ${m.name}`} className="w-8 h-8 rounded-full hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center cursor-pointer">
+              {m.owner ? (
+                <span className="text-[11px] font-semibold text-slate-400">Propriétaire</span>
+              ) : m.userId ? (
+                <span className="text-[11px] font-semibold text-emerald-600">A rejoint</span>
+              ) : m.invited ? (
+                <span className="text-[11px] font-semibold text-amber-600">Invitation envoyée</span>
+              ) : null}
+              {!readOnly && <button onClick={() => remove(m.id)} aria-label={`Retirer ${m.name}`} className="w-8 h-8 rounded-full hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center cursor-pointer">
                 <X className="w-4 h-4" />
-              </button>
+              </button>}
             </div>
           ))}
         </div>
 
+        {readOnly ? (
+          <>
+            <p className="text-xs text-slate-500">Seul le propriétaire peut inviter ou retirer des membres.</p>
+            {onLeave && (
+              <button onClick={onLeave} className="w-full mt-4 py-3 rounded-2xl bg-red-50 text-red-600 text-sm font-bold cursor-pointer">
+                Quitter ce portefeuille
+              </button>
+            )}
+          </>
+        ) : (
+        <>
         <div className="text-xs font-bold text-slate-500 mb-1.5">Ajouter une personne</div>
         <div className="space-y-2">
           <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="Nom (ex. Marie)" className={field} />
-          <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Téléphone ou e-mail (facultatif)" className={field} />
+          <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Son e-mail pour l'inviter (facultatif)" inputMode="email" className={field} />
           <button
             onClick={add}
             disabled={!name.trim()}
@@ -234,10 +254,15 @@ export const MembersSheet: React.FC<{
 
         <p className="flex gap-1.5 text-[11px] text-slate-500 mt-4">
           <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
-          <span>Pour l'instant, le partage se fait sur cet appareil : on note qui a fait chaque opération. La synchronisation entre plusieurs téléphones demandera un compte en ligne.</span>
+          <span>
+            Avec son e-mail, la personne verra ce portefeuille sur son téléphone en se connectant à Wallo avec cette adresse (tu dois être
+            connecté aussi). Sans e-mail, son nom sert seulement à noter qui a fait quoi.
+          </span>
         </p>
+        </>
+        )}
 
-        <div className="flex gap-2 mt-4">
+        {!readOnly && <div className="flex gap-2 mt-4">
           <button onClick={onClose} className="flex-1 py-3 rounded-2xl bg-slate-100 text-sm font-bold cursor-pointer">
             Annuler
           </button>
@@ -252,7 +277,7 @@ export const MembersSheet: React.FC<{
           >
             Enregistrer
           </button>
-        </div>
+        </div>}
       </div>
     </div>
   );

@@ -121,6 +121,10 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
         <MembersSheet
           wallet={sharing}
           onClose={() => setSharing(null)}
+          onLeave={() => {
+            setSharing(null);
+            setDeleting(sharing);
+          }}
           onSave={(members) => {
             onUpdate(sharing.id, { members });
             setSharing(null);
@@ -314,7 +318,23 @@ const DeleteDialog: React.FC<{
   onClose: () => void;
   onArchive: () => void;
   onDelete: () => void;
-}> = ({ wallet, txCount, onClose, onArchive, onDelete }) => (
+}> = ({ wallet, txCount, onClose, onArchive, onDelete }) => wallet.ownerId ? (
+  // Portefeuille partagé par quelqu'un d'autre : on le quitte (il reste pour les autres membres)
+  <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
+    <div className="w-full sm:max-w-[400px] bg-white rounded-t-[32px] sm:rounded-[32px] p-6 pb-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+      <h2 className="text-base font-bold mb-2">Quitter « {wallet.name} » ?</h2>
+      <p className="text-sm text-slate-600 mb-5">
+        Il disparaîtra de ton téléphone. Les autres membres le gardent, avec toutes ses opérations. Le propriétaire pourra te réinviter.
+      </p>
+      <button onClick={onDelete} className="w-full mb-2 py-3.5 rounded-2xl bg-red-50 text-red-600 font-bold text-sm cursor-pointer">
+        Quitter ce portefeuille
+      </button>
+      <button onClick={onClose} className="w-full py-3 rounded-2xl bg-slate-100 font-semibold text-sm cursor-pointer">
+        Annuler
+      </button>
+    </div>
+  </div>
+) : (
   <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
     <div className="w-full sm:max-w-[400px] bg-white rounded-t-[32px] sm:rounded-[32px] p-6 pb-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
       <h2 className="text-base font-bold mb-2">Supprimer « {wallet.name} » ?</h2>
@@ -828,7 +848,7 @@ const WalletDetail: React.FC<{
         {onTransfer && action('Transférer', ArrowLeftRight, onTransfer)}
         {action('Ajuster', SlidersHorizontal, onAdjust)}
         {action('Modifier', Pencil, onEdit)}
-        {w.archived ? action('Restaurer', ArchiveRestore, onRestore) : action('Supprimer', Trash2, onDelete, true)}
+        {w.archived ? action('Restaurer', ArchiveRestore, onRestore) : action(w.ownerId ? 'Quitter' : 'Supprimer', Trash2, onDelete, true)}
       </div>
 
       <h2 className="text-sm font-bold text-slate-900 mb-2">Transactions</h2>

@@ -124,6 +124,9 @@ interface TableSpec {
   key: (r: Row) => string;
 }
 
+// Mémoire d'une ligne : son empreinte, et pour une transaction « empreinte:portefeuille »
+const stamp = (t: TableName, r: Row) => (t === 'transactions' ? `${fingerprint(r)}:${r.wallet_id}` : fingerprint(r));
+
 const SPECS: TableSpec[] = [
   { name: 'profiles', rows: (d, me) => [profileRow(d, me)], key: (r) => String(r.id) },
   { name: 'categories', rows: (d, me) => d.categories.map((c, i) => categoryRow(c, i, me)), key: (r) => String(r.id) },
@@ -137,17 +140,21 @@ const SPECS: TableSpec[] = [
 async function push(d: SyncData, meta: SyncMeta, remote: Remote): Promise<number> {
   let sent = 0;
   const me = remote.me;
+  // Portefeuilles partagés quittés depuis la dernière synchro (calculé avant de toucher aux mémoires)
+  const leaving = new Set(Object.keys(meta.snap.wallets ?? {}).filter((id) => meta.foreignWallets.includes(id) && !d.wallets.some((w) => w.id === id)));
   for (const spec of SPECS) {
     const snap = { ...(meta.snap[spec.name] ?? {}) };
     const rows = spec.rows(d, me);
     const keys = new Set(rows.map(spec.key));
-    const changed = rows.filter((r) => snap[spec.key(r)] !== fingerprint(r));
+    const changed = rows.filter((r) => snap[spec.key(r)] !== stamp(spec.name, r));
     for (let i = 0; i < changed.length; i += 500) await remote.upsert(spec.name, changed.slice(i, i + 500));
-    changed.forEach((r) => (snap[spec.key(r)] = fingerprint(r)));
+    changed.forEach((r) => (snap[spec.key(r)] = stamp(spec.name, r)));
     sent += changed.length;
 
-    // Supprimés ici depuis la dernière synchro
-    const gone = Object.keys(snap).filter((k) => !keys.has(k));
+    // Supprimés ici depuis la dernière synchro.
+    // Les opérations d'un portefeuille partagé qu'on QUITTE ne sont pas supprimées pour les autres.
+    const gone = Object.keys(snap).filter((k) => !keys.has(k) && !(spec.name === 'transactions' && leaving.has(snap[k].split(':')[1])));
+    const forgotten = Object.keys(snap).filter((k) => !keys.has(k) && !gone.includes(k));
     if (gone.length && spec.name !== 'profiles' && spec.name !== 'wallet_members') {
       if (spec.name === 'wallets') {
         // Portefeuille d'un autre : on le quitte ; le mien : on le supprime
@@ -159,7 +166,7 @@ async function push(d: SyncData, meta: SyncMeta, remote: Remote): Promise<number
       }
       sent += gone.length;
     }
-    gone.forEach((k) => delete snap[k]);
+    [...gone, ...forgotten].forEach((k) => delete snap[k]);
     meta.snap[spec.name] = snap;
   }
   meta.foreignWallets = d.wallets.filter((w) => w.ownerId && w.ownerId !== me).map((w) => w.id);
@@ -192,9 +199,14 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
     const { rows, snap } = await fetch('profiles');
     const r = rows.find((x) => x.id === me);
     if (r) {
-      patch.settings = settingsFromRow(r);
-      patch.profileName = String(r.name ?? '');
-      snap[me] = fingerprint(profileRow({ ...d, settings: patch.settings, profileName: patch.profileName }, me));
+      const settings = settingsFromRow(r);
+      const profileName = String(r.name ?? '');
+      const fp = fingerprint(profileRow({ ...d, settings, profileName }, me));
+      if (snap[me] !== fp || fingerprint(profileRow(d, me)) !== fp) {
+        patch.settings = settings;
+        patch.profileName = profileName;
+      }
+      snap[me] = fp;
     }
   }
 
@@ -203,10 +215,14 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
   {
     const { rows, full, snap } = await fetch('categories');
     if (rows.length) {
-      const live = rows.filter((r) => !r.deleted_at).map(categoryFromRow);
+      const known = (c: Category) => {
+        const i = d.categories.findIndex((x) => x.id === c.id);
+        return i >= 0 && snap[c.id] === fingerprint(categoryRow(c, i, me)) && snap[c.id] === fingerprint(categoryRow(d.categories[i], i, me));
+      };
+      const live = rows.filter((r) => !r.deleted_at).map(categoryFromRow).filter((c) => full || !known(c));
       const remove = rows.filter((r) => r.deleted_at).map((r) => String(r.id));
-      patch.categories = { upsert: live, remove, order: full ? byOrder(rows.filter((r) => !r.deleted_at)) : undefined };
-      categories = applyList(categories, patch.categories);
+      if (live.length || remove.length) patch.categories = { upsert: live, remove, order: full ? byOrder(rows.filter((r) => !r.deleted_at)) : undefined };
+      if (patch.categories) categories = applyList(categories, patch.categories);
       categories.forEach((c, i) => {
         if (live.some((x) => x.id === c.id)) snap[c.id] = fingerprint(categoryRow(c, i, me));
       });
@@ -218,9 +234,13 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
   {
     const { rows, snap } = await fetch('custom_icons');
     if (rows.length) {
-      const live = rows.filter((r) => !r.deleted_at).map(iconFromRow);
-      const remove = rows.filter((r) => r.deleted_at).map((r) => String(r.id));
-      patch.customIcons = { upsert: live, remove };
+      const localI = new Map(d.customIcons.map((i) => [i.id, i]));
+      const live = rows
+        .filter((r) => !r.deleted_at)
+        .map(iconFromRow)
+        .filter((i) => !(localI.has(i.id) && fingerprint(iconRow(localI.get(i.id)!, me)) === fingerprint(iconRow(i, me))));
+      const remove = rows.filter((r) => r.deleted_at && localI.has(String(r.id))).map((r) => String(r.id));
+      if (live.length || remove.length) patch.customIcons = { upsert: live, remove };
       live.forEach((i) => (snap[i.id] = fingerprint(iconRow(i, me))));
       remove.forEach((id) => delete snap[id]);
     }
@@ -278,13 +298,21 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
   {
     const { rows, snap } = await fetch('transactions');
     if (rows.length) {
-      const live = rows.filter((r) => !r.deleted_at).map((r) => transactionFromRow(r, me, wallets, categories));
-      const remove = rows.filter((r) => r.deleted_at).map((r) => String(r.id));
-      patch.transactions = {
+      const localById = new Map(d.transactions.map((t) => [t.id, t]));
+      const live = rows
+        .filter((r) => !r.deleted_at)
+        .map((r) => transactionFromRow(r, me, wallets, categories))
+        .filter((t) => {
+          const mine = localById.get(t.id);
+          const s = stamp('transactions', transactionRow(t));
+          return !(mine && snap[t.id] === s && stamp('transactions', transactionRow(mine)) === s);
+        });
+      const remove = rows.filter((r) => r.deleted_at && localById.has(String(r.id))).map((r) => String(r.id));
+      if (live.length || remove.length) patch.transactions = {
         upsert: live,
         remove: [...(patch.transactions?.remove ?? []), ...remove],
       };
-      live.forEach((t) => (snap[t.id] = fingerprint(transactionRow(t))));
+      live.forEach((t) => (snap[t.id] = stamp('transactions', transactionRow(t))));
       remove.forEach((id) => delete snap[id]);
     }
   }
@@ -293,9 +321,13 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
   {
     const { rows, snap } = await fetch('budgets');
     if (rows.length) {
-      const live = rows.filter((r) => !r.deleted_at).map(budgetFromRow);
-      const remove = rows.filter((r) => r.deleted_at).map((r) => String(r.id));
-      patch.budgets = { upsert: live, remove };
+      const localB = new Map(d.budgets.map((b) => [b.id, b]));
+      const live = rows
+        .filter((r) => !r.deleted_at)
+        .map(budgetFromRow)
+        .filter((b) => !(localB.has(b.id) && fingerprint(budgetRow(localB.get(b.id)!)) === fingerprint(budgetRow(b))));
+      const remove = rows.filter((r) => r.deleted_at && localB.has(String(r.id))).map((r) => String(r.id));
+      if (live.length || remove.length) patch.budgets = { upsert: live, remove };
       live.forEach((b) => (snap[b.id] = fingerprint(budgetRow(b))));
       remove.forEach((id) => delete snap[id]);
     }

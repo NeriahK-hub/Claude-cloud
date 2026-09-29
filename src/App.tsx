@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Transaction, NotificationItem, Wallet, Settings, Budget } from './types';
 import { usePersistentState } from './hooks/usePersistentState';
 import { convertBetween, formatMoney, makeBalance, toMain, totalInMain, walletBalance } from './lib/money';
@@ -8,7 +8,12 @@ import { Page } from './components/BottomNav';
 import { useIsDesktop } from './hooks/useIsDesktop';
 import { Category, DEFAULT_CATEGORIES } from './data/categories';
 import { Backup, ImportPlan } from './lib/importExport';
-import { replaceCustomIcons } from './lib/customIcons';
+import { getAllCustomIcons, replaceCustomIcons, useCustomIcons } from './lib/customIcons';
+import { setProfileName, useProfile } from './lib/profile';
+import { useCloud } from './lib/sync/useCloud';
+import { applyList } from './lib/sync/engine';
+import type { SyncData } from './lib/sync/mapping';
+import { MergeDialog } from './components/Account';
 import { budgetStatus } from './lib/budgets';
 import { uuid } from './lib/ids';
 
@@ -249,10 +254,11 @@ export default function App() {
     });
   };
   const handleDeleteWallet = (id: string) => {
+    const shared = !!wallets.find((w) => w.id === id)?.ownerId; // portefeuille d'un autre : on le quitte
     setWallets((prev) => prev.filter((w) => w.id !== id));
     setTransactions((prev) => prev.filter((t) => t.walletId !== id));
     if (activeWalletId === id) setActiveWalletId('all');
-    showToast('Portefeuille supprimé');
+    showToast(shared ? 'Tu as quitté ce portefeuille partagé' : 'Portefeuille supprimé');
   };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -404,6 +410,47 @@ export default function App() {
     showToast('Sauvegarde restaurée');
   };
 
+  // ---------- Compte en ligne et synchro ----------
+  const profile = useProfile();
+  const customIcons = useCustomIcons();
+  const dataRef = useRef<SyncData>(null!);
+  dataRef.current = { wallets, transactions, categories, budgets, settings, profileName: profile.name, customIcons };
+  const changeKey = useMemo(() => ({}), [wallets, transactions, categories, budgets, storedSettings, profile.name, customIcons]);
+  const cloud = useCloud({
+    getLocal: () => dataRef.current,
+    replaceLocal: (d, map) => {
+      dataRef.current = d;
+      setWallets(d.wallets);
+      setTransactions(d.transactions);
+      setBudgets(d.budgets);
+      setActiveWalletId((prev) => map[prev] ?? prev);
+    },
+    applyPatch: (p) => {
+      const all = !!p.replaceAll;
+      const none = { upsert: [], remove: [] };
+      setWallets((prev) => applyList(prev, p.wallets ?? (all ? none : undefined), all));
+      setTransactions((prev) => applyList(prev, p.transactions ?? (all ? none : undefined), all));
+      setBudgets((prev) => applyList(prev, p.budgets ?? (all ? none : undefined), all));
+      if (p.categories) setCategories((prev) => applyList(prev, p.categories, all));
+      if (p.customIcons || all) replaceCustomIcons(applyList(getAllCustomIcons(), p.customIcons ?? none, all));
+      if (p.settings) setSettings(p.settings);
+      if (p.profileName !== undefined) setProfileName(p.profileName);
+      if (all) setActiveWalletId('all');
+    },
+    clearLocal: () => {
+      setWallets(DEFAULT_WALLETS);
+      setTransactions([]);
+      setCategories(DEFAULT_CATEGORIES);
+      setBudgets([]);
+      setSettings(DEFAULT_SETTINGS);
+      setActiveWalletId('all');
+      setNotifications(WELCOME);
+      replaceCustomIcons([]);
+      setProfileName('');
+    },
+    changeKey,
+  });
+
   // Ce qui est commun aux deux interfaces
   const shared: SharedProps = {
     page,
@@ -436,6 +483,7 @@ export default function App() {
     onAddBudget: handleAddBudget,
     onUpdateBudget: handleUpdateBudget,
     onDeleteBudget: handleDeleteBudget,
+    cloud,
     onImport: handleImport,
     onRestore: handleRestore,
   };
@@ -498,6 +546,8 @@ export default function App() {
         onDelete={handleDeleteTransaction}
         onDuplicate={handleDuplicateTransaction}
       />
+
+      {cloud.status === 'needs-decision' && <MergeDialog cloud={cloud} />}
 
       <NotificationsModal
         isOpen={isNotificationsOpen}

@@ -2,6 +2,7 @@ import { Budget, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { BalanceInfo } from '../lib/money';
 import { Backup, ImportPlan } from '../lib/importExport';
+import type { Cloud } from '../lib/sync/useCloud';
 import { HomeAction } from './BalanceSection';
 import { Page } from './BottomNav';
 
@@ -38,6 +39,7 @@ export interface SharedProps {
   onAddBudget: (b: Omit<Budget, 'id' | 'createdAt'>) => void;
   onUpdateBudget: (id: string, changes: Partial<Budget>) => void;
   onDeleteBudget: (id: string) => void;
+  cloud: Cloud;
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
 }

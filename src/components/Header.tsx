@@ -3,6 +3,7 @@ import { SlidersHorizontal, Bell } from 'lucide-react';
 
 interface HeaderProps {
   title?: string;
+  status?: React.ReactNode; // ex. indicateur de synchro
   unreadCount?: number;
   onOpenMenu?: () => void;
   onOpenNotifications?: () => void;
@@ -10,7 +11,8 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   title = 'Mon compte',
-  unreadCount = 2,
+  status,
+  unreadCount = 0,
   onOpenMenu,
   onOpenNotifications,
 }) => {
@@ -26,8 +28,9 @@ export const Header: React.FC<HeaderProps> = ({
       </button>
 
       {/* Center Title */}
-      <h1 className="text-lg font-bold text-slate-900 tracking-tight text-center">
+      <h1 className="text-lg font-bold text-slate-900 tracking-tight text-center flex items-center gap-1.5">
         {title}
+        {status}
       </h1>
 
       {/* Right Notification button */}
