@@ -236,6 +236,13 @@ export default function App() {
     setWallets((prev) => prev.map((w) => (w.id === id ? { ...w, ...changes } : w)));
     if (changes.archived === true) showToast('Portefeuille archivé');
   };
+  // Nouvel ordre choisi dans Portefeuilles > Réorganiser (les archivés restent à la fin)
+  const handleReorderWallets = (ids: string[]) => {
+    setWallets((prev) => {
+      const moved = ids.map((id) => prev.find((w) => w.id === id)).filter((w): w is Wallet => !!w);
+      return [...moved, ...prev.filter((w) => !ids.includes(w.id))];
+    });
+  };
   const handleDeleteWallet = (id: string) => {
     setWallets((prev) => prev.filter((w) => w.id !== id));
     setTransactions((prev) => prev.filter((t) => t.walletId !== id));
@@ -363,6 +370,7 @@ export default function App() {
     onDeleteWallet: handleDeleteWallet,
     onTransfer: handleTransfer,
     onAdjustBalance: handleAdjustBalance,
+    onReorderWallets: handleReorderWallets,
     onImport: handleImport,
     onRestore: handleRestore,
   };

@@ -33,6 +33,7 @@ export interface SharedProps {
   // fromAmount et fee dans la devise de « from », toAmount dans celle de « to »
   onTransfer: (fromId: string, toId: string, fromAmount: number, toAmount: number, note: string, fee: number) => void;
   onAdjustBalance: (walletId: string, newBalance: number) => void;
+  onReorderWallets: (ids: string[]) => void;
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
 }

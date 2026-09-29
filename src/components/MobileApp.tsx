@@ -108,6 +108,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
                 onTransfer={p.onTransfer}
                 settings={settings}
                 onAdjustBalance={p.onAdjustBalance}
+                onReorder={p.onReorderWallets}
           />
         )}
         {page === 'settings' && (

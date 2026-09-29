@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowDown, ArrowUpDown, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
+import { SortableList } from './SortableList';
 import { Settings, Transaction, Wallet, WalletKind } from '../types';
 import { TransactionItem } from './TransactionItem';
 import { AppIcon, IconBadge, WALLET_ICON_CHOICES } from './AppIcon';
@@ -19,16 +20,18 @@ interface WalletsViewProps {
   onSelectTransaction: (tx: Transaction) => void;
   onTransfer: (fromId: string, toId: string, fromAmount: number, toAmount: number, note: string, fee: number) => void;
   onAdjustBalance: (walletId: string, newBalance: number) => void;
+  onReorder: (ids: string[]) => void;
   settings: Settings;
 }
 
-export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions, defaultCurrency, onAdd, onUpdate, onDelete, onSelectTransaction, onTransfer, onAdjustBalance, settings }) => {
+export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions, defaultCurrency, onAdd, onUpdate, onDelete, onSelectTransaction, onTransfer, onAdjustBalance, onReorder, settings }) => {
   const [editing, setEditing] = useState<Wallet | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Wallet | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [transferFrom, setTransferFrom] = useState<string | null>(null); // id, ou '' = à choisir
   const [adjusting, setAdjusting] = useState<Wallet | null>(null);
   const [sharing, setSharing] = useState<Wallet | null>(null);
+  const [reordering, setReordering] = useState(false);
   const viewing = wallets.find((w) => w.id === viewingId) ?? null;
 
   const active = wallets.filter((w) => !w.archived);
@@ -179,40 +182,97 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
 
   return (
     <div className="px-5 pt-4 pb-8 animate-screen">
-      <h1 className="text-xl font-bold text-slate-900 mb-5">Portefeuilles</h1>
-
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setEditing('new')}
-          className="flex-1 py-3.5 rounded-3xl bg-white border border-slate-100 text-emerald-700 font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50"
-        >
-          <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center">
-            <Plus className="w-4 h-4" />
-          </span>
-          Ajouter
-        </button>
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-xl font-bold text-slate-900">Portefeuilles</h1>
         {active.length > 1 && (
           <button
-            onClick={() => setTransferFrom('')}
-            className="flex-1 py-3.5 rounded-3xl bg-white border border-slate-100 text-slate-700 font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50"
+            onClick={() => setReordering((r) => !r)}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold cursor-pointer transition ${
+              reordering ? 'bg-[#D8FB52] text-slate-900' : 'bg-white border border-slate-100 text-slate-700 hover:bg-slate-50'
+            }`}
           >
-            <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center">
-              <ArrowLeftRight className="w-3.5 h-3.5" />
-            </span>
-            Transférer
+            {reordering ? 'Terminé' : <><ArrowUpDown className="w-3.5 h-3.5" /> Réorganiser</>}
           </button>
         )}
       </div>
 
-      <div className="space-y-3">
-        {active.map(card)}
-        {active.length === 0 && <p className="text-center text-sm text-slate-400 py-6">Aucun portefeuille actif</p>}
-      </div>
-
-      {archived.length > 0 && (
+      {reordering ? (
         <>
-          <h2 className="text-sm font-bold text-slate-500 mt-6 mb-3">Archivés</h2>
-          <div className="space-y-3">{archived.map(card)}</div>
+          <p className="text-xs text-slate-500 mb-3">
+            Maintiens un portefeuille et fais-le glisser, ou utilise les flèches. Cet ordre est repris partout dans l'app.
+          </p>
+          <SortableList
+            items={active}
+            getId={(w) => w.id}
+            onChange={onReorder}
+            renderItem={(w, { index, dragging, move }) => (
+              <div
+                className={`bg-white rounded-2xl border p-2.5 pl-2 flex items-center gap-2.5 transition-shadow ${
+                  dragging ? 'shadow-xl border-slate-300 scale-[1.02]' : 'border-slate-100'
+                }`}
+              >
+                <GripVertical className="w-5 h-5 text-slate-400 shrink-0" aria-hidden />
+                <IconBadge icon={w.icon} image={w.image} color={w.color} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-slate-900 truncate">{w.name}</div>
+                  <div className="text-xs font-semibold tabular-nums text-slate-500">{formatMoney(walletBalance(w, transactions), w.currency)}</div>
+                </div>
+                <button
+                  onClick={() => move(-1)}
+                  disabled={index === 0}
+                  aria-label={`Monter ${w.name}`}
+                  className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => move(1)}
+                  disabled={index === active.length - 1}
+                  aria-label={`Descendre ${w.name}`}
+                  className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          />
+        </>
+      ) : (
+        <>
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setEditing('new')}
+              className="flex-1 py-3.5 rounded-3xl bg-white border border-slate-100 text-emerald-700 font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50"
+            >
+              <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center">
+                <Plus className="w-4 h-4" />
+              </span>
+              Ajouter
+            </button>
+            {active.length > 1 && (
+              <button
+                onClick={() => setTransferFrom('')}
+                className="flex-1 py-3.5 rounded-3xl bg-white border border-slate-100 text-slate-700 font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-50"
+              >
+                <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center">
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                </span>
+                Transférer
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {active.map(card)}
+            {active.length === 0 && <p className="text-center text-sm text-slate-400 py-6">Aucun portefeuille actif</p>}
+          </div>
+
+          {archived.length > 0 && (
+            <>
+              <h2 className="text-sm font-bold text-slate-500 mt-6 mb-3">Archivés</h2>
+              <div className="space-y-3">{archived.map(card)}</div>
+            </>
+          )}
         </>
       )}
 
