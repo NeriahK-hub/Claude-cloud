@@ -8,3 +8,10 @@ coverage/
 !.env.example
 !.env
 .firebase/
+dist-admin/
+
+# Tâches planifiées avec le mot de passe push (voir supabase/README.md)
+supabase/push_cron.local.sql
+
+# Cache local de la CLI Supabase
+supabase/.temp/

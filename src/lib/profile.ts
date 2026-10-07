@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { onOtherTabChange } from './crossTab';
 
 // Profil de la personne qui utilise l'app (pour l'instant : juste son nom, sur cet appareil).
 // Avec les comptes en ligne, il viendra de la base.
@@ -18,6 +19,11 @@ function read(): Profile {
     return { name: '' };
   }
 }
+
+onOtherTabChange(KEY, () => {
+  profile = read();
+  listeners.forEach((l) => l());
+});
 
 export function setProfileName(name: string) {
   profile = { ...profile, name };

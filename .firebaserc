@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "wallo-b13b0"
+  },
+  "targets": {
+    "wallo-b13b0": {
+      "hosting": {
+        "app": [
+          "wallo-b13b0"
+        ],
+        "admin": [
+          "wallo-admin"
+        ]
+      }
+    }
   }
 }

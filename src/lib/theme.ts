@@ -1,6 +1,9 @@
 // Thème clair / sombre. « system » suit le réglage du téléphone ou de l'ordinateur.
 // Le choix est gardé dans localStorage ; index.html l'applique aussi avant le chargement
 // de l'app pour éviter un flash blanc.
+import { onOtherTabChange } from './crossTab';
+import { markPrefsChanged } from './prefsStamp';
+
 export type ThemePref = 'system' | 'light' | 'dark';
 
 const KEY = 'ap.theme';
@@ -35,11 +38,17 @@ export function setThemePref(pref: ThemePref) {
   } catch {
     // stockage bloqué : le thème s'applique quand même pour cette session
   }
+  markPrefsChanged();
   apply();
 }
 
 // À appeler une fois au démarrage : applique le thème et suit les changements du système
+// (et ceux faits dans un autre onglet de l'app)
 export function initTheme() {
   apply();
   media.addEventListener('change', apply);
+  onOtherTabChange(KEY, () => {
+    current = readStored();
+    apply();
+  });
 }

@@ -65,6 +65,35 @@ export function budgetStatus(
   return { spent, ratio: b.amount > 0 ? spent / b.amount : 0, left: b.amount - spent, txs, ...range };
 }
 
+// Le budget existait-il sur cette période ? (créé avant sa fin ; les très anciens sans date : oui)
+export const existedIn = (b: Budget, range: { end: Date }) => !b.createdAt || new Date(b.createdAt).getTime() < range.end.getTime();
+
+// Période la plus ancienne à montrer (0 = en cours, -1 = précédente…) : celle où le premier de ces budgets a été créé
+export function firstOffset(budgets: Budget[], period: BudgetPeriod, now = new Date()): number {
+  const dates = budgets.map((b) => (b.createdAt ? new Date(b.createdAt).getTime() : NaN)).filter(Number.isFinite);
+  if (dates.length < budgets.length || !dates.length) return -600; // budget sans date : on ne limite pas
+  const first = Math.min(...dates);
+  let o = 0;
+  while (o > -600 && budgetRange({ period }, o, now).start.getTime() > first) o--;
+  return o;
+}
+
+// Rythme de dépense sur une période : combien par jour pour tenir, où on finira à ce rythme, moyenne par jour
+export function budgetPace(spent: number, amount: number, r: { start: Date; end: Date }, now = new Date()) {
+  const DAY = 86400000;
+  const total = Math.max(1, Math.round((r.end.getTime() - r.start.getTime()) / DAY));
+  const current = r.start <= now && now < r.end;
+  const elapsed = current ? Math.min(total, Math.max(1, Math.ceil((now.getTime() - r.start.getTime()) / DAY))) : total;
+  const daysLeft = current ? total - elapsed + 1 : 0; // aujourd'hui compris
+  return {
+    current,
+    daysLeft,
+    perDayAllowed: current ? Math.max(0, amount - spent) / daysLeft : 0, // recommandé par jour jusqu'à la fin
+    projected: current ? (spent / elapsed) * total : spent, // dépenses prévues à la fin, au rythme actuel
+    perDay: spent / elapsed, // dépense moyenne par jour jusqu'ici
+  };
+}
+
 // Ce qu'on a dépensé avant, pour proposer un montant :
 // les périodes précédentes (même durée) ; pour un budget personnalisé, les 90 derniers jours ramenés à sa durée.
 export function pastSpending(

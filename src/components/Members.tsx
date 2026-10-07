@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { Users, UserPlus, X, Info } from 'lucide-react';
+import { QrButton } from './QrInvite';
+import { askConfirm } from '../lib/confirm';
+import { Users, UserPlus, X, Link2, Share2, Copy, Loader2 } from 'lucide-react';
 import { Transaction, Wallet, WalletMember } from '../types';
 import { formatMoney } from '../lib/money';
 import { uuid } from '../lib/ids';
+import type { Cloud } from '../lib/sync/useCloud';
+import { copyText, formatCode, inviteUrl, shareInvite } from '../lib/invite';
+import { frenchError, LoginSheet } from './Account';
 
 // Portefeuille partagé (ex. un couple qui économise ensemble).
 // « Moi » n'est pas dans wallet.members : c'est la personne qui utilise l'app.
@@ -28,7 +33,7 @@ const initials = (name: string) =>
     .join('');
 
 export const MemberAvatar: React.FC<{ name: string; color: string; size?: 'xs' | 'sm' | 'md'; ring?: boolean }> = ({ name, color, size = 'sm', ring }) => {
-  const box = { xs: 'w-5 h-5 text-[9px]', sm: 'w-7 h-7 text-[11px]', md: 'w-10 h-10 text-sm' }[size];
+  const box = { xs: 'w-5 h-5 text-[10px]', sm: 'w-7 h-7 text-[12px]', md: 'w-10 h-10 text-sm' }[size];
   return (
     <span
       title={name}
@@ -48,7 +53,7 @@ export const MemberStack: React.FC<{ wallet: Wallet; size?: 'xs' | 'sm' }> = ({ 
       {people.slice(0, 4).map((p) => (
         <MemberAvatar key={p.id} name={p.name} color={p.color} size={size} ring />
       ))}
-      {people.length > 4 && <span className="pl-2.5 text-[11px] font-bold text-slate-500">+{people.length - 4}</span>}
+      {people.length > 4 && <span className="pl-2.5 text-[12px] font-bold text-slate-500">+{people.length - 4}</span>}
     </span>
   );
 };
@@ -74,7 +79,7 @@ export const MemberChips: React.FC<{ wallet: Wallet | undefined; value: string; 
               onClick={() => onChange(m.id)}
               aria-pressed={on}
               className={`shrink-0 flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full text-xs font-semibold cursor-pointer border ${
-                on ? 'bg-[#D8FB52] text-slate-900 border-transparent' : 'bg-white text-slate-700 border-slate-200'
+                on ? 'bg-accent text-slate-900 border-transparent' : 'bg-white text-slate-700 border-slate-200'
               }`}
             >
               <MemberAvatar name={m.name} color={m.color} size="xs" />
@@ -148,7 +153,7 @@ export const SharingBlock: React.FC<{ wallet: Wallet; transactions: Transaction[
                 {p.name}
                 {p.removed && <span className="text-xs font-medium text-slate-400"> (retiré)</span>}
               </div>
-              <div className="text-[11px] text-slate-500">{totalPut > 0 ? `${Math.round((p.put / totalPut) * 100)} % des versements` : 'Aucun versement'}</div>
+              <div className="text-[12px] text-slate-500">{totalPut > 0 ? `${Math.round((p.put / totalPut) * 100)} % des versements` : 'Aucun versement'}</div>
             </div>
             <div className="text-right">
               <div className="text-xs font-bold tabular-nums text-emerald-600">+{money(p.put)}</div>
@@ -161,124 +166,247 @@ export const SharingBlock: React.FC<{ wallet: Wallet; transactions: Transaction[
   );
 };
 
-// Fenêtre « Partager » : ajouter / retirer des personnes
+// Fenêtre « Partager » : inviter avec un lien, noter un nom, retirer quelqu'un.
+// `wallet` est la version à jour (un membre peut rejoindre pendant que la fenêtre est ouverte) :
+// on ne garde ici que ce que TU ajoutes ou retires, appliqué à la dernière version en enregistrant.
 export const MembersSheet: React.FC<{
   wallet: Wallet;
+  cloud?: Cloud;
   onClose: () => void;
   onSave: (members: WalletMember[]) => void;
   onLeave?: () => void; // portefeuille d'un autre : on peut seulement le quitter
-}> = ({ wallet, onClose, onSave, onLeave }) => {
+}> = ({ wallet, cloud, onClose, onSave, onLeave }) => {
   const readOnly = !!wallet.ownerId; // je ne suis pas le propriétaire
-  const [members, setMembers] = useState<WalletMember[]>(wallet.members ?? []);
+  const [added, setAdded] = useState<WalletMember[]>([]);
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   const [name, setName] = useState('');
-  const [contact, setContact] = useState('');
-  const visible = members.filter((m) => !m.removed);
+  const [login, setLogin] = useState(false);
+  const current = wallet.members ?? [];
+  const visible = [...current, ...added].filter((m) => !m.removed && !removedIds.has(m.id));
 
+  const newMember = (n: string): WalletMember => ({ id: uuid(), name: n, color: MEMBER_COLORS[(current.length + added.length) % MEMBER_COLORS.length] });
   const add = () => {
     const n = name.trim();
     if (!n) return;
-    const color = MEMBER_COLORS[members.length % MEMBER_COLORS.length];
-    setMembers((prev) => [...prev, { id: uuid(), name: n, color, contact: contact.trim() || undefined }]);
+    setAdded((prev) => [...prev, newMember(n)]);
     setName('');
-    setContact('');
   };
   // On garde la personne en « retirée » pour que ses anciennes opérations restent à son nom
-  const remove = (id: string) => setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, removed: true } : m)));
+  const remove = async (id: string) => {
+    if (added.some((m) => m.id === id)) return setAdded((prev) => prev.filter((m) => m.id !== id)); // pas encore enregistré
+    const m = current.find((x) => x.id === id);
+    const ok = await askConfirm({
+      title: `Retirer ${m?.name ?? 'ce membre'} du portefeuille ?`,
+      message: m?.userId
+        ? 'Il ne verra plus ce portefeuille sur son téléphone. Ses anciennes opérations restent à son nom.'
+        : 'Ses anciennes opérations restent à son nom.',
+      confirmLabel: 'Retirer',
+      danger: true,
+    });
+    if (ok) setRemovedIds((prev) => new Set(prev).add(id));
+  };
+  const save = () => {
+    const n = name.trim(); // un nom tapé mais pas encore ajouté compte aussi
+    onSave([...current.map((m) => (removedIds.has(m.id) ? { ...m, removed: true } : m)), ...added, ...(n ? [newMember(n)] : [])]);
+  };
 
-  const field = 'w-full px-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]';
+  const field = 'w-full px-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
-      <div
-        className="w-full sm:max-w-[420px] max-h-[90dvh] overflow-y-auto bg-white rounded-t-[32px] sm:rounded-[32px] p-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] animate-slide-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-base font-bold">{readOnly ? 'Membres de' : 'Partager'} « {wallet.name} »</h2>
-          <button onClick={onClose} aria-label="Fermer" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <p className="text-xs text-slate-500 mb-4">Chaque opération indique qui l'a faite, et tu vois ce que chacun a mis et utilisé.</p>
-
-        <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 mb-4">
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
-            <MemberAvatar name={ME.name} color={ME.color} />
-            <span className="flex-1 text-sm font-semibold">Moi</span>
-            {!readOnly && <span className="text-[11px] font-semibold text-slate-400">Propriétaire</span>}
+    <>
+      <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
+        <div
+          className="w-full sm:max-w-[420px] max-h-[90dvh] overflow-y-auto bg-white rounded-t-[32px] sm:rounded-[32px] p-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] animate-slide-up"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-base font-bold">{readOnly ? 'Membres de' : 'Partager'} « {wallet.name} »</h2>
+            <button onClick={onClose} aria-label="Fermer" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          {visible.map((m) => (
-            <div key={m.id} className="flex items-center gap-2.5 px-3 py-2.5">
-              <MemberAvatar name={m.name} color={m.color} />
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm font-semibold truncate">{m.name}</span>
-                {m.contact && <span className="block text-[11px] text-slate-400 truncate">{m.contact}</span>}
-              </span>
-              {m.owner ? (
-                <span className="text-[11px] font-semibold text-slate-400">Propriétaire</span>
-              ) : m.userId ? (
-                <span className="text-[11px] font-semibold text-emerald-600">A rejoint</span>
-              ) : m.invited ? (
-                <span className="text-[11px] font-semibold text-amber-600">Invitation envoyée</span>
-              ) : null}
-              {!readOnly && <button onClick={() => remove(m.id)} aria-label={`Retirer ${m.name}`} className="w-8 h-8 rounded-full hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center cursor-pointer">
-                <X className="w-4 h-4" />
-              </button>}
+          <p className="text-xs text-slate-500 mb-4">Chaque opération indique qui l'a faite, et tu vois ce que chacun a mis et utilisé.</p>
+
+          {!readOnly && cloud?.configured && <InviteBlock wallet={wallet} cloud={cloud} onLogin={() => setLogin(true)} />}
+
+          <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 mb-4">
+            <div className="flex items-center gap-2.5 px-3 py-2.5">
+              <MemberAvatar name={ME.name} color={ME.color} />
+              <span className="flex-1 text-sm font-semibold">Moi</span>
+              {!readOnly && <span className="text-[12px] font-semibold text-slate-400">Propriétaire</span>}
             </div>
-          ))}
+            {visible.map((m) => (
+              <div key={m.id} className="flex items-center gap-2.5 px-3 py-2.5">
+                <MemberAvatar name={m.name} color={m.color} />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-semibold truncate">{m.name}</span>
+                  {m.contact && <span className="block text-[12px] text-slate-400 truncate">{m.contact}</span>}
+                </span>
+                {m.owner ? (
+                  <span className="text-[12px] font-semibold text-slate-400">Propriétaire</span>
+                ) : m.userId ? (
+                  <span className="text-[12px] font-semibold text-emerald-600">A rejoint</span>
+                ) : m.invited ? (
+                  <span className="text-[12px] font-semibold text-amber-600">En attente</span>
+                ) : (
+                  <span className="text-[12px] font-semibold text-slate-400">Nom seulement</span>
+                )}
+                {!readOnly && <button onClick={() => remove(m.id)} aria-label={`Retirer ${m.name}`} className="w-8 h-8 rounded-full hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>}
+              </div>
+            ))}
+          </div>
+
+          {readOnly ? (
+            <>
+              <p className="text-xs text-slate-500">Seul le propriétaire peut inviter ou retirer des membres.</p>
+              {onLeave && (
+                <button onClick={onLeave} className="w-full mt-4 py-3 rounded-2xl bg-red-50 text-red-600 text-sm font-bold cursor-pointer">
+                  Quitter ce portefeuille
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="text-xs font-bold text-slate-500 mb-1">Noter juste un nom</div>
+              <p className="text-[12px] text-slate-500 mb-2">Pour quelqu'un sans Wallo : sert seulement à noter qui a fait quoi, sur ce téléphone.</p>
+              <div className="flex gap-2">
+                <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="Nom (ex. Maman)" className={field} />
+                <button
+                  onClick={add}
+                  disabled={!name.trim()}
+                  aria-label="Ajouter ce nom"
+                  className="shrink-0 w-11 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center cursor-pointer disabled:opacity-40"
+                >
+                  <UserPlus className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex gap-2 mt-5">
+                <button onClick={onClose} className="flex-1 py-3 rounded-2xl bg-slate-100 text-sm font-bold cursor-pointer">
+                  Annuler
+                </button>
+                <button onClick={save} className="flex-[2] py-3 rounded-2xl bg-accent text-slate-900 text-sm font-bold cursor-pointer">
+                  Enregistrer
+                </button>
+              </div>
+            </>
+          )}
         </div>
-
-        {readOnly ? (
-          <>
-            <p className="text-xs text-slate-500">Seul le propriétaire peut inviter ou retirer des membres.</p>
-            {onLeave && (
-              <button onClick={onLeave} className="w-full mt-4 py-3 rounded-2xl bg-red-50 text-red-600 text-sm font-bold cursor-pointer">
-                Quitter ce portefeuille
-              </button>
-            )}
-          </>
-        ) : (
-        <>
-        <div className="text-xs font-bold text-slate-500 mb-1.5">Ajouter une personne</div>
-        <div className="space-y-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="Nom (ex. Marie)" className={field} />
-          <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Son e-mail pour l'inviter (facultatif)" inputMode="email" className={field} />
-          <button
-            onClick={add}
-            disabled={!name.trim()}
-            className="w-full py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
-          >
-            <UserPlus className="w-4 h-4" /> Ajouter
-          </button>
-        </div>
-
-        <p className="flex gap-1.5 text-[11px] text-slate-500 mt-4">
-          <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
-          <span>
-            Avec son e-mail, la personne verra ce portefeuille sur son téléphone en se connectant à Wallo avec cette adresse (tu dois être
-            connecté aussi). Sans e-mail, son nom sert seulement à noter qui a fait quoi.
-          </span>
-        </p>
-        </>
-        )}
-
-        {!readOnly && <div className="flex gap-2 mt-4">
-          <button onClick={onClose} className="flex-1 py-3 rounded-2xl bg-slate-100 text-sm font-bold cursor-pointer">
-            Annuler
-          </button>
-          <button
-            onClick={() => {
-              // Un nom tapé mais pas encore ajouté compte aussi
-              const n = name.trim();
-              const color = MEMBER_COLORS[members.length % MEMBER_COLORS.length];
-              onSave(n ? [...members, { id: uuid(), name: n, color, contact: contact.trim() || undefined }] : members);
-            }}
-            className="flex-[2] py-3 rounded-2xl bg-[#D8FB52] text-slate-900 text-sm font-bold cursor-pointer"
-          >
-            Enregistrer
-          </button>
-        </div>}
       </div>
+      {/* En dehors de la fenêtre animée : sinon elle y serait enfermée */}
+      {login && cloud && !cloud.user && <LoginSheet cloud={cloud} onClose={() => setLogin(false)} />}
+    </>
+  );
+};
+
+// « Inviter avec un lien » : le propriétaire envoie un lien (ou un code) par WhatsApp, SMS…
+const InviteBlock: React.FC<{ wallet: Wallet; cloud: Cloud; onLogin: () => void }> = ({ wallet, cloud, onLogin }) => {
+  const [invite, setInvite] = useState<{ code: string; expires_at: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError('');
+    setNote('');
+    try {
+      await fn();
+    } catch (e) {
+      setError(frenchError(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const share = (inv: { code: string }) =>
+    shareInvite(wallet.name, inv.code).then((r) => {
+      if (r === 'copied') setNote('Lien copié : colle-le dans WhatsApp ou un SMS.');
+      if (r === 'failed') setNote('Envoie ce code à la personne : elle le tape dans Wallo › Portefeuilles › Rejoindre.');
+    });
+  const inviteNow = () =>
+    run(async () => {
+      const inv = invite ?? (await cloud.createInvite(wallet.id));
+      setInvite(inv);
+      await share(inv);
+    });
+
+  if (!cloud.user) {
+    return (
+      <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3.5 mb-4">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+          <Link2 className="w-4 h-4" /> Inviter avec un lien
+        </div>
+        <p className="text-xs text-slate-500 mt-1 mb-3">Connecte-toi pour inviter quelqu'un : il verra ce portefeuille et pourra y ajouter des opérations depuis son téléphone.</p>
+        <button onClick={onLogin} className="w-full py-3 rounded-2xl bg-accent text-slate-900 text-sm font-bold cursor-pointer">
+          Se connecter
+        </button>
+      </div>
+    );
+  }
+
+  const until = invite && new Date(invite.expires_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+
+  return (
+    <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3.5 mb-4">
+      <button
+        onClick={inviteNow}
+        disabled={busy}
+        className="w-full py-3 rounded-2xl bg-accent text-slate-900 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+      >
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />} Inviter quelqu'un
+      </button>
+      {/* La personne est à côté ? Elle scanne le QR dans son Wallo (pas de détour par le navigateur) */}
+      <QrButton
+        kind="wallet"
+        name={wallet.name}
+        getCode={async () => {
+          const inv = invite ?? (await cloud.createInvite(wallet.id));
+          setInvite(inv);
+          return inv.code;
+        }}
+        onError={(e) => setError(frenchError(e instanceof Error ? e.message : String(e)))}
+      />
+      <p className="text-[12px] text-slate-500 mt-2">
+        Envoie le lien par WhatsApp ou SMS. La personne le touche, se connecte à Wallo (avec n'importe quelle adresse) et rejoint ce portefeuille.
+      </p>
+
+      {invite && (
+        <div className="mt-3 pt-3 border-t border-slate-200 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-semibold text-slate-500">Code (à taper dans « Rejoindre »)</div>
+              <div className="text-lg font-extrabold tracking-[0.15em] tabular-nums text-slate-900 select-all">{formatCode(invite.code)}</div>
+            </div>
+            <button
+              onClick={() => copyText(inviteUrl(invite.code)).then((ok) => setNote(ok ? 'Lien copié.' : ''))}
+              aria-label="Copier le lien"
+              className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-100"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center justify-between mt-2 text-[12px]">
+            <span className="text-slate-500">Valable jusqu'au {until}</span>
+            <button
+              onClick={() =>
+                run(async () => {
+                  await cloud.revokeInvites(wallet.id);
+                  setInvite(null);
+                  setNote('Lien annulé : il ne marche plus.');
+                })
+              }
+              disabled={busy}
+              className="font-bold text-red-600 cursor-pointer"
+            >
+              Annuler ce lien
+            </button>
+          </div>
+        </div>
+      )}
+      {note && <p className="text-[12px] font-semibold text-emerald-700 mt-2">{note}</p>}
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </div>
   );
 };

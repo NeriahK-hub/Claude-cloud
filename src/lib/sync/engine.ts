@@ -3,7 +3,7 @@
 // Une synchro = 1) envoyer ce qui a changé ici depuis la dernière fois, 2) récupérer ce qui a changé
 // dans la base (autres appareils, autres membres), 3) oublier les portefeuilles qu'on ne voit plus.
 // Conflit (même opération modifiée à deux endroits) : la dernière modification envoyée l'emporte.
-import { Budget, Ristourne, Transaction, Wallet } from '../../types';
+import { Budget, DebtShare, Recurring, Ristourne, Transaction, Wallet } from '../../types';
 import { Category } from '../../data/categories';
 import { CustomIcon } from '../customIcons';
 import { isUuid, uuid } from '../ids';
@@ -13,6 +13,10 @@ import {
   TableName,
   budgetFromRow,
   budgetRow,
+  debtMoveFromRow,
+  debtMoveRow,
+  debtShareFromRow,
+  debtShareRow,
   categoryFromRow,
   categoryRow,
   fingerprint,
@@ -27,11 +31,14 @@ import {
   ristourneMemberRows,
   ristourneRow,
   profileRow,
+  recurringFromRow,
+  recurringRow,
   settingsFromRow,
   transactionFromRow,
   transactionRow,
   walletFromRow,
   walletRow,
+  TABLES,
 } from './mapping';
 
 // Ce que la base sait faire (Supabase dans l'app, PostgreSQL local dans les tests)
@@ -45,6 +52,19 @@ export interface Remote {
   visibleWalletIds(): Promise<string[]>;
   leaveRistourne(id: string): Promise<void>;
   visibleRistourneIds(): Promise<string[]>;
+  leaveDebtShare(id: string): Promise<void>;
+  visibleDebtShareIds(): Promise<string[]>;
+  // Facultatif (fonction sync_check de la base) : en un appel, les invitations acceptées, les tables qui ont
+  // changé depuis `since`, et ce que la personne voit encore. null = pas disponible -> synchro complète.
+  check?(since: Partial<Record<TableName, string | null>>): Promise<SyncCheck | null>;
+}
+
+export interface SyncCheck {
+  invites: number;
+  changed: TableName[];
+  wallets: string[];
+  ristournes: string[];
+  debtShares: string[];
 }
 
 // Mémoire de la synchro sur cet appareil
@@ -54,6 +74,7 @@ export interface SyncMeta {
   snap: Partial<Record<TableName, Record<string, string>>>; // empreinte de chaque ligne telle qu'envoyée / reçue
   foreignWallets: string[]; // portefeuilles partagés dont je ne suis pas propriétaire
   foreignRistournes?: string[]; // ristournes dont je ne suis pas propriétaire
+  debtShares?: string[]; // dettes partagées connues à la dernière synchro (les miennes et celles des autres)
 }
 
 export const emptyMeta = (userId: string): SyncMeta => ({ userId, cursors: {}, snap: {}, foreignWallets: [], foreignRistournes: [] });
@@ -70,8 +91,10 @@ export interface SyncPatch {
   transactions?: ListPatch<Transaction>;
   categories?: ListPatch<Category>;
   budgets?: ListPatch<Budget>;
+  recurrings?: ListPatch<Recurring>;
   customIcons?: ListPatch<CustomIcon>;
   ristournes?: ListPatch<Ristourne>;
+  debtShares?: ListPatch<DebtShare>;
   settings?: SyncData['settings'];
   profileName?: string;
 }
@@ -124,7 +147,8 @@ export function migrateIds(d: SyncData): { data: SyncData; map: Record<string, s
 }
 
 // Données « vides » : rien de plus que les portefeuilles de départ
-export const isTrivial = (d: SyncData) => d.transactions.length === 0 && d.budgets.length === 0 && d.ristournes.length === 0 && d.wallets.length <= 2;
+export const isTrivial = (d: SyncData) =>
+  d.transactions.length === 0 && d.budgets.length === 0 && d.ristournes.length === 0 && d.debtShares.length === 0 && !d.recurrings?.length && d.wallets.length <= 2;
 
 // ---------- Envoi ----------
 
@@ -136,7 +160,13 @@ interface TableSpec {
 
 // Mémoire d'une ligne : son empreinte, et pour une transaction « empreinte:portefeuille »
 const stamp = (t: TableName, r: Row) =>
-  t === 'transactions' ? `${fingerprint(r)}:${r.wallet_id}` : t === 'ristourne_payments' ? `${fingerprint(r)}:${r.ristourne_id}` : fingerprint(r);
+  t === 'transactions'
+    ? `${fingerprint(r)}:${r.wallet_id}`
+    : t === 'ristourne_payments'
+      ? `${fingerprint(r)}:${r.ristourne_id}`
+      : t === 'debt_moves'
+        ? `${fingerprint(r)}:${r.share_id}`
+        : fingerprint(r);
 
 const SPECS: TableSpec[] = [
   { name: 'profiles', rows: (d, me) => [profileRow(d, me)], key: (r) => String(r.id) },
@@ -150,17 +180,67 @@ const SPECS: TableSpec[] = [
   { name: 'ristournes', rows: (d, me) => d.ristournes.filter((r) => !r.ownerId || r.ownerId === me).map(ristourneRow), key: (r) => String(r.id) },
   { name: 'ristourne_members', rows: (d, me) => d.ristournes.flatMap((r) => ristourneMemberRows(r, me)), key: (r) => String(r.id) },
   { name: 'ristourne_payments', rows: (d) => d.ristournes.flatMap((r) => r.payments.map((p) => paymentRow(r, p))), key: (r) => String(r.id) },
+  // Dettes partagées : la dette par celle / celui qui l'a partagée, les mouvements par les deux
+  { name: 'debt_shares', rows: (d) => d.debtShares.filter((s) => !s.ownerId).map(debtShareRow), key: (r) => String(r.id) },
+  { name: 'debt_moves', rows: (d) => d.debtShares.flatMap((s) => s.moves.map((m) => debtMoveRow(s, m))), key: (r) => String(r.id) },
+  // Opérations qui reviennent / factures (base à jour : 20261012000000_upcoming.sql)
+  { name: 'recurrings', rows: (d) => (d.recurrings ?? []).map(recurringRow), key: (r) => String(r.id) },
 ];
 
-async function push(d: SyncData, meta: SyncMeta, remote: Remote): Promise<number> {
+// Tables récentes : si la base n'a pas encore la migration, on les laisse de côté sans bloquer la synchro
+// (rien n'est marqué comme envoyé : tout partira quand la base sera à jour)
+const OPTIONAL = new Set<TableName>(['recurrings']);
+const missingTable = (e: unknown) => /does not exist|could not find the table|schema cache|PGRST205|42P01/i.test(String((e as Error)?.message ?? e));
+
+// Tous les identifiants présents dans des données (y compris membres et versements)
+export function idsOf(d: SyncData): string[] {
+  return [
+    ...d.wallets.flatMap((w) => [w.id, ...(w.members ?? []).map((m) => m.id)]),
+    ...d.transactions.map((t) => t.id),
+    ...d.categories.map((c) => c.id),
+    ...d.budgets.map((b) => b.id),
+    ...d.customIcons.map((i) => i.id),
+    ...d.ristournes.flatMap((r) => [r.id, ...r.members.map((m) => m.id), ...r.payments.map((p) => p.id)]),
+    ...d.debtShares.flatMap((s) => [s.id, ...s.moves.map((m) => m.id)]),
+    ...(d.recurrings ?? []).map((r) => r.id),
+  ];
+}
+
+// known : ce que CET onglet / appareil a déjà eu dans ses données. Une ligne absente d'ici n'est
+// supprimée (ou quittée) que si on l'avait : un onglet resté en retard, qui n'a jamais vu
+// l'opération ajoutée ailleurs, ne peut pas la supprimer par erreur. Sans `known` : ancien comportement.
+async function push(d: SyncData, meta: SyncMeta, remote: Remote, known?: Set<string>): Promise<number> {
   let sent = 0;
   const me = remote.me;
+  const had = (id: string) => !known || known.has(id);
   // Portefeuilles partagés quittés depuis la dernière synchro (calculé avant de toucher aux mémoires)
-  const leaving = new Set(Object.keys(meta.snap.wallets ?? {}).filter((id) => meta.foreignWallets.includes(id) && !d.wallets.some((w) => w.id === id)));
+  const leaving = new Set(
+    Object.keys(meta.snap.wallets ?? {}).filter((id) => meta.foreignWallets.includes(id) && had(id) && !d.wallets.some((w) => w.id === id))
+  );
   // Ristournes d'autrui quittées ici (elles ne sont jamais envoyées : on se retire, rien n'est supprimé)
-  const leftRistournes = (meta.foreignRistournes ?? []).filter((id) => !d.ristournes.some((r) => r.id === id));
+  const leftRistournes = (meta.foreignRistournes ?? []).filter((id) => had(id) && !d.ristournes.some((r) => r.id === id));
   for (const id of leftRistournes) await remote.leaveRistourne(id);
+  // Dettes partagées retirées ici : on arrête de les suivre (jamais supprimées pour l'autre)
+  const leftDebts = (meta.debtShares ?? []).filter((id) => had(id) && !d.debtShares.some((s) => s.id === id));
+  for (const id of leftDebts) await remote.leaveDebtShare(id);
   for (const spec of SPECS) {
+    if (OPTIONAL.has(spec.name)) {
+      try {
+        sent += await pushSpec(spec);
+      } catch (e) {
+        if (!missingTable(e)) throw e;
+      }
+      continue;
+    }
+    sent += await pushSpec(spec);
+  }
+  meta.foreignWallets = d.wallets.filter((w) => w.ownerId && w.ownerId !== me).map((w) => w.id);
+  meta.foreignRistournes = d.ristournes.filter((r) => r.ownerId && r.ownerId !== me).map((r) => r.id);
+  meta.debtShares = d.debtShares.map((s) => s.id);
+  return sent;
+
+  async function pushSpec(spec: TableSpec): Promise<number> {
+    let sent = 0;
     const snap = { ...(meta.snap[spec.name] ?? {}) };
     const rows = spec.rows(d, me);
     const keys = new Set(rows.map(spec.key));
@@ -175,11 +255,15 @@ async function push(d: SyncData, meta: SyncMeta, remote: Remote): Promise<number
     const gone = Object.keys(snap).filter(
       (k) =>
         !keys.has(k) &&
+        had(k) &&
         !(spec.name === 'transactions' && leaving.has(scope(k))) &&
-        !(spec.name === 'ristourne_payments' && leftRistournes.includes(scope(k)))
+        !(spec.name === 'ristourne_payments' && leftRistournes.includes(scope(k))) &&
+        !(spec.name === 'debt_moves' && leftDebts.includes(scope(k)))
     );
-    const forgotten = Object.keys(snap).filter((k) => !keys.has(k) && !gone.includes(k));
-    if (gone.length && spec.name !== 'profiles' && spec.name !== 'wallet_members' && spec.name !== 'ristourne_members') {
+    // Jamais eue ici : on garde sa mémoire telle quelle (elle arrivera par l'autre onglet ou la réception)
+    const goneSet = new Set(gone);
+    const forgotten = Object.keys(snap).filter((k) => !keys.has(k) && !goneSet.has(k) && had(k));
+    if (gone.length && spec.name !== 'profiles' && spec.name !== 'wallet_members' && spec.name !== 'ristourne_members' && spec.name !== 'debt_shares') {
       if (spec.name === 'wallets') {
         // Portefeuille d'un autre : on le quitte ; le mien : on le supprime
         for (const id of gone.filter((id) => meta.foreignWallets.includes(id))) await remote.leaveWallet(id);
@@ -192,10 +276,8 @@ async function push(d: SyncData, meta: SyncMeta, remote: Remote): Promise<number
     }
     [...gone, ...forgotten].forEach((k) => delete snap[k]);
     meta.snap[spec.name] = snap;
+    return sent;
   }
-  meta.foreignWallets = d.wallets.filter((w) => w.ownerId && w.ownerId !== me).map((w) => w.id);
-  meta.foreignRistournes = d.ristournes.filter((r) => r.ownerId && r.ownerId !== me).map((r) => r.id);
-  return sent;
 }
 
 // ---------- Réception ----------
@@ -205,12 +287,15 @@ const since = (cursor?: string) => (cursor ? new Date(new Date(cursor).getTime()
 const maxDate = (rows: Row[], prev?: string) =>
   rows.reduce<string | undefined>((m, r) => (!m || String(r.updated_at) > m ? String(r.updated_at) : m), prev);
 
-async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patch: SyncPatch; count: number }> {
+async function pull(d: SyncData, meta: SyncMeta, remote: Remote, hint?: SyncCheck | null): Promise<{ patch: SyncPatch; count: number }> {
   const me = remote.me;
   const patch: SyncPatch = {};
   let count = 0;
+  const changed = hint ? new Set<TableName>(hint.changed) : null;
   const fetch = async (t: TableName) => {
     const full = !meta.cursors[t];
+    // Rien de nouveau dans cette table (d'après sync_check) : pas de requête
+    if (changed && !full && !changed.has(t)) return { rows: [] as Row[], full, snap: (meta.snap[t] ??= {}) };
     const rows = await remote.pull(t, since(meta.cursors[t]));
     meta.cursors[t] = maxDate(rows, meta.cursors[t]);
     count += rows.length;
@@ -290,7 +375,7 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
     }
 
     // Portefeuilles partagés qu'on ne voit plus (retiré par le propriétaire) : on les oublie ici
-    const visible = new Set(await remote.visibleWalletIds());
+    const visible = new Set(hint ? hint.wallets : await remote.visibleWalletIds());
     const lost = wallets.filter((w) => snap[w.id] && !visible.has(w.id) && !remove.includes(w.id)).map((w) => w.id);
     remove.push(...lost);
 
@@ -357,6 +442,24 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
       remove.forEach((id) => delete snap[id]);
     }
   }
+  // Opérations qui reviennent / factures (table facultative : base pas encore à jour -> rien)
+  try {
+    const { rows, snap } = await fetch('recurrings');
+    if (rows.length) {
+      const localR = new Map((d.recurrings ?? []).map((x) => [x.id, x]));
+      const live = rows
+        .filter((r) => !r.deleted_at)
+        .map((r) => recurringFromRow(r, me))
+        .filter((x) => !(localR.has(x.id) && fingerprint(recurringRow(localR.get(x.id)!)) === fingerprint(recurringRow(x))));
+      const remove = rows.filter((r) => r.deleted_at && localR.has(String(r.id))).map((r) => String(r.id));
+      if (live.length || remove.length) patch.recurrings = { upsert: live, remove };
+      live.forEach((x) => (snap[x.id] = fingerprint(recurringRow(x))));
+      remove.forEach((id) => delete snap[id]);
+    }
+  } catch (e) {
+    if (!missingTable(e)) throw e;
+  }
+
   // Ristournes (+ membres et paiements, rangés dans chaque ristourne)
   {
     const rr = await fetch('ristournes');
@@ -380,7 +483,7 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
       touched.set(r.id, { ...r, payments: row.deleted_at ? without : [...without, paymentFromRow(row)] });
     }
     // Ristournes qu'on ne voit plus (retiré, ou on l'a quittée ailleurs)
-    const visible = new Set(await remote.visibleRistourneIds());
+    const visible = new Set(hint ? hint.ristournes : await remote.visibleRistourneIds());
     remove.push(...d.ristournes.filter((r) => (rr.snap[r.id] !== undefined || r.ownerId) && !visible.has(r.id) && !remove.includes(r.id)).map((r) => r.id));
     remove.forEach((id) => touched.delete(id));
 
@@ -404,6 +507,41 @@ async function pull(d: SyncData, meta: SyncMeta, remote: Remote): Promise<{ patc
       .filter((r) => r.ownerId && r.ownerId !== me)
       .map((r) => r.id);
   }
+
+  // Dettes partagées (+ leurs mouvements)
+  {
+    const sr = await fetch('debt_shares');
+    const mr = await fetch('debt_moves');
+    const touched = new Map<string, DebtShare>();
+    const base = (id: string) => touched.get(id) ?? d.debtShares.find((x) => x.id === id);
+    const remove = sr.rows.filter((r) => r.deleted_at).map((r) => String(r.id));
+    for (const row of sr.rows.filter((r) => !r.deleted_at)) touched.set(String(row.id), debtShareFromRow(row, me, base(String(row.id))));
+    for (const row of mr.rows) {
+      const s = base(String(row.share_id));
+      if (!s) continue;
+      const without = s.moves.filter((x) => x.id !== row.id);
+      touched.set(s.id, { ...s, moves: row.deleted_at ? without : [...without, debtMoveFromRow(row, !s.ownerId)] });
+    }
+    // Dettes qu'on ne voit plus (on a arrêté de la suivre ailleurs)
+    const visible = new Set(hint ? hint.debtShares : await remote.visibleDebtShareIds());
+    const had = new Set(meta.debtShares ?? []);
+    remove.push(...d.debtShares.filter((s) => had.has(s.id) && !visible.has(s.id) && !remove.includes(s.id)).map((s) => s.id));
+    remove.forEach((id) => touched.delete(id));
+
+    const same = (a: DebtShare, b?: DebtShare) => !!b && JSON.stringify(a) === JSON.stringify(b);
+    const upsert = [...touched.values()].filter((s) => !same(s, d.debtShares.find((x) => x.id === s.id)));
+    if (upsert.length || remove.length) patch.debtShares = { upsert, remove };
+    for (const s of touched.values()) {
+      if (!s.ownerId) sr.snap[s.id] = fingerprint(debtShareRow(s));
+      s.moves.forEach((m) => (mr.snap[m.id] = stamp('debt_moves', debtMoveRow(s, m))));
+    }
+    for (const id of remove) {
+      delete sr.snap[id];
+      d.debtShares.find((x) => x.id === id)?.moves.forEach((m) => delete mr.snap[m.id]);
+    }
+    mr.rows.filter((row) => row.deleted_at).forEach((row) => delete mr.snap[String(row.id)]);
+    meta.debtShares = applyList(d.debtShares, patch.debtShares).map((s) => s.id);
+  }
   return { patch, count };
 }
 
@@ -417,7 +555,9 @@ const LISTS = [
   ['transactions', 'transactions'],
   ['categories', 'categories'],
   ['budgets', 'budgets'],
+  ['recurrings', 'recurrings'],
   ['ristournes', 'ristournes'],
+  ['debtShares', 'debt_shares'],
   ['customIcons', 'custom_icons'],
 ] as const;
 
@@ -425,8 +565,9 @@ export function keepLocalEdits(patch: SyncPatch, meta: SyncMeta, before: SyncDat
   if (patch.replaceAll || before === now) return false;
   let dirtyAny = false;
   for (const [key, table] of LISTS) {
-    const prev = new Map<string, unknown>(before[key].map((x) => [x.id, x]));
-    const cur = new Map<string, { id: string; walletId?: string }>(now[key].map((x) => [x.id, x]));
+    // (données anciennes sans une liste, ex. « recurrings » : liste vide)
+    const prev = new Map<string, unknown>((before[key] ?? []).map((x) => [x.id, x]));
+    const cur = new Map<string, { id: string; walletId?: string }>((now[key] ?? []).map((x) => [x.id, x]));
     const dirty = new Set<string>();
     for (const [id, x] of cur) if (prev.get(id) !== x) dirty.add(id); // modifié ou ajouté
     for (const id of prev.keys()) if (!cur.has(id)) dirty.add(id); // supprimé
@@ -441,29 +582,52 @@ export function keepLocalEdits(patch: SyncPatch, meta: SyncMeta, before: SyncDat
       if (x) snap[id] = table === 'transactions' ? `dirty:${x.walletId}` : 'dirty';
     }
   }
+  // Devises, taux ou nom changés ici pendant la synchro : on garde ceux d'ici (renvoyés au tour suivant)
+  if (
+    (patch.settings || patch.profileName !== undefined) &&
+    (JSON.stringify(before.settings) !== JSON.stringify(now.settings) || before.profileName !== now.profileName)
+  ) {
+    delete patch.settings;
+    delete patch.profileName;
+    (meta.snap.profiles ??= {})[meta.userId] = 'dirty';
+    dirtyAny = true;
+  }
   return dirtyAny;
 }
 
 // ---------- Une synchro complète ----------
 // getLocal() est rappelé au moment de l'envoi pour prendre les données les plus récentes.
+// refetchShared : on vient de rejoindre un portefeuille avec un code -> tout est relu, anciennes opérations comprises.
 export async function runSync(
   getLocal: () => SyncData,
   metaIn: SyncMeta | null,
   remote: Remote,
-  decision?: 'merge' | 'replace'
+  decision?: 'merge' | 'replace',
+  refetchShared = false,
+  known?: Set<string>
 ): Promise<SyncResult> {
   const me = remote.me;
   let meta: SyncMeta = metaIn && metaIn.userId === me ? structuredClone(metaIn) : emptyMeta(me);
   const first = !metaIn || metaIn.userId !== me;
 
+  // Coup d'œil rapide (un seul appel) : invitations, tables changées, ce qui est encore visible
+  let hint: SyncCheck | null = null;
+  if (remote.check && !first) {
+    const sinceAll = Object.fromEntries(TABLES.map((t) => [t, since(meta.cursors[t])])) as Partial<Record<TableName, string | null>>;
+    hint = await remote.check(sinceAll).catch(() => null);
+  }
+
   // Invitations reçues : les nouveaux portefeuilles partagés sont récupérés en entier
-  if ((await remote.acceptInvites()) > 0) {
+  if ((hint ? hint.invites : await remote.acceptInvites()) > 0 || refetchShared) {
+    hint = null; // tout est relu
     delete meta.cursors.wallets;
     delete meta.cursors.wallet_members;
     delete meta.cursors.transactions;
     delete meta.cursors.ristournes;
     delete meta.cursors.ristourne_members;
     delete meta.cursors.ristourne_payments;
+    delete meta.cursors.debt_shares;
+    delete meta.cursors.debt_moves;
   }
 
   let replace = false;
@@ -479,13 +643,14 @@ export async function runSync(
   if (replace) {
     // On repart des données du compte : rien n'est envoyé, tout est reçu
     meta = emptyMeta(me);
-    const empty: SyncData = { ...getLocal(), wallets: [], transactions: [], budgets: [], customIcons: [], ristournes: [] };
+    const empty: SyncData = { ...getLocal(), wallets: [], transactions: [], budgets: [], customIcons: [], ristournes: [], debtShares: [], recurrings: [] };
     const { patch, count } = await pull(empty, meta, remote);
     patch.replaceAll = true;
     return { status: 'done', patch, meta, pushed: 0, pulled: count };
   }
 
-  const pushed = await push(getLocal(), meta, remote);
-  const { patch, count } = await pull(getLocal(), meta, remote);
+  const pushed = await push(getLocal(), meta, remote, known);
+  // Ce qu'on vient d'envoyer change les tables : on relit en entier pour garder les curseurs justes
+  const { patch, count } = await pull(getLocal(), meta, remote, pushed ? null : hint);
   return { status: 'done', patch, meta, pushed, pulled: count };
 }

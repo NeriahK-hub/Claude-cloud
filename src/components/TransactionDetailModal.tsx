@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { X, Share2, Copy, Check, Pencil, Trash2, CopyPlus, ChevronLeft } from 'lucide-react';
-import { Transaction, Wallet } from '../types';
+import { Settings, Transaction, Wallet } from '../types';
 import { Category, categoriesFor } from '../data/categories';
 import { IconBadge } from './AppIcon';
-import { formatMoney, dayLabel, timeLabel } from '../lib/money';
+import { convertBetween, formatMoney } from '../lib/money';
+import { DateField, localDay } from './DatePicker';
 import { isShared, memberOf, MemberAvatar, MemberChips, ME_ID } from './Members';
 import { useDisplayPrefs } from '../lib/display';
 
@@ -11,6 +12,7 @@ interface TransactionDetailModalProps {
   transaction: Transaction | null;
   wallets: Wallet[];
   categories: Category[];
+  settings: Settings; // taux de change, pour déplacer une opération vers un portefeuille d'une autre devise
   onClose: () => void;
   onUpdate: (id: string, changes: Partial<Transaction>) => void;
   onDelete: (tx: Transaction) => void;
@@ -20,17 +22,18 @@ interface TransactionDetailModalProps {
 const typeLabel = (t: Transaction) =>
   t.type === 'transfer' ? 'Transfert' : t.type === 'adjustment' ? 'Ajustement' : t.amount > 0 ? 'Revenu' : 'Dépense';
 
-// "2026-09-29T17:50" (heure locale) <-> ISO
-const toLocalInput = (iso: string) => {
+// Nouveau jour choisi -> ISO, en gardant l'heure d'origine de l'opération (l'heure n'est plus modifiable)
+const withDay = (iso: string, day: string) => {
   const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const [y, m, dd] = day.split('-').map(Number);
+  return new Date(y, m - 1, dd, d.getHours(), d.getMinutes(), d.getSeconds()).toISOString();
 };
 
 export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   transaction,
   wallets,
   categories,
+  settings,
   onClose,
   onUpdate,
   onDelete,
@@ -71,7 +74,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const actionBtn = (label: string, Icon: typeof Pencil, onClick: () => void, danger = false) => (
     <button
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-[11px] font-bold cursor-pointer transition ${
+      className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-[12px] font-bold cursor-pointer transition ${
         danger ? 'text-red-600' : 'text-slate-700'
       }`}
     >
@@ -86,7 +89,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
         className="w-full sm:max-w-md max-h-[100dvh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl relative animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between pb-2">
+        <div className="sheet-head flex items-center justify-between pb-2">
           <div className="flex items-center gap-2">
             {mode === 'edit' && (
               <button onClick={() => setMode('view')} aria-label="Retour" className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
@@ -110,6 +113,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
           <EditForm
             tx={transaction}
             wallets={wallets}
+            settings={settings}
             categories={categories}
             onCancel={() => setMode('view')}
             onSave={(changes) => {
@@ -128,7 +132,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   size="lg"
                 />
               </div>
-              <div className={`text-3xl font-extrabold tabular-nums ${isPositive ? 'text-emerald-600' : 'text-slate-900'}`}>{formattedAmount}</div>
+              <div className={`text-3xl font-extrabold tabular-nums ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>{formattedAmount}</div>
               <p className="text-sm font-bold text-slate-800 mt-1">{transaction.title}</p>
             </div>
 
@@ -138,7 +142,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 transaction.originalCurrency &&
                 row('Montant saisi', formatMoney(transaction.originalAmount, transaction.originalCurrency))}
               {row('Catégorie', transaction.category)}
-              {row('Date', `${dayLabel(transaction.createdAt)} à ${timeLabel(transaction.createdAt)}`)}
+              {row('Date', new Date(transaction.createdAt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}
               {row('Portefeuille', wallet?.name ?? '—')}
               {(isShared(wallet) || transaction.memberId) &&
                 row(
@@ -149,6 +153,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                   </span>
                 )}
               {transaction.withPerson && row('Avec', transaction.withPerson)}
+              {!!transaction.interest && row('Intérêts prévus', formatMoney(transaction.interest, transaction.currency))}
               {transaction.excludeFromReport && row('Rapport', 'Exclue des statistiques')}
               {counterpart && row(isPositive ? 'Venant de' : 'Envoyé vers', counterpart.name)}
               {transaction.referenceNumber && (
@@ -203,7 +208,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 </div>
                 <button
                   onClick={onClose}
-                  className="w-full mt-2 py-3 rounded-xl bg-[#D8FB52] hover:bg-[#cbed3b] text-slate-900 text-sm font-bold cursor-pointer"
+                  className="w-full mt-2 py-3 rounded-xl bg-accent hover:bg-accent-hover text-slate-900 text-sm font-bold cursor-pointer"
                 >
                   Fermer
                 </button>
@@ -222,8 +227,9 @@ const EditForm: React.FC<{
   wallets: Wallet[];
   categories: Category[];
   onCancel: () => void;
+  settings: Settings;
   onSave: (changes: Partial<Transaction>) => void;
-}> = ({ tx, wallets, categories, onCancel, onSave }) => {
+}> = ({ tx, wallets, categories, settings, onCancel, onSave }) => {
   const isOut = tx.amount < 0;
   // Transferts et ajustements n'ont pas de catégorie ni de changement de portefeuille
   const simple = tx.type !== 'transfer' && tx.type !== 'adjustment';
@@ -232,14 +238,14 @@ const EditForm: React.FC<{
     const parent = c.parentId ? categories.find((p) => p.id === c.parentId) : null;
     return parent ? `${parent.name} › ${c.name}` : c.name;
   };
-  // Seulement les portefeuilles de la même devise (le montant est dans cette devise)
-  const sameCurrency = wallets.filter((w) => w.currency === tx.currency && (!w.archived || w.id === tx.walletId));
+  // Tous les portefeuilles (non archivés). Autre devise : le montant est converti avec le taux des Paramètres.
+  const walletChoices = wallets.filter((w) => !w.archived || w.id === tx.walletId);
 
   const [amount, setAmount] = useState(String(Math.abs(tx.amount)));
   const [title, setTitle] = useState(tx.title);
   const [categoryId, setCategoryId] = useState(tx.categoryId ?? '');
   const [walletId, setWalletId] = useState(tx.walletId);
-  const [when, setWhen] = useState(toLocalInput(tx.createdAt));
+  const [day, setDay] = useState(localDay(new Date(tx.createdAt)));
   const [memberId, setMemberId] = useState(tx.memberId ?? ME_ID);
   const [person, setPerson] = useState(tx.withPerson ?? '');
   const [exclude, setExclude] = useState(!!tx.excludeFromReport);
@@ -248,19 +254,29 @@ const EditForm: React.FC<{
   const editWallet = wallets.find((w) => w.id === walletId);
 
   const value = parseFloat(amount.replace(/\s/g, '').replace(',', '.'));
-  const valid = value > 0 && title.trim() !== '' && !!when;
+  // Portefeuille d'une autre devise : montant converti (null = taux manquant)
+  const otherCurrency = !!editWallet && editWallet.currency !== tx.currency;
+  const converted = otherCurrency && value > 0 ? convertBetween(value, tx.currency, editWallet!.currency, settings) : null;
+  const rateMissing = otherCurrency && value > 0 && converted === null;
+  const valid = value > 0 && title.trim() !== '' && !!day && !rateMissing;
 
   const save = () => {
     const changes: Partial<Transaction> = {
       amount: isOut ? -value : value,
       title: title.trim(),
       walletId,
-      createdAt: new Date(when).toISOString(),
+      createdAt: withDay(tx.createdAt, day),
       memberId: isShared(editWallet) && memberId !== ME_ID ? memberId : undefined,
       withPerson: isDebt ? person.trim() || undefined : tx.withPerson,
       excludeFromReport: simple && exclude ? true : undefined,
     };
-    if (value !== Math.abs(tx.amount)) {
+    if (otherCurrency && converted !== null) {
+      // Déplacée vers un portefeuille d'une autre devise : montant converti, montant tapé gardé comme « d'origine »
+      changes.amount = (isOut ? -1 : 1) * Math.round(converted * 100) / 100;
+      changes.currency = editWallet!.currency;
+      changes.originalAmount = value;
+      changes.originalCurrency = tx.currency;
+    } else if (value !== Math.abs(tx.amount)) {
       // Le montant d'origine (autre devise) ne correspond plus
       changes.originalAmount = undefined;
       changes.originalCurrency = undefined;
@@ -277,7 +293,7 @@ const EditForm: React.FC<{
     onSave(changes);
   };
 
-  const field = 'w-full mt-1 px-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]';
+  const field = 'w-full mt-1 px-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent';
   const label = 'block text-xs font-semibold text-slate-500 mt-3';
 
   return (
@@ -304,16 +320,26 @@ const EditForm: React.FC<{
         </>
       )}
 
-      {simple && sameCurrency.length > 1 && (
+      {simple && walletChoices.length > 1 && (
         <>
           <label className={label}>Portefeuille</label>
           <select value={walletId} onChange={(e) => setWalletId(e.target.value)} className={field}>
-            {sameCurrency.map((w) => (
+            {walletChoices.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.name}
+                {w.name} ({w.currency})
               </option>
             ))}
           </select>
+          {converted !== null && (
+            <p className="text-xs text-slate-500 mt-1">
+              Converti : {formatMoney(Math.abs(converted), editWallet!.currency)} dans ce portefeuille (taux de tes Paramètres).
+            </p>
+          )}
+          {rateMissing && (
+            <p className="text-xs text-amber-600 mt-1">
+              Taux {tx.currency} → {editWallet!.currency} manquant : ajoute-le dans Paramètres › Taux de change.
+            </p>
+          )}
         </>
       )}
 
@@ -340,10 +366,10 @@ const EditForm: React.FC<{
         </label>
       )}
 
-      <label className={label}>Date et heure</label>
-      <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} className={field} />
+      <label className={label}>Date</label>
+      <DateField value={day} onChange={setDay} shortcuts="past" label="Date" className="mb-1" />
 
-      {tx.transferId && <p className="text-[11px] text-slate-400 mt-2">La date s'applique aux deux côtés du transfert.</p>}
+      {tx.transferId && <p className="text-[12px] text-slate-400 mt-2">La date s'applique aux deux côtés du transfert.</p>}
 
       <div className="flex gap-2 mt-4">
         <button onClick={onCancel} className="flex-1 py-3 rounded-xl bg-slate-100 text-sm font-semibold cursor-pointer">
@@ -352,7 +378,7 @@ const EditForm: React.FC<{
         <button
           disabled={!valid}
           onClick={save}
-          className="flex-[2] py-3 rounded-xl bg-[#D8FB52] disabled:opacity-40 text-slate-900 text-sm font-bold cursor-pointer"
+          className="flex-[2] py-3 rounded-xl bg-accent disabled:opacity-40 text-slate-900 text-sm font-bold cursor-pointer"
         >
           Enregistrer
         </button>

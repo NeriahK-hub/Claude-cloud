@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from 'react';
+import { onOtherTabChange } from './crossTab';
+import { markPrefsChanged } from './prefsStamp';
 
 // Préférences d'affichage de cet appareil (Paramètres › Affichage).
 // Lues partout sans passer par les composants : formatMoney, périodes, dates.
@@ -11,9 +13,14 @@ export interface DisplayPrefs {
   monthStart: number; // 1 à 28 (ex. 25 = mois de paie du 25 au 24)
   yearStart: number; // 0 = janvier … 11 = décembre
   excludeOption: boolean; // interrupteur « Exclure du rapport » dans les formulaires
+  hideBalance: boolean; // solde masqué sur l'accueil (bouton œil)
+  homeWalletCard: boolean; // carte du portefeuille choisi (objectif, crédit, partagé) sur l'accueil
+  simpleMode: boolean; // interface simple : accueil réduit à l'essentiel, gros boutons (Paramètres › Apparence)
+  iconsOnly: boolean; // icônes seules : moins de mots sur les boutons, icônes plus grandes (pour qui lit peu)
+  festiveOff: boolean; // décorations des fêtes coupées sur cet appareil (quand l'admin les a allumées)
 }
 
-export const DEFAULT_PREFS: DisplayPrefs = { number: 'fr', decimals: 'always', date: 'dmy', weekStart: 1, monthStart: 1, yearStart: 0, excludeOption: false };
+export const DEFAULT_PREFS: DisplayPrefs = { number: 'fr', decimals: 'always', date: 'dmy', weekStart: 1, monthStart: 1, yearStart: 0, excludeOption: false, hideBalance: false, homeWalletCard: false, simpleMode: false, iconsOnly: false, festiveOff: false };
 
 export const NUMBER_LOCALES: Record<DisplayPrefs['number'], string> = { fr: 'fr-FR', en: 'en-US', de: 'de-DE', ch: 'de-CH' };
 
@@ -29,6 +36,11 @@ function read(): DisplayPrefs {
   }
 }
 
+onOtherTabChange(KEY, () => {
+  prefs = read();
+  listeners.forEach((l) => l());
+});
+
 export const getPrefs = () => prefs;
 
 export function setPrefs(changes: Partial<DisplayPrefs>) {
@@ -38,6 +50,8 @@ export function setPrefs(changes: Partial<DisplayPrefs>) {
   } catch {
     // réglage gardé pour cette session
   }
+  // Solde masqué : propre à cet appareil, pas envoyé au compte
+  if (Object.keys(changes).some((k) => k !== 'hideBalance')) markPrefsChanged();
   listeners.forEach((l) => l());
 }
 

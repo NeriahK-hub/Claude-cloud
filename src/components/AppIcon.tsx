@@ -1,5 +1,6 @@
 import React from 'react';
 import { useCustomIcons } from '../lib/customIcons';
+import { useRemoteConfig } from '../lib/remoteConfig';
 import {
   Utensils, ShoppingCart, Bus, Fuel, Receipt, House, Zap, Droplet, Smartphone, Wifi, Tv, Pill,
   Stethoscope, GraduationCap, BookOpen, ShoppingBag, Shirt, PartyPopper, Gift, Users, Briefcase,
@@ -7,7 +8,7 @@ import {
   ArrowDownToLine, CircleHelp, CupSoda, Car, HeartPulse, School, Laptop, Headphones, Beer, Tag,
   Sparkles, CircleCheck, Landmark, CreditCard, PiggyBank, Coins, Store, PawPrint, Church,
   Scissors, Dumbbell, Plane, Gamepad2, Baby, Heart, Coffee, Music, Target, ArrowLeftRight, SlidersHorizontal,
-  Layers, LucideIcon,
+  Layers, Repeat, CalendarDays, Sofa, LucideIcon,
 } from 'lucide-react';
 
 // Table de correspondance explicite : nom (texte sauvegardé) -> icône lucide
@@ -18,6 +19,7 @@ export const ICONS: Record<string, LucideIcon> = {
   ArrowDownToLine, CircleHelp, CupSoda, Car, HeartPulse, School, Laptop, Headphones, Beer, Tag,
   Sparkles, CircleCheck, Landmark, CreditCard, PiggyBank, Coins, Store, PawPrint, Church,
   Scissors, Dumbbell, Plane, Gamepad2, Baby, Heart, Coffee, Music, Target, ArrowLeftRight, SlidersHorizontal,
+  Repeat, CalendarDays, Sofa,
 };
 
 // Icônes proposées dans les grilles de choix
@@ -36,7 +38,10 @@ export const AppIcon: React.FC<{ name: string; className?: string; style?: React
   className = 'w-5 h-5',
   style,
 }) => {
-  const custom = useCustomIcons().find((i) => i.id === name);
+  // Icône perso, ou icône proposée à tous depuis l'espace admin
+  const mine = useCustomIcons();
+  const global = useRemoteConfig().icons;
+  const custom = mine.find((i) => i.id === name) ?? global.find((i) => i.id === name);
   if (custom) {
     // Icône SVG de l'utilisateur : image (couleurs d'origine) ou masque coloré
     // Les logos en couleur (Orange Money, Airtel…) ont leur propre fond et des marges :
@@ -83,7 +88,7 @@ export const WalletChipIcon: React.FC<{ wallet: { icon: string; image?: string; 
   wallet ? (
     <IconBadge icon={wallet.icon} image={wallet.image} color={wallet.color} size="xs" />
   ) : (
-    <span className="w-6 h-6 shrink-0 rounded-full bg-[#D8FB52] flex items-center justify-center">
+    <span className="w-6 h-6 shrink-0 rounded-full bg-accent flex items-center justify-center">
       <Layers className="w-3.5 h-3.5 text-slate-900" />
     </span>
   );

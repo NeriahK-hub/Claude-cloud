@@ -25,7 +25,7 @@ export const CurrencyPicker: React.FC<CurrencyPickerProps> = ({ value, onChange,
       key={key}
       type="button"
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left cursor-pointer transition ${selected ? 'bg-lime-50' : 'hover:bg-slate-50'}`}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left cursor-pointer transition ${selected ? 'bg-accent/15' : 'hover:bg-slate-50'}`}
     >
       <span className="w-7 text-xl text-center">{left}</span>
       <span className="flex-1 min-w-0">
@@ -33,7 +33,7 @@ export const CurrencyPicker: React.FC<CurrencyPickerProps> = ({ value, onChange,
         {sub && <span className="text-xs text-slate-400 ml-2">{sub}</span>}
       </span>
       {selected && (
-        <span className="w-5 h-5 rounded-full bg-[#D8FB52] flex items-center justify-center">
+        <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center">
           <Check className="w-3 h-3 stroke-[3]" />
         </span>
       )}
@@ -49,7 +49,7 @@ export const CurrencyPicker: React.FC<CurrencyPickerProps> = ({ value, onChange,
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Rechercher une devise ou un pays"
-            className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
+            className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
       )}

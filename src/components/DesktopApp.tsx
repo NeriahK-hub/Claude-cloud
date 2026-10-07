@@ -1,16 +1,30 @@
-import React, { Suspense } from 'react';
-import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon, PieChart, HandCoins } from 'lucide-react';
+import React, { Suspense, useEffect } from 'react';
+import { HealthCard } from './HealthCard';
+import { BadgesCard } from './BadgesCard';
+import { ReviewCards } from './ReviewCards';
+import { FestiveCard, FestiveLayer } from './Festive';
+import { useFestive } from '../lib/festive';
+import { CoachTour, GOAL_TIPS, HOME_TIPS, REPORT_TIPS, SIMPLE_TIPS, WALLET_TIPS } from './CoachTour';
+import { NetworkCloud } from './NetworkCloud';
+import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon, PieChart, HandCoins, Target, CalendarClock } from 'lucide-react';
 import { SharedProps } from './appProps';
 import { WalletsView, HomeWalletCard } from './WalletsView';
 import { isShared } from './Members';
 import { countsInStats, formatMoney, toMain, walletBalance } from '../lib/money';
 import { IconBadge, WalletChipIcon } from './AppIcon';
-import { ACTIONS, HomeAction } from './BalanceSection';
+import { BalanceLabel, HomeAction, useHomeActions } from './BalanceSection';
+import { featureOn, useRemoteConfig } from '../lib/remoteConfig';
+import { MatrixSwap } from './MatrixSwap';
+import { useDisplayPrefs } from '../lib/display';
 import { Page } from './BottomNav';
 import { TransactionItem } from './TransactionItem';
 import { MonthReportCard } from './MonthReportCard';
+import { AdBanner } from './AdBanner';
 import { inThisMonth } from '../lib/periods';
-import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView } from './pages';
+import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView, PlacesView, UpcomingView } from './pages';
+import { DueCard } from './DueCard';
+import { RateCard } from './RateCard';
+import { SimpleMonth } from './SimpleHome';
 
 // Interface ORDINATEUR : menu à gauche, contenu en grille à droite
 type DesktopAppProps = SharedProps;
@@ -20,6 +34,8 @@ const MENU: { id: Page; label: string; icon: React.ElementType }[] = [
   { id: 'history', label: 'Historique', icon: History },
   { id: 'statistic', label: 'Statistiques', icon: BarChart2 },
   { id: 'budgets', label: 'Budgets', icon: PieChart },
+  { id: 'goals', label: 'Objectifs', icon: Target },
+  { id: 'upcoming', label: 'À venir', icon: CalendarClock },
   { id: 'debts', label: 'Dettes et prêts', icon: HandCoins },
   { id: 'ristourne', label: 'Ristourne', icon: Users },
   { id: 'categories', label: 'Catégories', icon: Tags },
@@ -35,10 +51,21 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
     onSelectTransaction, categories, onAddCategory, onDeleteCategory,
   } = p;
   const main = settings.mainCurrency;
+  const { hideBalance, homeWalletCard: showWalletCard, simpleMode } = useDisplayPrefs();
+  const festive = useFestive(); // design des fêtes (espace admin)
+  useEffect(() => {
+    if (festive) document.documentElement.dataset.festive = festive;
+    else delete document.documentElement.dataset.festive;
+  }, [festive]); // carte du portefeuille : désactivée par défaut
   const now = new Date();
   const thisMonth = transactions.filter((t) => countsInStats(t) && inThisMonth(t.createdAt, now));
   const spent = thisMonth.filter((t) => t.amount < 0).reduce((s, t) => s - toMain(t.amount, t.currency, settings), 0);
   const earned = thisMonth.filter((t) => t.amount > 0).reduce((s, t) => s + toMain(t.amount, t.currency, settings), 0);
+  const remote = useRemoteConfig();
+  const actions = useHomeActions();
+  // Menu sans les fonctionnalités désactivées (espace admin)
+  const OFF: Partial<Record<Page, boolean>> = { debts: !featureOn(remote, 'debts'), budgets: !featureOn(remote, 'budgets'), ristourne: !featureOn(remote, 'ristournes') };
+  const menu = MENU.filter((m) => !OFF[m.id]);
   const pageTitle = MENU.find((m) => m.id === page)?.label ?? '';
 
   return (
@@ -51,8 +78,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
         </div>
 
         <nav className="flex flex-col gap-1">
-          {MENU.map(({ id, label, icon: Icon }) => {
-            const active = page === id;
+          {menu.map(({ id, label, icon: Icon }) => {
+            const active = page === id || (id === 'history' && page === 'transactions');
             return (
               <button
                 key={id}
@@ -70,7 +97,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
 
         <button
           onClick={onAddExpense}
-          className="mt-auto w-full py-3 rounded-2xl bg-[#D8FB52] hover:bg-[#cbed3b] font-bold text-sm flex items-center justify-center gap-2 cursor-pointer"
+          className="mt-auto w-full py-3 rounded-2xl bg-accent hover:bg-accent-hover font-bold text-sm flex items-center justify-center gap-2 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           Ajouter une transaction
@@ -80,6 +107,13 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
       {/* Contenu */}
       <main className="flex-1 min-w-0 px-8 py-6">
         <Suspense fallback={null}>
+        {page === 'home' && festive && <FestiveLayer kind={festive} />}
+        {/* Bulles d'aide des premières fois (une seule fois chacune) */}
+        {page === 'home' && <CoachTour key={simpleMode ? 'simple' : 'full'} steps={simpleMode ? SIMPLE_TIPS : HOME_TIPS} />}
+        {page === 'statistic' && <CoachTour key="report" steps={REPORT_TIPS} />}
+        {page === 'wallets' && <CoachTour key="wallets" steps={WALLET_TIPS} />}
+        {page === 'goals' && <CoachTour key="goals" steps={GOAL_TIPS} />}
+
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-extrabold tracking-tight">{pageTitle}</h1>
           <div className="flex items-center gap-3">
@@ -90,6 +124,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
               <WalletChipIcon wallet={p.activeWallet} />
               {activeWalletLabel}
             </button>
+            <NetworkCloud cloud={p.cloud} onOpenAccount={() => onNavigate('profile')} />
             <button
               onClick={onOpenNotifications}
               aria-label="Notifications"
@@ -97,7 +132,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#D8FB52] text-[10px] font-bold flex items-center justify-center border-2 border-white">
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-accent text-[11px] font-bold flex items-center justify-center border-2 border-white">
                   {unreadCount}
                 </span>
               )}
@@ -110,23 +145,23 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             {/* Colonne gauche (2/3) */}
             <div className="col-span-2 space-y-6">
               <div className="bg-white rounded-3xl p-6 border border-slate-100">
-                <span className="text-xs font-semibold text-slate-400">Ton solde</span>
+                <BalanceLabel className="text-slate-400 font-semibold" />
                 <div className="text-5xl font-extrabold tracking-tight tabular-nums mt-1 mb-6">
-                  {formatMoney(balance.main, balance.mainCurrency)}
+                  <MatrixSwap hidden={hideBalance} text={formatMoney(balance.main, balance.mainCurrency)} />
                 </div>
                 {balance.second !== null && balance.secondCurrency && (
                   <div className="text-base font-semibold text-slate-400 tabular-nums -mt-4 mb-6">
-                    {formatMoney(balance.second, balance.secondCurrency)}
+                    <MatrixSwap hidden={hideBalance} text={formatMoney(balance.second, balance.secondCurrency)} />
                   </div>
                 )}
-                <div className="grid grid-cols-4 gap-3">
-                  {ACTIONS.map(({ id, label, icon: Icon, highlight }) => (
+                <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${actions.length}, minmax(0, 1fr))` }}>
+                  {actions.map(({ id, label, icon: Icon, highlight }) => (
                     <button
                       key={id}
                       onClick={() => onQuickAction(id)}
                       className={`py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition cursor-pointer ${
                         highlight
-                          ? 'bg-[#D8FB52] hover:bg-[#cbed3b]'
+                          ? 'bg-accent hover:bg-accent-hover'
                           : 'bg-slate-50 hover:bg-slate-100 border border-slate-200'
                       }`}
                     >
@@ -136,17 +171,40 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                   ))}
                 </div>
               </div>
-              {p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
+              {showWalletCard && p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               )}
 
-              <MonthReportCard
-                allTransactions={allTransactions}
-                wallets={wallets}
-                activeWallet={p.activeWallet}
-                settings={settings}
-                onOpenReports={() => onNavigate('statistic')}
-              />
+              {festive && <FestiveCard kind={festive} onNavigate={onNavigate} />}
+              <div className="empty:hidden">
+                <ReviewCards transactions={p.transactions} settings={settings} categories={categories} />
+              </div>
+              <div className="empty:hidden">
+                <RateCard settings={settings} wallets={wallets} onChangeSettings={p.onChangeSettings} />
+              </div>
+              <div className="empty:hidden">
+                <DueCard recurrings={p.recurrings} categories={categories} onConfirm={p.onConfirmRecurring} onSkip={p.onSkipRecurring} onOpen={() => onNavigate('upcoming')} />
+              </div>
+              <AdBanner />
+              {/* Mode simple : un résumé du mois à la place des cartes santé, badges et rapport */}
+              {simpleMode ? (
+                <SimpleMonth transactions={p.transactions} settings={settings} hidden={hideBalance} />
+              ) : (
+                <>
+                  <HealthCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} onSelectTransaction={onSelectTransaction} />
+                  <BadgesCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} />
+
+                  <MonthReportCard
+                    allTransactions={allTransactions}
+                    wallets={wallets}
+                    activeWallet={p.activeWallet}
+                    settings={settings}
+                    onOpenReports={() => onNavigate('statistic')}
+                    onOpenGoals={() => onNavigate('goals')}
+                recurrings={p.recurrings}
+                  />
+                </>
+              )}
 
               <div className="bg-white rounded-3xl p-6 border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
@@ -198,16 +256,54 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
           </div>
         )}
 
-        {/* Les autres pages réutilisent les écrans mobiles, centrés */}
-        {page !== 'home' && (
-          <div className="max-w-2xl bg-slate-50 rounded-3xl border border-slate-100 overflow-hidden">
-            {page === 'history' && (
+        {/* Portefeuilles : vraie mise en page ordinateur (grille, détail en deux colonnes) */}
+        {page === 'wallets' && (
+          <WalletsView
+            wallets={wallets}
+            transactions={allTransactions}
+            defaultCurrency={main}
+            onAdd={p.onAddWallet}
+            onUpdate={p.onUpdateWallet}
+            onDelete={p.onDeleteWallet}
+            onSelectTransaction={p.onSelectTransaction}
+            onTransfer={p.onTransfer}
+            settings={settings}
+            onAdjustBalance={p.onAdjustBalance}
+            onReorder={p.onReorderWallets}
+            cloud={p.cloud}
+            onJoin={p.onOpenJoin}
+            onRemoveDuplicates={p.onRemoveDuplicates}
+          />
+        )}
+
+        {page === 'goals' && (
+          <WalletsView
+            goalsOnly
+            onBack={() => onNavigate('home')}
+            wallets={wallets}
+            transactions={allTransactions}
+            defaultCurrency={main}
+            onAdd={p.onAddWallet}
+            onUpdate={p.onUpdateWallet}
+            onDelete={p.onDeleteWallet}
+            onSelectTransaction={p.onSelectTransaction}
+            onTransfer={p.onTransfer}
+            settings={settings}
+            onAdjustBalance={p.onAdjustBalance}
+            onReorder={p.onReorderWallets}
+            cloud={p.cloud}
+          />
+        )}
+
+        {/* Les autres pages : chaque écran a sa mise en page ordinateur (useIsDesktop) */}
+        {page !== 'home' && page !== 'wallets' && page !== 'goals' && (
+          <div className="desk-page">
+            {(page === 'history' || page === 'transactions') && (
               <TransactionHistoryView
                 transactions={allTransactions}
                 wallets={wallets}
                 initialWalletId={p.activeWallet?.id ?? 'all'}
                 settings={settings}
-                onBack={() => onNavigate('home')}
                 onSelectTransaction={onSelectTransaction}
               />
             )}
@@ -217,7 +313,26 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 settings={settings}
                 onBack={() => onNavigate('home')}
                 onAdd={p.onAddDebt}
+                onEdit={p.onEditDebts}
+                onDelete={p.onDeleteDebts}
+                shared={p.sharedDebts}
+                onAddInterest={p.onAddDebtInterest}
+                onRemoveInterest={p.onRemoveDebtInterest}
                 onSelectTransaction={onSelectTransaction}
+              />
+            )}
+            {page === 'upcoming' && (
+              <UpcomingView
+                recurrings={p.recurrings}
+                wallets={wallets}
+                categories={categories}
+                settings={settings}
+                onAdd={p.onAddRecurring}
+                onUpdate={p.onUpdateRecurring}
+                onDelete={p.onDeleteRecurring}
+                onConfirm={p.onConfirmRecurring}
+                onSkip={p.onSkipRecurring}
+                onBack={() => onNavigate('home')}
               />
             )}
             {page === 'budgets' && (
@@ -234,6 +349,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
               />
             )}
             {page === 'ristourne' && <RistourneView
+                cloud={p.cloud}
                 ristournes={p.ristournes}
                 wallets={wallets.filter((w) => !w.archived)}
                 defaultCurrency={settings.mainCurrency}
@@ -243,7 +359,9 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 onDelete={p.onDeleteRistourne}
                 onPay={p.onPayRistourne}
                 onUnpay={p.onUnpayRistourne}
+                onConfirm={p.onConfirmRistournePayment}
                 onReceive={p.onReceiveRistourne}
+                onJoin={p.onOpenJoinRistourne}
               />}
             {page === 'categories' && (
               <CategoriesView
@@ -264,27 +382,16 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 settings={settings}
                 onSelectTransaction={onSelectTransaction}
                 onOpenAccountPicker={onOpenAccountPicker}
-              />
-            )}
-            {page === 'wallets' && (
-              <WalletsView
-                wallets={wallets}
-                transactions={allTransactions}
-                defaultCurrency={main}
-                onAdd={p.onAddWallet}
-                onUpdate={p.onUpdateWallet}
-                onDelete={p.onDeleteWallet}
-                onSelectTransaction={p.onSelectTransaction}
-                onTransfer={p.onTransfer}
-                settings={settings}
-                onAdjustBalance={p.onAdjustBalance}
-                onReorder={p.onReorderWallets}
+                budgets={p.budgets}
+                recurrings={p.recurrings}
+                onNavigate={onNavigate}
               />
             )}
             {page === 'settings' && (
               <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
             )}
-            {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} />}
+            {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} onOpenTutorial={p.onOpenTutorial} />}
+        {page === 'places' && <PlacesView onBack={() => onNavigate('profile')} />}
           </div>
         )}
         </Suspense>

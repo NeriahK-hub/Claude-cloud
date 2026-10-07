@@ -1,20 +1,44 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone, HandCoins, PieChart } from 'lucide-react';
+import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone, HandCoins, PieChart, Share, MapPin, GraduationCap, CalendarClock, MessageSquareHeart, MessageCircleQuestion, Download } from 'lucide-react';
+import { useInstallWay } from '../lib/install';
+import { InstallGuide } from './InstallGuide';
+import { resetCoach } from './CoachTour';
+import { FeedbackSheet } from './FeedbackSheet';
 import { Page } from './BottomNav';
 import { initialsOf, setProfileName, useProfile } from '../lib/profile';
 import type { Cloud } from '../lib/sync/useCloud';
 import { AccountCard } from './Account';
+import { shareApp } from '../lib/invite';
+import { useFeature } from '../lib/remoteConfig';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 
 interface ProfileViewProps {
   onNavigate: (page: Page) => void;
   cloud: Cloud;
+  onOpenTutorial: () => void;
 }
 
 // Profil : ton nom (utilisé dans l'app) et les raccourcis vers les réglages
-export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) => {
+export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud, onOpenTutorial }) => {
+  const installWay = useInstallWay();
+  const [showInstall, setShowInstall] = useState(false);
+  const desktop = useIsDesktop(); // ordinateur : pas de retour ni de titre en double, contenu sur plusieurs colonnes
   const { name } = useProfile();
   const [editing, setEditing] = useState(!name);
   const [draft, setDraft] = useState(name);
+  const debtsOn = useFeature('debts');
+  const budgetsOn = useFeature('budgets');
+  const [shared, setShared] = useState<'copied' | 'failed' | null>(null);
+  const [tipsReset, setTipsReset] = useState(false);
+  const [feedback, setFeedback] = useState(false);
+
+  const share = async () => {
+    const r = await shareApp();
+    if (r === 'copied' || r === 'failed') {
+      setShared(r);
+      setTimeout(() => setShared(null), 2500);
+    }
+  };
 
   const save = () => {
     setProfileName(draft.trim());
@@ -38,8 +62,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) =
   );
 
   return (
-    <div className="w-full px-5 pt-3 pb-28 animate-screen">
-      <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-5">Profil</h1>
+    <div className={desktop ? 'max-w-5xl animate-screen grid grid-cols-2 gap-4 items-start' : 'w-full px-5 pt-3 pb-28 animate-screen'}>
+      {!desktop && <h1 className="page-head text-xl font-bold text-slate-900 tracking-tight mb-5">Profil</h1>}
+      <div>
 
       <div className="bg-white rounded-3xl p-5 border border-slate-100 flex items-center gap-4 mb-4">
         <div className="w-16 h-16 rounded-full bg-[#16382F] text-white flex items-center justify-center font-extrabold text-xl shrink-0">
@@ -53,10 +78,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) =
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && save()}
                 placeholder="Ton prénom et nom"
-                autoFocus
-                className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
+                // Clavier seulement après avoir touché le crayon (pas à chaque ouverture du Profil quand le nom est vide)
+                autoFocus={!!name}
+                className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent"
               />
-              <button onClick={save} aria-label="Enregistrer le nom" className="w-10 h-10 rounded-xl bg-[#D8FB52] text-slate-900 flex items-center justify-center cursor-pointer">
+              <button onClick={save} aria-label="Enregistrer le nom" className="w-10 h-10 rounded-xl bg-accent text-slate-900 flex items-center justify-center cursor-pointer">
                 <Check className="w-4 h-4" />
               </button>
             </div>
@@ -75,17 +101,89 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) =
       </div>
 
       <AccountCard cloud={cloud} />
+      </div>
+      <div>
 
       <div className="bg-white rounded-3xl p-2 border border-slate-100">
-        {link('Paramètres', 'Apparence, devises, taux, import / export', SettingsIcon, 'settings')}
-        {link('Catégories', 'Créer, modifier, ranger en sous-catégories', Tags, 'categories')}
+        {link('Paramètres', 'Apparence, devises, import / export', SettingsIcon, 'settings')}
+        {link('Catégories', 'Créer, modifier, ranger', Tags, 'categories')}
         {link('Portefeuilles', 'Ajouter, réorganiser, partager', Wallet, 'wallets')}
         {link('Historique', 'Toutes les transactions, par période', History, 'history')}
-        {link('Dettes et prêts', "Qui te doit, à qui tu dois, ce qu'il reste", HandCoins, 'debts')}
-        {link('Budgets', 'Limites par mois et par catégorie', PieChart, 'budgets')}
+        {debtsOn && link('Dettes et prêts', 'Qui te doit, à qui tu dois', HandCoins, 'debts')}
+        {link('Banques et distributeurs', 'Trouver une banque ou un ATM près de toi', MapPin, 'places')}
+        {budgetsOn && link('Budgets', 'Limites par mois et par catégorie', PieChart, 'budgets')}
+        {link('À venir', 'Factures et opérations qui reviennent', CalendarClock, 'upcoming')}
       </div>
 
-      <p className="text-center text-[11px] text-slate-400 mt-6">Wallo</p>
+      <div className="bg-white rounded-3xl p-2 border border-slate-100 mt-4">
+        <button onClick={share} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
+          <span className="w-9 h-9 rounded-full bg-accent flex items-center justify-center shrink-0">
+            <Share className="w-4 h-4 text-slate-900" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-slate-900">Partager Wallo</span>
+            <span className="block text-xs text-slate-500 truncate">
+              {shared === 'copied' ? 'Message copié, colle-le où tu veux' : shared === 'failed' ? 'wallo-b13b0.web.app' : 'Envoie l\'app à tes proches'}
+            </span>
+          </span>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </button>
+        {/* Pas encore installé : comment mettre Wallo sur l'écran d'accueil */}
+        {installWay !== 'installed' && (
+          <button onClick={() => setShowInstall(true)} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
+            <span className="w-9 h-9 rounded-full bg-accent/30 flex items-center justify-center shrink-0">
+              <Download className="w-4 h-4 text-slate-800" />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-semibold text-slate-900">Installer Wallo</span>
+              <span className="block text-xs text-slate-500 truncate">Sur ton écran d'accueil, comme une vraie app</span>
+            </span>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </button>
+        )}
+        {showInstall && <InstallGuide onClose={() => setShowInstall(false)} />}
+        <button onClick={onOpenTutorial} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
+          <span className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+            <GraduationCap className="w-4 h-4 text-slate-700" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-slate-900">Comment ça marche</span>
+            <span className="block text-xs text-slate-500 truncate">Revoir le tutoriel de Wallo</span>
+          </span>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </button>
+        {/* Bulles d'aide : on les remontre dès qu'on revient à l'accueil */}
+        <button
+          onClick={() => {
+            resetCoach();
+            setTipsReset(true);
+          }}
+          className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left"
+        >
+          <span className="w-9 h-9 rounded-full bg-sky-500/10 flex items-center justify-center shrink-0">
+            <MessageCircleQuestion className="w-4 h-4 text-sky-500" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-slate-900">Revoir les astuces</span>
+            <span className="block text-xs text-slate-500 truncate">{tipsReset ? 'C\u2019est fait\u00a0: retourne à l\u2019accueil' : 'Les bulles qui expliquent chaque écran'}</span>
+          </span>
+          {tipsReset ? <Check className="w-4 h-4 text-emerald-500" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+        </button>
+        <button onClick={() => setFeedback(true)} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
+          <span className="w-9 h-9 rounded-full bg-rose-500/10 flex items-center justify-center shrink-0">
+            <MessageSquareHeart className="w-4 h-4 text-rose-500" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-slate-900">Donner mon avis</span>
+            <span className="block text-xs text-slate-500 truncate">Une idée, un problème ? Dis-le nous</span>
+          </span>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </button>
+      </div>
+      {feedback && <FeedbackSheet onClose={() => setFeedback(false)} />}
+
+      <p className="text-center text-xs text-slate-400 mt-6">Wallo</p>
+      </div>
     </div>
   );
 };

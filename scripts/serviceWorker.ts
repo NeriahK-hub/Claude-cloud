@@ -80,6 +80,39 @@ async function file(request) {
   }
 }
 
+// Notification push envoyée par Supabase (même app fermée) : { title, body, tag, url }
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Wallo', {
+      body: data.body || '',
+      tag: data.tag,
+      icon: '/icons/icon-192.png',
+      data: { url: data.url || '/' },
+    })
+  );
+});
+
+// Toucher une notification : revenir sur Wallo s'il est ouvert, sinon l'ouvrir
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const open = list.find((c) => new URL(c.url).origin === self.location.origin);
+      if (!open) return self.clients.openWindow(url);
+      // App déjà ouverte : on lui passe l'adresse (ex. « ?goal=…&deposit=10 » ouvre l'ajout d'argent)
+      open.postMessage({ type: 'open-url', url });
+      return open.focus();
+    })
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);

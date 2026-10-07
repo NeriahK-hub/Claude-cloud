@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace, Trash2 } from 'lucide-react';
+import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace, Trash2, ChevronLeft, ClipboardPaste } from 'lucide-react';
 import type { Cloud } from '../lib/sync/useCloud';
+import { useFeature } from '../lib/remoteConfig';
 
 // Messages d'erreur de Supabase, en clair
-function frenchError(msg: string): string {
+export function frenchError(msg: string): string {
+  if (/(join_wallet|create_wallet_invite|wallet_invite_check|revoke_wallet_invites)/.test(msg) && /(find|exist|schema cache)/i.test(msg))
+    return "L'invitation par lien n'est pas encore activée sur le serveur.";
+  if (/ristourne/.test(msg) && /(find|exist|schema cache)/i.test(msg))
+    return "L'invitation à une ristourne n'est pas encore activée sur le serveur (migration 20261006000000_ristourne_custom_invites.sql à exécuter dans Supabase).";
+  if (/schema cache|Could not find the function|does not exist/i.test(msg)) return "Le serveur n'est pas encore à jour : une migration reste à exécuter dans Supabase.";
   if (/expired|invalid/i.test(msg) && /token|otp|code/i.test(msg)) return 'Code incorrect ou expiré. Vérifie-le ou demande un nouveau code.';
   if (/after \d+ seconds|rate limit|too many/i.test(msg)) return 'Trop de demandes : attends une minute avant de redemander un code.';
   if (/invalid.*email|email.*invalid/i.test(msg)) return "Cette adresse e-mail n'est pas valide.";
@@ -43,6 +49,7 @@ export const SyncIndicator: React.FC<{ cloud: Cloud; onClick?: () => void }> = (
 // Carte du profil : se connecter / état de la synchro / se déconnecter
 export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
   const [login, setLogin] = useState(false);
+  const accountsOn = useFeature('accounts');
   const [confirmOut, setConfirmOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [, force] = useState(0);
@@ -62,6 +69,18 @@ export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
     );
   }
 
+  // Connexion désactivée depuis l'espace admin (les personnes déjà connectées restent connectées)
+  if (!cloud.user && !accountsOn) {
+    return (
+      <div className="bg-white rounded-3xl p-4 border border-slate-100 mb-4 flex items-center gap-3">
+        <span className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+          <CloudOff className="w-5 h-5 text-slate-500" />
+        </span>
+        <p className="text-xs text-slate-500">La connexion est indisponible pour le moment. Tes données restent sur cet appareil.</p>
+      </div>
+    );
+  }
+
   if (!cloud.user) {
     return (
       <>
@@ -69,7 +88,7 @@ export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
           onClick={() => setLogin(true)}
           className="w-full text-left bg-white rounded-3xl p-4 border border-slate-100 mb-4 flex items-center gap-3 cursor-pointer hover:bg-slate-50"
         >
-          <span className="w-10 h-10 rounded-full bg-[#D8FB52] flex items-center justify-center shrink-0">
+          <span className="w-10 h-10 rounded-full bg-accent flex items-center justify-center shrink-0">
             <CloudIcon className="w-5 h-5 text-slate-900" />
           </span>
           <span className="flex-1 min-w-0">
@@ -202,7 +221,7 @@ const Sheet: React.FC<{ title: string; onClose?: () => void; children: React.Rea
       className="w-full sm:max-w-[420px] max-h-[92dvh] overflow-y-auto bg-white rounded-t-[28px] sm:rounded-[28px] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] animate-slide-up"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between mb-2">
+      <div className="sheet-head flex items-center justify-between mb-2">
         <h2 className="text-base font-bold">{title}</h2>
         {onClose && (
           <button onClick={onClose} aria-label="Fermer" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
@@ -214,6 +233,34 @@ const Sheet: React.FC<{ title: string; onClose?: () => void; children: React.Rea
     </div>
   </div>
 );
+
+// Page de connexion en plein écran (sur téléphone, une fenêtre du bas était cachée par le clavier)
+const FullPage: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      className="fixed inset-0 z-50 bg-slate-50 overflow-y-auto animate-screen pt-[env(safe-area-inset-top)] pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+    >
+      <div className="px-5 pt-3">
+        <button onClick={onClose} aria-label="Retour" className="w-11 h-11 rounded-full bg-white border border-slate-100 flex items-center justify-center cursor-pointer">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+      </div>
+      <div className="w-full max-w-sm mx-auto px-5 pt-6">
+        <img src="/icons/wallo.svg" alt="" className="w-16 h-16 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold tracking-tight text-center mb-2">{title}</h2>
+        {children}
+      </div>
+    </div>
+  );
+};
 
 // Connexion sans mot de passe : code à 6 chiffres par e-mail, ou compte Google
 export const LoginSheet: React.FC<{ cloud: Cloud; onClose: () => void }> = ({ cloud, onClose }) => {
@@ -254,14 +301,14 @@ export const LoginSheet: React.FC<{ cloud: Cloud; onClose: () => void }> = ({ cl
       setWait(60);
     });
 
-  const field = 'w-full px-4 py-3 rounded-2xl bg-slate-100 text-base outline-none focus:ring-2 focus:ring-[#D8FB52]';
+  const field = 'w-full px-4 py-3 rounded-2xl bg-slate-100 text-base outline-none focus:ring-2 focus:ring-accent';
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   return (
-    <Sheet title={step === 'email' ? 'Se connecter à Wallo' : 'Entre le code reçu'} onClose={onClose}>
+    <FullPage title={step === 'email' ? 'Se connecter à Wallo' : 'Entre le code reçu'} onClose={onClose}>
       {step === 'email' ? (
         <>
-          <p className="text-sm text-slate-500 mb-4">Pas de mot de passe : on t'envoie un code par e-mail. Si tu n'as pas encore de compte, il est créé.</p>
+          <p className="text-sm text-slate-500 text-center mb-6">Pas de mot de passe : on t'envoie un code par e-mail. Si tu n'as pas encore de compte, il est créé.</p>
           <input
             type="email"
             inputMode="email"
@@ -271,12 +318,11 @@ export const LoginSheet: React.FC<{ cloud: Cloud; onClose: () => void }> = ({ cl
             onKeyDown={(e) => e.key === 'Enter' && validEmail && send()}
             placeholder="ton.adresse@exemple.com"
             className={field}
-            autoFocus
           />
           <button
             onClick={send}
             disabled={!validEmail || busy}
-            className="w-full mt-3 py-3.5 rounded-2xl bg-[#D8FB52] text-slate-900 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+            className="w-full mt-3 py-3.5 rounded-2xl bg-accent text-slate-900 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
           >
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />} Recevoir le code
           </button>
@@ -293,8 +339,8 @@ export const LoginSheet: React.FC<{ cloud: Cloud; onClose: () => void }> = ({ cl
         </>
       ) : (
         <>
-          <p className="text-sm text-slate-500 mb-4">
-            Code envoyé à <b className="text-slate-800">{email.trim()}</b>. Tape les chiffres reçus, ou touche le lien dans l'e-mail. Pense à regarder les spams.
+          <p className="text-sm text-slate-500 text-center mb-6">
+            Code envoyé à <b className="text-slate-800">{email.trim()}</b>. Copie les chiffres de l'e-mail et reviens ici. Pense à regarder les spams.
           </p>
           <input
             inputMode="numeric"
@@ -306,10 +352,25 @@ export const LoginSheet: React.FC<{ cloud: Cloud; onClose: () => void }> = ({ cl
             className={`${field} text-center text-2xl font-bold tracking-[0.4em] tabular-nums`}
             autoFocus
           />
+          {/* Coller le code copié dans l'e-mail (et valider tout de suite) */}
+          {'clipboard' in navigator && 'readText' in navigator.clipboard && (
+            <button
+              onClick={async () => {
+                const digits = (await navigator.clipboard.readText().catch(() => '')).replace(/\D/g, '').slice(0, 10);
+                if (digits.length < 6) return setError('Aucun code copié. Copie les chiffres dans l’e-mail, puis réessaie.');
+                setCode(digits);
+                run(() => cloud.verifyCode(email, digits));
+              }}
+              disabled={busy}
+              className="w-full mt-3 py-3 rounded-2xl bg-slate-100 text-slate-900 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+            >
+              <ClipboardPaste className="w-4 h-4" /> Coller le code
+            </button>
+          )}
           <button
             onClick={() => run(() => cloud.verifyCode(email, code))}
             disabled={code.length < 6 || busy}
-            className="w-full mt-3 py-3.5 rounded-2xl bg-[#D8FB52] text-slate-900 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+            className="w-full mt-3 py-3.5 rounded-2xl bg-accent text-slate-900 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
           >
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Valider
           </button>
@@ -323,8 +384,8 @@ export const LoginSheet: React.FC<{ cloud: Cloud; onClose: () => void }> = ({ cl
           </div>
         </>
       )}
-      {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
-    </Sheet>
+      {error && <p className="text-sm text-red-600 text-center mt-4">{error}</p>}
+    </FullPage>
   );
 };
 

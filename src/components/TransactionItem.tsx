@@ -1,16 +1,29 @@
 import React from 'react';
 import { Transaction } from '../types';
 import { IconBadge } from './AppIcon';
-import { formatMoney, timeLabel } from '../lib/money';
+import { formatMoney } from '../lib/money';
 
 interface TransactionItemProps {
   transaction: Transaction;
   onClick: (tx: Transaction) => void;
+  showDate?: boolean; // false dans les listes déjà groupées par jour (le jour est dans le titre du groupe)
+}
+
+// Date courte sous le titre : « Aujourd'hui », « Hier », « 28 sept. » (l'heure n'est plus affichée)
+function shortDay(iso: string): string {
+  const d = new Date(iso);
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((start(new Date()) - start(d)) / 86400000);
+  if (diff === 0) return "Aujourd'hui";
+  if (diff === 1) return 'Hier';
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
 }
 
 export const TransactionItem: React.FC<TransactionItemProps> = ({
   transaction,
   onClick,
+  showDate = true,
 }) => {
   const isPositive = transaction.amount > 0;
   const formattedAmount = `${isPositive ? '+' : '−'}${formatMoney(Math.abs(transaction.amount), transaction.currency)}`;
@@ -36,9 +49,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
           <span className="text-sm font-bold text-slate-900 tracking-tight block truncate">
             {transaction.title}
           </span>
-          <span className="text-xs text-slate-400 font-medium block mt-0.5">
-            {timeLabel(transaction.createdAt)}
-          </span>
+          {showDate && <span className="text-xs text-slate-400 font-medium block mt-0.5">{shortDay(transaction.createdAt)}</span>}
         </div>
       </div>
 
@@ -46,7 +57,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
       <div className="text-right shrink-0 pl-2">
         <span
           className={`text-sm font-bold tracking-tight block tabular-nums ${
-            isPositive ? 'text-emerald-600' : 'text-slate-900'
+            isPositive ? 'text-emerald-600' : 'text-red-500'
           }`}
         >
           {formattedAmount}
