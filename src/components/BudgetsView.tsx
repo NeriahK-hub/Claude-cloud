@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { takeJump } from '../lib/jumpTo';
 import { BudgetDraft, clearBudgetDraft, peekBudgetDraft } from '../lib/budgetDraft';
 import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, Layers, Pencil, Trash2, PieChart, Delete, CalendarDays, HelpCircle } from 'lucide-react';
 import { Budget, Settings, Transaction } from '../types';
@@ -46,6 +47,15 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   // Arrivée depuis un conseil : la fiche s'ouvre déjà remplie (ou le budget existant de cette catégorie)
   const [draft] = useState(peekBudgetDraft);
   useEffect(() => clearBudgetDraft(), []);
+  // Conseil « … va déborder » : on ouvre ce budget (dans le bon onglet : semaine, mois…)
+  useLayoutEffect(() => {
+    const j = takeJump('budget');
+    const b = j && budgets.find((x) => x.id === j.id);
+    if (b) {
+      setTab(periodOf(b));
+      setViewingId(b.id);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [editing, setEditing] = useState<Budget | 'new' | null>(() => {
     if (!draft || !categories.some((c) => c.id === draft.categoryId)) return null;
     return budgets.find((b) => b.categoryId === draft.categoryId && periodOf(b) === 'month') ?? 'new';

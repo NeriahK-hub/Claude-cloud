@@ -1,6 +1,7 @@
 import { Budget, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
-import { toMain, walletBalance } from './money';
+import { formatMoney, toMain, walletBalance } from './money';
+import { getPrefs } from './display';
 import { budgetStatus, existedIn, budgetRange, periodOf } from './budgets';
 import { DebtEntry } from './debts';
 import { niceBudget } from './budgetDraft';
@@ -14,7 +15,13 @@ import type { HealthTip } from './health';
 // Rien n'est envoyé : tout est calculé sur le téléphone.
 
 const DAY = 86400000;
-const dm = (d: Date) => `${d.getDate() === 1 ? '1er' : d.getDate()} ${['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'][d.getMonth()]}`;
+// « 30 sept. », ou « 30 sept. 2027 » si ce n'est pas cette année
+const dm = (d: Date) =>
+  `${d.getDate() === 1 ? '1er' : d.getDate()} ${['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'][d.getMonth()]}${
+    d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ''
+  }`;
+// Montant dans la devise de l'élément concerné (objectif en $, portefeuille en FC…), sans centimes
+const inCur = (v: number, currency: string) => formatMoney(Math.round(v), currency, { ...getPrefs(), decimals: 'never' });
 const fromYmd = (s: string) => {
   const [y, m, d] = s.split('-').map(Number);
   return new Date(y, m - 1, d);
@@ -53,18 +60,19 @@ export function smartTips(args: {
     const overAt = new Date(st.start.getTime() + (now.getTime() - st.start.getTime()) / st.ratio);
     if (overAt >= st.end) continue;
     const daysLeft = Math.max(1, daysBetween(today, st.end));
-    const left = toMain(st.left, b.currency, settings);
+    const left = st.left; // dans la devise du budget
+    const bm = (v: number) => inCur(v, b.currency);
     tips.push({
       title: `« ${catName(b.categoryId)} » va déborder`,
-      text: `À ce rythme, ton budget « ${catName(b.categoryId)} » sera dépassé vers le ${dm(overAt)}. Il te reste ${money(left)} pour ${daysLeft} jour${daysLeft > 1 ? 's' : ''} : environ ${money(left / daysLeft)} par jour.`,
+      text: `À ce rythme, ton budget « ${catName(b.categoryId)} » sera dépassé vers le ${dm(overAt)}. Il te reste ${bm(left)} pour ${daysLeft} jour${daysLeft > 1 ? 's' : ''} : environ ${bm(left / daysLeft)} par jour.`,
       part: 'forecast',
       why: 'Wallo compare ce que tu as déjà dépensé au temps écoulé. Ralentir maintenant est bien plus facile que rattraper après le dépassement.',
       stats: [
         { label: 'Déjà dépensé', value: `${Math.round(st.ratio * 100)} %`, tone: 'warn' },
         { label: 'Temps écoulé', value: `${Math.round(elapsed * 100)} %`, tone: 'neutral' },
-        { label: 'Par jour pour tenir', value: money(left / daysLeft), tone: 'good' },
+        { label: 'Par jour pour tenir', value: bm(left / daysLeft), tone: 'good' },
       ],
-      action: { label: 'Voir mes budgets', page: 'budgets' },
+      action: { label: 'Voir ce budget', page: 'budgets', jump: { kind: 'budget', id: b.id } },
       weight: 11,
     });
   }
@@ -120,10 +128,10 @@ export function smartTips(args: {
     if (bal >= -0.004) continue;
     tips.push({
       title: `« ${w.name} » est en négatif`,
-      text: `Le portefeuille « ${w.name} » affiche ${money(toMain(bal, w.currency, settings))}. Une entrée oubliée ? Ajoute-la, ou corrige le solde.`,
+      text: `Le portefeuille « ${w.name} » affiche ${inCur(bal, w.currency)}. Une entrée oubliée ? Ajoute-la, ou corrige le solde.`,
       part: 'check',
       why: 'De l’argent liquide ou du Mobile Money ne peut pas descendre sous zéro : un solde négatif veut souvent dire qu’une opération manque, et tous tes chiffres sont faussés.',
-      action: { label: 'Voir mes portefeuilles', page: 'wallets' },
+      action: { label: 'Corriger le solde', page: 'wallets', jump: { kind: 'wallet', id: w.id, adjust: true } },
       weight: 9,
     });
     break; // un seul à la fois : le plus important d'abord
@@ -138,10 +146,10 @@ export function smartTips(args: {
       if (a.walletId === b.walletId && a.amount === b.amount && a.title.trim() === b.title.trim() && Math.abs(at(b) - at(a)) < 60_000) {
         tips.push({
           title: 'Un doublon ?',
-          text: `« ${b.title} » (${money(Math.abs(main(b)))}) est noté deux fois le ${dm(new Date(b.createdAt))}, à la même minute. Si c’est une erreur, supprimes-en un.`,
+          text: `« ${b.title} » (${inCur(Math.abs(b.amount), b.currency)}) est noté deux fois le ${dm(new Date(b.createdAt))}, à la même minute. Si c’est une erreur, supprimes-en un.`,
           part: 'check',
           why: 'Une opération enregistrée deux fois fausse ton solde, ton rapport et ta note.',
-          action: { label: 'Voir mes opérations', page: 'history' },
+          action: { label: 'Voir l’opération', page: 'history', jump: { kind: 'tx', id: b.id } },
           weight: 6,
         });
         break;
@@ -203,10 +211,10 @@ export function smartTips(args: {
     if (weeksLeft <= 0) {
       tips.push({
         title: `« ${w.name} » : date passée`,
-        text: `La date de ton objectif « ${w.name} » est passée, il manque encore ${money(toMain(missing, w.currency, settings))}. Choisis une nouvelle date réaliste pour garder le cap.`,
+        text: `La date de ton objectif « ${w.name} » est passée, il manque encore ${inCur(missing, w.currency)}. Choisis une nouvelle date réaliste pour garder le cap.`,
         part: 'goal',
         why: 'Un objectif avec une date à jour te dit combien mettre de côté chaque semaine.',
-        action: { label: 'Voir mes objectifs', page: 'goals' },
+        action: { label: 'Changer la date', page: 'goals', jump: { kind: 'goal', id: w.id } },
         weight: 5,
       });
       continue;
@@ -215,15 +223,15 @@ export function smartTips(args: {
     if (need > put * 1.2 && weeksLeft < 104) {
       tips.push({
         title: `« ${w.name} » prend du retard`,
-        text: `Pour « ${w.name} » avant le ${dm(end)}, il faut mettre ${money(toMain(need, w.currency, settings))} par semaine. Tu y mets ${money(toMain(put, w.currency, settings))} en moyenne.`,
+        text: `Pour « ${w.name} » avant le ${dm(end)}, il faut mettre ${inCur(need, w.currency)} par semaine. Tu y mets ${inCur(put, w.currency)} en moyenne.`,
         part: 'goal',
         why: 'Wallo compare ce qui manque au temps qui reste. Ajuster maintenant (un peu plus chaque semaine, ou une date plus tard) évite la mauvaise surprise.',
         stats: [
-          { label: 'Il manque', value: money(toMain(missing, w.currency, settings)), tone: 'warn' },
-          { label: 'Par semaine, il faut', value: money(toMain(need, w.currency, settings)), tone: 'neutral' },
-          { label: 'Tu mets en moyenne', value: money(toMain(put, w.currency, settings)), tone: put > 0 ? 'good' : 'bad' },
+          { label: 'Il manque', value: inCur(missing, w.currency), tone: 'warn' },
+          { label: 'Par semaine, il faut', value: inCur(need, w.currency), tone: 'neutral' },
+          { label: 'Tu mets en moyenne', value: inCur(put, w.currency), tone: put > 0 ? 'good' : 'bad' },
         ],
-        action: { label: 'Voir mes objectifs', page: 'goals' },
+        action: { label: `Ajouter ${inCur(Math.ceil(need), w.currency)}`, page: 'goals', jump: { kind: 'goal', id: w.id, deposit: Math.ceil(need) } },
         weight: 7,
       });
     }
@@ -237,20 +245,20 @@ export function smartTips(args: {
     if (d.side === 'payable' && inDays >= 0 && inDays <= 7) {
       tips.push({
         title: inDays === 0 ? 'À rendre aujourd’hui' : 'À rendre bientôt',
-        text: `Tu dois rendre ${money(d.left)} à ${d.name} ${inDays === 0 ? 'aujourd’hui' : inDays === 1 ? 'demain' : `avant le ${dm(due)}`}. Prévois-le dès maintenant.`,
+        text: `Tu dois rendre ${inCur(d.left, d.currency ?? settings.mainCurrency)} à ${d.name} ${inDays === 0 ? 'aujourd’hui' : inDays === 1 ? 'demain' : `avant le ${dm(due)}`}. Prévois-le dès maintenant.`,
         part: 'debts',
         why: 'Rendre à temps garde la confiance, et évite les intérêts ou les tensions.',
-        action: { label: 'Voir mes dettes', page: 'debts' },
+        action: { label: 'Voir cette dette', page: 'debts', jump: { kind: 'debt', key: d.key } },
         weight: inDays <= 1 ? 10 : 7,
       });
     }
     if (d.side === 'receivable' && inDays < 0) {
       tips.push({
         title: `${d.name} te doit encore`,
-        text: `${d.name} devait te rendre ${money(d.left)} le ${dm(due)}. Un petit rappel gentil ?`,
+        text: `${d.name} devait te rendre ${inCur(d.left, d.currency ?? settings.mainCurrency)} le ${dm(due)}. Un petit rappel gentil ?`,
         part: 'debts',
         why: 'L’argent prêté et pas rendu manque dans ton budget. Un rappel tôt est plus simple qu’après des mois.',
-        action: { label: 'Voir mes dettes', page: 'debts' },
+        action: { label: 'Voir ce prêt', page: 'debts', jump: { kind: 'debt', key: d.key } },
         weight: 4,
       });
     }

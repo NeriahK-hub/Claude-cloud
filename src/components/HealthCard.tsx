@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { track } from '../lib/usage';
 import { setBudgetDraft } from '../lib/budgetDraft';
 import { requestNewGoal } from '../lib/goalMilestones';
+import { requestJump } from '../lib/jumpTo';
 import {
   ChevronRight,
   ChevronDown,
@@ -109,7 +110,8 @@ export const HealthCard: React.FC<{
   shared?: SharedDebts;
   onNavigate?: (page: Page) => void;
   compact?: boolean; // tuile à côté de la série (accueil)
-}> = ({ transactions, wallets, budgets, categories, settings, shared, onNavigate, compact }) => {
+  onSelectTransaction?: (tx: Transaction) => void; // conseil « Un doublon ? » : ouvrir l'opération
+}> = ({ transactions, wallets, budgets, categories, settings, shared, onNavigate, compact, onSelectTransaction }) => {
   const [open, setOpen] = useState(false);
   const health = useMemo(() => {
     const money = (v: number) => formatMoney(Math.round(v), settings.mainCurrency, { ...getPrefs(), decimals: 'never' });
@@ -203,7 +205,13 @@ export const HealthCard: React.FC<{
                   setOpen(false);
                   setBudgetDraft(a.budget ?? null); // « Créer un budget » : la fiche s'ouvre déjà remplie
                   if (a.goal) requestNewGoal(a.goal); // « Créer un objectif Réserve » : formulaire déjà rempli
+                  // L'endroit exact : l'écran visé ouvre ce portefeuille / budget / dette / objectif
+                  requestJump(a.jump && a.jump.kind !== 'tx' ? a.jump : null);
                   onNavigate(a.page);
+                  // Opération (doublon) : sa fiche arrive par-dessus l'historique, une fois la page affichée
+                  const j = a.jump;
+                  const tx = j?.kind === 'tx' ? transactions.find((t) => t.id === j.id) : undefined;
+                  if (tx && onSelectTransaction) setTimeout(() => onSelectTransaction(tx), 380);
                 }
               : undefined
           }

@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useLayoutEffect } from 'react';
+import { takeJump } from '../lib/jumpTo';
 import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, HandCoins, Pencil, Trash2, Link2, CalendarClock } from 'lucide-react';
 import { DebtMove, DebtShare, Settings, Transaction, Wallet } from '../types';
 import type { Cloud } from '../lib/sync/useCloud';
@@ -66,6 +67,16 @@ export const DebtsView: React.FC<DebtsViewProps> = ({ transactions, settings, on
   const [side, setSide] = useState<DebtSide>('receivable');
   const [showSettled, setShowSettled] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // Conseil « À rendre bientôt » / « … te doit encore » : on ouvre la fiche de cette personne
+  useLayoutEffect(() => {
+    const j = takeJump('debt');
+    if (!j) return;
+    const e = debtsSummary(transactions, settings, shared?.shares, shared?.me).find((x) => x.key === j.key);
+    if (e) {
+      setSide(e.side);
+      setOpenKey(e.key);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const main = settings.mainCurrency;
   const money = (v: number) => formatMoney(v, main);
 

@@ -2,8 +2,10 @@ import { Budget, Settings, Transaction, Wallet } from '../types';
 import { BudgetDraft, niceBudget } from './budgetDraft';
 import type { GoalDraft } from './goalMilestones';
 import { smartTips } from './healthInsights';
+import type { Jump } from './jumpTo';
 import { Category } from '../data/categories';
-import { countsInStats, toMain, walletBalance } from './money';
+import { countsInStats, formatMoney, toMain, walletBalance } from './money';
+import { getPrefs } from './display';
 import { budgetStatus, existedIn, budgetRange, periodOf } from './budgets';
 import { DebtEntry, dueLevel, isDebtTransaction } from './debts';
 
@@ -12,7 +14,7 @@ import { DebtEntry, dueLevel, isDebtTransaction } from './debts';
 
 export type HealthPartId = 'savings' | 'budgets' | 'debts' | 'cushion' | 'regular';
 // budget : fiche « Nouveau budget » ouverte déjà remplie (catégorie + montant proposé)
-export type HealthAction = { label: string; page: 'budgets' | 'debts' | 'goals' | 'history' | 'statistic' | 'wallets'; budget?: BudgetDraft; goal?: GoalDraft };
+export type HealthAction = { label: string; page: 'budgets' | 'debts' | 'goals' | 'history' | 'statistic' | 'wallets'; budget?: BudgetDraft; goal?: GoalDraft; jump?: Jump }; // jump : ouvrir l'endroit exact (portefeuille, budget, dette, opération…)
 type Tone = 'good' | 'warn' | 'bad' | 'neutral';
 
 export interface HealthPart {
@@ -194,7 +196,11 @@ export function computeHealth(args: {
           color: c?.color ?? '#64748B',
         };
       }),
-      action: live.length ? { label: 'Voir mes budgets', page: 'budgets' } : { label: 'Créer un budget', page: 'budgets', budget: firstBudget },
+      action: !live.length
+        ? { label: 'Créer un budget', page: 'budgets', budget: firstBudget }
+        : ok < live.length
+          ? { label: 'Voir ce budget', page: 'budgets', jump: { kind: 'budget', id: live[st.findIndex((x) => x.ratio === Math.max(...st.map((y) => y.ratio)))].id } }
+          : { label: 'Voir mes budgets', page: 'budgets' },
     };
     parts.push(p);
     addTip(p, live.length ? 'Un budget est dépassé' : 'Crée ton premier budget');
@@ -204,7 +210,8 @@ export function computeHealth(args: {
   {
     const max = 20;
     const mine = debts.filter((d) => d.side === 'payable' && d.left > 0.004);
-    const owed = mine.reduce((s, d) => s + d.left, 0);
+    // Une dette peut être en $ ou en FC : le total est ramené à la devise principale
+    const owed = mine.reduce((s, d) => s + (d.currency ? toMain(d.left, d.currency, settings) : d.left), 0);
     const late = mine.filter((d) => dueLevel(d, now) === 'late');
     const repaidSum = transactions.filter((t) => t.categoryId === 'debt-repay' && at(t) > t30 && at(t) <= now.getTime()).reduce((s, t) => s - main(t), 0);
     const repaid = repaidSum > 0;
@@ -239,13 +246,13 @@ export function computeHealth(args: {
         const lvl = dueLevel(d, now);
         return {
           name: d.name,
-          value: money(d.left),
+          value: d.currency ? formatMoney(Math.round(d.left), d.currency, { ...getPrefs(), decimals: 'never' }) : money(d.left), // dans la devise de la dette
           sub: lvl === 'late' ? 'En retard' : d.due ? `À rendre avant le ${d.due.split('-').reverse().slice(0, 2).join('/')}` : 'Sans date',
           tone: lvl === 'late' ? 'bad' : 'neutral',
           ratio: d.total + d.interest > 0 ? d.paid / (d.total + d.interest) : 0,
         };
       }),
-      action: { label: 'Voir mes dettes', page: 'debts' },
+      action: late.length ? { label: `Voir ma dette envers ${late[0].name}`, page: 'debts', jump: { kind: 'debt', key: late[0].key } } : { label: 'Voir mes dettes', page: 'debts' },
     };
     parts.push(p);
     addTip(p, late.length ? 'Une dette est en retard' : 'Rembourse un peu chaque mois');

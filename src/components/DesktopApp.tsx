@@ -191,7 +191,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 <SimpleMonth transactions={p.transactions} settings={settings} hidden={hideBalance} />
               ) : (
                 <>
-                  <HealthCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} />
+                  <HealthCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} onSelectTransaction={onSelectTransaction} />
                   <BadgesCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} />
 
                   <MonthReportCard

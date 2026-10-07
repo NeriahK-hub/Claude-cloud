@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { takeJump } from '../lib/jumpTo';
 import { DuplicatePlan, findDuplicateWallets } from '../lib/dedupe';
 import { Plus, Target, Pencil, ChevronRight, CalendarPlus, Flag, Flame, Quote, BellRing, Coins, Sofa, Trophy, Lightbulb, PartyPopper, TrendingUp, CircleCheck, Clock, CalendarClock, CalendarX, Pause, Sprout, ArrowRight, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowUpDown, GripVertical, ChevronUp, ChevronDown, History, Users, CopyX, Lock, Sparkles } from 'lucide-react';
 import { SortableList } from './SortableList';
@@ -81,6 +82,15 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
     // Notification d'un palier touchée : on ouvre cet objectif
     const view = goalsOnly ? consumeViewGoal() : null;
     if (view && wallets.some((w) => w.id === view)) setViewingId(view);
+    // Conseil de la Santé financière : ce portefeuille (et « Corriger le solde »), ou cet objectif
+    const jump = goalsOnly ? takeJump('goal') : takeJump('wallet');
+    const jw = jump && wallets.find((w) => w.id === jump.id && !w.archived);
+    if (jump && jw) {
+      setViewingId(jw.id);
+      // La fenêtre arrive juste après le détail : on voit d'où elle vient
+      if (jump.kind === 'wallet' && jump.adjust) setTimeout(() => setAdjusting(jw), 380);
+      if (jump.kind === 'goal' && jump.deposit) setTimeout(() => openDeposit(jw, jump.deposit), 380);
+    }
   });
 
   // En ouvrant un portefeuille, son historique ou les archives, on repart du haut de la page

@@ -210,7 +210,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
             <AdBanner className="px-5 mb-3" />
             {/* Santé et série côte à côte : deux petites tuiles plutôt que deux grandes cartes */}
             <div className="px-5 mb-3 grid grid-cols-2 gap-3">
-              <HealthCard compact transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} />
+              <HealthCard compact transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} onSelectTransaction={onSelectTransaction} />
               <BadgesCard compact transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} />
             </div>
             <div className="px-5 mb-3">
