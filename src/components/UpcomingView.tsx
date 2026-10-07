@@ -107,6 +107,14 @@ export const UpcomingView: React.FC<{
   onSkip: (r: Recurring) => void;
   onBack: () => void;
 }> = ({ recurrings, wallets, categories, settings, onAdd, onUpdate, onDelete, onConfirm, onSkip, onBack }) => {
+  // Le même montant dans l'autre devise (« ≈ 17,40 $US ») : devise principale -> 2e devise des Paramètres,
+  // autre devise -> devise principale. null si pas d'autre devise ou pas de taux.
+  const other = (v: number, from: string): string | null => {
+    const to = from === settings.mainCurrency ? settings.secondCurrency : settings.mainCurrency;
+    if (!to || to === from) return null;
+    const x = convertBetween(v, from, to, settings);
+    return x === null ? null : `≈\u00a0${money(x, to)}`;
+  };
   const desktop = useIsDesktop();
   const [editing, setEditing] = useState<Recurring | 'new' | 'bill' | null>(null);
   const today = ymd(new Date());
@@ -146,8 +154,9 @@ export const UpcomingView: React.FC<{
           <span className="block text-[14px] font-semibold text-slate-900 truncate">{r.title}</span>
           <span className="block text-[12px] text-slate-500 truncate">{how(r)}</span>
         </span>
-        <span className={`text-[14px] font-bold tabular-nums shrink-0 ${r.direction === 'in' ? 'text-emerald-600' : 'text-slate-900'}`}>
+        <span className={`text-right text-[14px] font-bold tabular-nums shrink-0 ${r.direction === 'in' ? 'text-emerald-600' : 'text-slate-900'}`}>
           {r.amount ? `${r.direction === 'in' ? '+' : '−'}${money(r.amount, r.currency)}` : <span className="text-[12px] font-semibold text-slate-400">à saisir</span>}
+          {r.amount && other(r.amount, r.currency) && <span className="block text-right text-[11px] font-medium text-slate-400">{other(r.amount, r.currency)}</span>}
         </span>
       </button>
     );
@@ -197,10 +206,12 @@ export const UpcomingView: React.FC<{
               )
             ) : (
               <>
-                D'ici la fin du mois, il reste <b className="text-slate-900 tabular-nums">{money(month.out, settings.mainCurrency)}</b> à payer
+                D'ici la fin du mois, il reste <b className="text-slate-900 tabular-nums whitespace-nowrap">{money(month.out, settings.mainCurrency)}</b>
+                {other(month.out, settings.mainCurrency) && <span className="tabular-nums whitespace-nowrap"> ({other(month.out, settings.mainCurrency)})</span>} à payer
                 {month.in > 0 && (
                   <>
-                    {' '}et <b className="text-emerald-600 tabular-nums">{money(month.in, settings.mainCurrency)}</b> à recevoir
+                    {' '}et <b className="text-emerald-600 tabular-nums whitespace-nowrap">{money(month.in, settings.mainCurrency)}</b>
+                    {other(month.in, settings.mainCurrency) && <span className="tabular-nums whitespace-nowrap"> ({other(month.in, settings.mainCurrency)})</span>} à recevoir
                   </>
                 )}
                 {month.unknown && ', sans compter les factures au montant qui change'}.
