@@ -4,6 +4,44 @@
 @theme {
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
     "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+
+  /* Tailles de texte calquées sur iOS (Dynamic Type, taille par défaut) :
+     xs = Footnote 13, sm = Subhead 15, base = Body 17, lg = Title 3 20, xl = Title 2 22,
+     2xl = Title 1 28, 3xl = Large Title 34. Petites étiquettes : 12 (Caption 1) et 11 (Caption 2). */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.375rem;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.5625rem;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 2.125rem;
+  --text-3xl: 2.125rem;
+  --text-3xl--line-height: 2.5625rem;
+
+  /* Graisses un peu plus légères, comme iOS (SF Pro est variable : 650 et 750 existent) */
+  --font-weight-bold: 650;
+  --font-weight-extrabold: 750;
+}
+
+/* Couleur d'accent (boutons principaux, sélection, onglet actif…) : au choix dans
+   Paramètres › Apparence (src/lib/accent.ts remplace ces valeurs). Citron par défaut.
+   Classes : bg-accent, hover:bg-accent-hover, text-on-accent, ring-accent, bg-accent/40… */
+:root {
+  --accent: #d8fb52;
+  --accent-hover: #c7e74b;
+  --on-accent: #0d1015; /* texte posé sur l'accent (foncé ou blanc selon la couleur) */
+  --accent-rgb: 216 251 82;
+  --accent-deep: #8ca335; /* liseré de sélection sur fond clair */
+}
+@theme inline {
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
 }
 
 @layer utilities {
@@ -29,11 +67,18 @@ body,
 #root {
   height: 100%;
 }
+/* Filet de sécurité : l'écran ne glisse jamais sur le côté, même si un élément est trop large
+   (clip, et pas hidden : les en-têtes « sticky » continuent de marcher) */
+#root {
+  overflow-x: clip;
+}
 
 body {
   margin: 0;
   background: #dfe3e2;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
@@ -121,22 +166,46 @@ html:has(.fixed.inset-0.z-50) {
 .fixed.inset-0.z-50 .overflow-y-auto {
   overscroll-behavior: contain;
 }
+/* Une fenêtre ne glisse jamais sur le côté, même si un élément est un peu trop large */
+.fixed.inset-0.z-50 .overflow-y-auto {
+  overflow-x: hidden;
+}
 
 /* Sélection (tuile choisie : portefeuille, catégorie, période…) : pas de gros cadre,
-   un liseré fin couleur citron + un voile léger ; une petite coche est ajoutée par le composant.
+   un liseré fin couleur d'accent + un voile léger ; une petite coche est ajoutée par le composant.
    Un sélecteur ouvert (Type, Portefeuille…) s'éclaircit simplement (.is-open). */
 :root {
-  --sel-ring: #8fbf1f;
-  --sel-bg: rgb(216 251 82 / 0.3);
-  --sel-check: #D8FB52;
+  --sel-ring: var(--accent-deep);
+  --sel-bg: rgb(var(--accent-rgb) / 0.3);
+  --sel-check: var(--accent);
 }
 html.dark {
-  --sel-ring: rgb(216 251 82 / 0.75);
-  --sel-bg: rgb(216 251 82 / 0.08);
+  --sel-ring: rgb(var(--accent-rgb) / 0.75);
+  --sel-bg: rgb(var(--accent-rgb) / 0.08);
 }
 .is-selected {
   background-color: var(--sel-bg);
   box-shadow: inset 0 0 0 1.5px var(--sel-ring);
+}
+/* Tuile choisie : le fond et le liseré arrivent en douceur, l'icône fait un petit rebond */
+.is-selected,
+.is-selected ~ *,
+button:has(> .sel-check) {
+  transition: background-color 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out), scale 0.16s var(--ease-out);
+}
+.is-selected > .tint,
+.is-selected > img {
+  animation: sel-bounce 0.42s var(--ease-out) both;
+}
+@keyframes sel-bounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+@keyframes sel-pop {
+  0% { opacity: 0; transform: scale(0.3); }
+  60% { opacity: 1; transform: scale(1.18); }
+  100% { opacity: 1; transform: scale(1); }
 }
 .sel-ring {
   box-shadow: inset 0 0 0 1.5px var(--sel-ring);
@@ -152,11 +221,11 @@ html.dark {
   height: 16px;
   border-radius: 999px;
   background: var(--sel-check);
-  color: #0d1015;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: fade-in 0.15s ease-out both;
+  animation: sel-pop 0.32s var(--ease-out) both;
 }
 
 /* Longues listes : le navigateur ne dessine que les lignes visibles à l'écran */
@@ -170,6 +239,10 @@ input:focus-visible,
 select:focus-visible {
   outline: 2px solid #16382f;
   outline-offset: 2px;
+}
+/* Champ intégré à une ligne de liste (façon Réglages d'iOS) : pas de cadre, c'est la ligne qui s'éclaircit */
+.field-plain:focus-visible {
+  outline: none;
 }
 
 /* ---------- Animations used by modals, drawers and toasts ---------- */
@@ -226,6 +299,32 @@ select:focus-visible {
 .animate-pulse-subtle { animation: pulse-subtle 1.1s ease-in-out infinite; }
 .animate-fade-in { animation: fade-in 0.2s ease-out both; }
 .animate-slide-up { animation: slide-up 0.34s var(--ease-out) both; }
+/* Fermeture d'une fenêtre : elle glisse un peu vers le bas et s'efface, le voile s'éclaircit */
+.animate-sheet-out { animation: sheet-out 0.2s cubic-bezier(0.4, 0, 1, 1) both; }
+/* Liste de choix dans une fenêtre (portefeuille, catégorie…) : elle arrive de la droite, le formulaire revient de la gauche */
+.animate-pick-in { animation: pick-in 0.28s var(--ease-out) both; }
+.animate-pick-back { animation: pick-back 0.28s var(--ease-out) both; }
+@keyframes pick-in {
+  from { opacity: 0; transform: translateX(32px); }
+}
+@keyframes pick-back {
+  from { opacity: 0; transform: translateX(-24px); }
+}
+.animate-overlay-out { animation: overlay-out 0.2s ease-in both; }
+/* Fenêtre du bas qui redescend quand on la ferme (toucher le fond, croix) */
+.animate-sheet-down { animation: sheet-down 0.26s cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes sheet-down {
+  to { transform: translateY(100%); }
+}
+@media (min-width: 640px) {
+  .animate-sheet-down { animation-name: sheet-out; }
+}
+@keyframes sheet-out {
+  to { opacity: 0; transform: translateY(24px) scale(0.98); }
+}
+@keyframes overlay-out {
+  to { background-color: rgb(0 0 0 / 0); }
+}
 .animate-slide-right { animation: slide-right 0.3s var(--ease-out) both; }
 .animate-toast { animation: toast-in 0.25s ease-out both; }
 /* `backwards` et pas `both` : un transform qui reste appliqué après l'animation
@@ -234,6 +333,9 @@ select:focus-visible {
 .animate-shake { animation: shake 0.3s ease-in-out; }
 /* Barres de progression : elles se remplissent à l'affichage (transform seulement) */
 .animate-bar { transform-origin: left; animation: bar-grow 0.7s var(--ease-out) backwards; }
+/* Barre verticale qui monte (bilans semaine / année) */
+.animate-bar-up { transform-origin: bottom; animation: bar-up 0.7s var(--ease-out) backwards; }
+@keyframes bar-up { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 .animate-search-in { animation: search-in 0.28s var(--ease-out) backwards; }
 .animate-list-in { animation: list-in 0.3s var(--ease-out) backwards; }
 .animate-donut { animation: donut-in 0.6s var(--ease-out) backwards; }
@@ -287,7 +389,6 @@ html.dark {
   --color-purple-50: rgb(168 85 247 / 0.14);
   --color-violet-50: rgb(139 92 246 / 0.16);
   --color-blue-50: rgb(59 130 246 / 0.14);
-  --color-lime-50: rgb(216 251 82 / 0.1);
 }
 html.dark body { background: #07090c; }
 
@@ -305,10 +406,11 @@ html.dark .text-indigo-600, html.dark .text-indigo-700 { color: #a5b4fc; }
 html.dark .text-amber-600, html.dark .text-amber-700 { color: #fbbf24; }
 html.dark .text-rose-600 { color: #fb7185; }
 html.dark .text-red-600 { color: #f87171; }
-/* Boutons citron : texte toujours foncé */
-html.dark :is(.bg-\[\#D8FB52\], .bg-\[\#cbed3b\], .bg-\[\#B8E94C\]),
-html.dark :is(.bg-\[\#D8FB52\], .bg-\[\#cbed3b\], .bg-\[\#B8E94C\]) :is(.text-slate-900, .text-slate-950, .text-slate-800, .text-slate-700) {
-  color: #0d1015;
+/* Posé sur la couleur d'accent : le texte prend la couleur prévue pour elle
+   (foncé sur citron, blanc sur violet…), en clair comme en sombre */
+:is(.bg-accent, .bg-accent-hover),
+:is(.bg-accent, .bg-accent-hover) :is(.text-slate-900, .text-slate-950, .text-slate-800, .text-slate-700) {
+  color: var(--on-accent);
 }
 /* Pastilles foncées (toast, onglet actif…) : inversées, texte foncé */
 html.dark .bg-slate-900.text-white { color: #0d1015; }
@@ -327,3 +429,474 @@ html.dark .to-\[\#FCEEF2\] { --tw-gradient-to: #281a1f; }
 html.dark .from-\[\#F0FDF4\] { --tw-gradient-from: #13241b; }
 html.dark .via-\[\#DCFCE7\] { --tw-gradient-via: #15281e; }
 html.dark .to-\[\#ECFDF5\] { --tw-gradient-to: #122219; }
+
+/* ================= Barre d'état de l'iPhone (app sur l'écran d'accueil) =================
+   index.html demande « black-translucent » : l'app passe sous l'heure et la batterie, qui
+   restent blanches. .status-bar est posée tout en haut, de la hauteur de cette barre (0 ailleurs) :
+   fond de l'app pour que le contenu qui défile n'y passe pas, et en mode clair un voile sombre
+   pour que l'heure blanche reste lisible. */
+.status-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  z-index: 45;
+  pointer-events: none;
+  background: var(--color-slate-50);
+}
+html:not(.dark) .status-bar {
+  background: linear-gradient(rgb(13 16 21 / 0.62), rgb(13 16 21 / 0.48)), var(--color-slate-50);
+}
+
+/* ---------- Écran d'accueil (1re ouverture, src/components/Splash.tsx) ---------- */
+.splash-blob {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(70px);
+  opacity: 0.55;
+  animation: splash-drift 7s ease-in-out infinite alternate;
+}
+.splash-blob-2 { opacity: 0.4; animation-duration: 9s; animation-delay: -2s; }
+.splash-blob-3 { opacity: 0.45; animation-duration: 6s; animation-delay: -4s; }
+@keyframes splash-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(30px, -40px, 0) scale(1.15); }
+}
+/* Pas de filtre flou ni d'état gardé à la fin (fill backwards) : sur iPhone, Safari redessine
+   alors le logo net à sa vraie taille au lieu d'agrandir l'image du début de l'animation. */
+.splash-logo {
+  box-shadow: 0 24px 60px -12px rgb(20 8 80 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.12);
+  animation: splash-pop 0.9s var(--ease-out) backwards;
+}
+@keyframes splash-pop {
+  0% { opacity: 0; transform: scale(0.7) rotate(-8deg); }
+  60% { opacity: 1; transform: scale(1.05) rotate(1deg); }
+  100% { opacity: 1; transform: none; }
+}
+.splash-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 30px;
+  border: 2px solid rgb(216 251 82 / 0.7);
+  animation: splash-ring 2.4s ease-out 0.7s infinite;
+  opacity: 0;
+}
+.splash-ring-2 { animation-delay: 1.5s; border-color: rgb(255 255 255 / 0.5); }
+@keyframes splash-ring {
+  0% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+.splash-letter {
+  display: inline-block;
+  animation: splash-letter 0.6s var(--ease-out) backwards;
+}
+@keyframes splash-letter {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+.splash-tagline { animation: fade-in 0.7s ease-out 1.05s both; }
+.splash-coin {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 17px;
+  color: #fff;
+  background: rgb(255 255 255 / 0.12);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: splash-coin-in 0.7s var(--ease-out) both, splash-float 3.6s ease-in-out infinite alternate;
+}
+.splash-coin-sm { width: 38px; height: 38px; font-size: 13px; }
+@keyframes splash-coin-in {
+  from { opacity: 0; scale: 0.4; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes splash-float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-14px); }
+}
+.splash-bar { width: 0; animation: splash-bar linear forwards; }
+@keyframes splash-bar { to { width: 100%; } }
+.splash-out { animation: splash-out 0.45s ease-in forwards; }
+@keyframes splash-out {
+  to { opacity: 0; transform: scale(1.06); filter: blur(6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash *, .splash { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; }
+  .splash-bar { animation-duration: 1.4s !important; }
+}
+
+/* ---------- Tutoriel (src/components/Tutorial.tsx) ---------- */
+/* Tailwind v4 : scale-* et translate-* sont des propriétés à part, pas de conflit avec ces transform */
+.tuto-illu { animation: tuto-illu 0.5s var(--ease-out) backwards; }
+@keyframes tuto-illu {
+  from { opacity: 0; transform: translateX(24px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.tuto-text { animation: rise-in 0.4s var(--ease-out) 0.08s backwards; }
+/* Cartes qui arrivent puis flottent doucement */
+.tuto-float { animation: tuto-pop 0.45s var(--ease-out) backwards, tuto-bob 3.2s ease-in-out 0.8s infinite alternate; }
+@keyframes tuto-pop {
+  from { opacity: 0; transform: translateY(12px) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tuto-bob {
+  to { transform: translateY(-6px); }
+}
+.tuto-pulse { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 60%, transparent); animation: tuto-pulse 1.8s ease-out 0.9s infinite; }
+@keyframes tuto-pulse {
+  to { box-shadow: 0 0 0 16px transparent; }
+}
+.tuto-grow { transform-origin: bottom; animation: tuto-grow 0.6s var(--ease-out) 0.2s backwards; }
+@keyframes tuto-grow {
+  from { transform: scaleY(0); }
+}
+.tuto-out { animation: tuto-out 0.3s ease-in forwards; }
+@keyframes tuto-out {
+  to { opacity: 0; transform: scale(1.03); }
+}
+
+/* ---------- Barres du haut qui restent en place quand on fait défiler ---------- */
+/* Page : titre + bouton retour, collés sous l'heure (fond de l'écran derrière) */
+.page-head {
+  position: sticky;
+  top: env(safe-area-inset-top);
+  z-index: 30;
+  background: var(--color-slate-50);
+  margin-left: -1.25rem;
+  margin-right: -1.25rem;
+  padding: 0.5rem 1.25rem;
+}
+/* Ordinateur : le titre de la page est déjà dans la barre du haut, et le menu de gauche remplace « Retour ».
+   L'en-tête d'un écran principal ne garde que ses boutons d'action (Ajouter, Rechercher…), à droite. */
+.desk-head {
+  justify-content: flex-end;
+}
+.desk-head > button[aria-label="Retour"],
+.desk-head > h1 {
+  display: none;
+}
+.desk-head:not(:has(> :not(h1, button[aria-label="Retour"]))) {
+  display: none;
+}
+/* Écrans secondaires (détail d'un budget, d'une ristourne…) : en-tête normal, pas collé en haut,
+   sans les marges du téléphone */
+.desk-page > div {
+  padding-left: 0;
+  padding-right: 0;
+  padding-top: 0;
+}
+.desk-page .page-head {
+  position: static;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0;
+  background: transparent;
+}
+/* Fenêtre du bas (p-5) : titre + fermer, collés en haut de la fenêtre (fond de la fenêtre derrière) */
+.sheet-head {
+  position: sticky;
+  top: -1.25rem;
+  z-index: 10;
+  background: var(--color-white);
+  margin-top: -1.25rem;
+  margin-left: -1.25rem;
+  margin-right: -1.25rem;
+  padding: 1.25rem 1.25rem 0.5rem;
+}
+
+/* ---------- Téléphone : fenêtres du bas collées au bord ----------
+   Sur iPhone (app installée), le bas de l'écran (barre d'accueil) peut rester noir sous la fenêtre :
+   on prolonge sa couleur vers le bas, et on garde de la place sous le dernier bouton. */
+@media (max-width: 639px) {
+  .fixed.inset-0.z-50.items-end > .animate-slide-up {
+    box-shadow: 0 60px 0 0 var(--color-white);
+  }
+  .fixed.inset-0.z-50.items-end > .animate-slide-up.overflow-y-auto {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 2rem);
+  }
+}
+
+/* ---------- Ordinateur : fenêtres (ajout, modification, réglages…) ----------
+   Sur téléphone ce sont des fenêtres du bas ; sur ordinateur (même seuil que useIsDesktop),
+   une vraie fenêtre centrée : plus large, jamais coupée en haut ou en bas, qui apparaît en fondu,
+   avec une barre de défilement fine qui ne déborde pas sur les coins arrondis. */
+@media (min-width: 1024px) {
+  .fixed.inset-0.z-50.items-end {
+    padding: 2rem;
+    backdrop-filter: blur(4px);
+  }
+  .fixed.inset-0.z-50.items-end > .animate-slide-up {
+    animation: dialog-in 0.22s var(--ease-out) both;
+    border-radius: 28px;
+    box-shadow: 0 30px 80px rgb(0 0 0 / 0.35);
+  }
+  /* Fenêtres avec un formulaire ou une liste : plus larges que sur téléphone */
+  .fixed.inset-0.z-50.items-end > .animate-slide-up:is(.overflow-y-auto, .flex-col) {
+    max-width: 520px;
+    max-height: calc(100dvh - 4rem);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-slate-300) transparent;
+    scrollbar-gutter: stable;
+  }
+  .fixed.inset-0.z-50.items-end > .animate-slide-up.overflow-y-auto {
+    padding-left: 1.75rem;
+    padding-right: calc(1.75rem - 6px); /* la place de la barre de défilement */
+    padding-bottom: 1.75rem;
+  }
+  .fixed.inset-0.z-50.items-end > .animate-slide-up.overflow-y-auto .sheet-head {
+    margin-left: -1.75rem;
+    margin-right: calc(-1.75rem + 6px);
+    padding-left: 1.75rem;
+    padding-right: calc(1.75rem - 6px);
+  }
+}
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- Clavier ouvert (src/lib/keyboard.ts) ---------- */
+/* Les fenêtres occupent seulement la partie visible au-dessus du clavier : une fenêtre du bas
+   se pose juste sur le clavier, et elle ne dépasse jamais la hauteur visible (elle défile dedans). */
+html.keyboard-open .fixed.inset-0.z-50 {
+  top: var(--vv-top, 0px);
+  bottom: auto;
+  height: var(--vv-height, 100%);
+}
+html.keyboard-open .fixed.inset-0.z-50 > div {
+  max-height: calc(var(--vv-height, 100dvh) - 8px);
+}
+html.keyboard-open .fixed.inset-0.z-50 > div:not(.overflow-y-auto) {
+  overflow-y: auto;
+}
+
+/* Bouton « + » de la barre du bas : reflet doux en haut, ombre colorée, anneau qui le détache du fond */
+.fab-add {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0) 55%);
+  box-shadow:
+    0 0 0 4px var(--color-white),
+    0 8px 20px -4px rgb(var(--accent-rgb) / 0.55),
+    0 2px 4px rgb(0 0 0 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+.fab-add:active {
+  box-shadow:
+    0 0 0 4px var(--color-white),
+    0 3px 10px -2px rgb(var(--accent-rgb) / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.25);
+}
+
+/* Barres de défilement fines et discrètes partout (listes, fenêtres) : pouce arrondi, sans rail gris */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(148 163 184 / 0.45) transparent;
+  }
+  html.dark * {
+    scrollbar-color: rgb(148 163 184 / 0.3) transparent;
+  }
+}
+
+/* Nuage de l'en-tête : il flotte pendant l'envoi, rebondit quand le réseau revient */
+.cloud-bob { animation: cloud-bob 1.4s ease-in-out infinite; }
+@keyframes cloud-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2.5px); }
+}
+.cloud-pop { animation: cloud-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes cloud-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.cloud-ring { animation: cloud-ring 1.2s ease-out 2; }
+@keyframes cloud-ring {
+  0% { box-shadow: 0 0 0 0 rgb(16 185 129 / 0.45); }
+  100% { box-shadow: 0 0 0 10px rgb(16 185 129 / 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cloud-bob, .cloud-pop, .cloud-ring { animation: none; }
+}
+
+/* Tutoriel : l'anneau se remplit, la courbe se dessine */
+.tuto-ring { animation: tuto-ring 1s var(--ease-out) 0.25s backwards; }
+@keyframes tuto-ring {
+  from { stroke-dashoffset: 260; }
+}
+.tuto-draw { stroke-dasharray: 220; animation: tuto-draw 1.2s var(--ease-out) 0.25s backwards; }
+@keyframes tuto-draw {
+  from { stroke-dashoffset: 220; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tuto-ring, .tuto-draw { animation: none; }
+}
+
+/* ---------- Séries et badges (BadgesCard) ---------- */
+.flame-flicker { transform-origin: 50% 90%; animation: flame-flicker 2.4s ease-in-out infinite; }
+@keyframes flame-flicker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.06, 0.97) rotate(-2deg); }
+  50% { transform: scale(0.97, 1.05) rotate(1.5deg); }
+  75% { transform: scale(1.04, 0.98) rotate(-1deg); }
+}
+/* Flamme vivante (LiveFlame) : vitesse et amplitude données par --flame-speed / --flame-amp */
+.flame-dance {
+  transform-origin: 50% 92%;
+  animation: flame-dance var(--flame-speed, 2.4s) ease-in-out infinite;
+}
+@keyframes flame-dance {
+  0%, 100% { transform: scale(1, 1) rotate(0deg); }
+  20% { transform: scale(calc(1 + 0.03 * var(--flame-amp, 1)), calc(1 - 0.03 * var(--flame-amp, 1))) rotate(calc(-1.5deg * var(--flame-amp, 1))); }
+  45% { transform: scale(calc(1 - 0.025 * var(--flame-amp, 1)), calc(1 + 0.05 * var(--flame-amp, 1))) rotate(calc(1.2deg * var(--flame-amp, 1))); }
+  70% { transform: scale(calc(1 + 0.02 * var(--flame-amp, 1)), calc(1 - 0.015 * var(--flame-amp, 1))) rotate(calc(-0.8deg * var(--flame-amp, 1))); }
+}
+.flame-core {
+  transform-origin: 50% 100%;
+  animation: flame-core calc(var(--flame-speed, 1.5s) * 0.7) ease-in-out infinite;
+}
+@keyframes flame-core {
+  0%, 100% { transform: scale(1, 1); opacity: 0.85; }
+  35% { transform: scale(0.9, 1.15) translateX(-1px); opacity: 1; }
+  65% { transform: scale(1.08, 0.92) translateX(1px); opacity: 0.75; }
+}
+.flame-heat { animation: flame-heat calc(var(--flame-speed, 2s) * 1.3) ease-in-out infinite; }
+@keyframes flame-heat {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.12); opacity: 1; }
+}
+.flame-spark {
+  opacity: 0;
+  animation: flame-spark 1.6s ease-out infinite;
+  box-shadow: 0 0 4px currentColor;
+}
+@keyframes flame-spark {
+  0% { transform: translate(0, 0) scale(1); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(var(--spark-x, 4px), calc(-1 * var(--spark-h, 40px))) scale(0.3); opacity: 0; }
+}
+.badge-pop { animation: badge-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes badge-pop {
+  0% { transform: scale(0.4) rotate(-12deg); opacity: 0; }
+  60% { transform: scale(1.08) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}
+/* Reflet qui passe sur une médaille obtenue */
+.badge-shine {
+  background: linear-gradient(115deg, transparent 35%, rgb(255 255 255 / 0.45) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: badge-shine 4.5s ease-in-out infinite;
+}
+@keyframes badge-shine {
+  0%, 70% { transform: translateX(-120%); }
+  85%, 100% { transform: translateX(120%); }
+}
+.badge-glow { animation: badge-glow 2s ease-in-out infinite; }
+@keyframes badge-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 60%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-accent) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flame-flicker, .flame-dance, .flame-core, .flame-heat, .badge-pop, .badge-shine, .badge-glow { animation: none; }
+  .flame-spark { display: none; }
+}
+
+/* Scanner de code QR : la ligne qui balaie le cadre */
+.qr-scan-line { animation: qr-scan 2.2s ease-in-out infinite; }
+@keyframes qr-scan {
+  0%, 100% { top: 12%; opacity: 0.4; }
+  50% { top: 88%; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .qr-scan-line { animation: none; top: 50%; } }
+
+/* ---------- « Ton année » façon Wrapped (YearWrapped) ---------- */
+.wrap-in { animation: wrap-in 0.6s var(--ease-out) both; }
+@keyframes wrap-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+.wrap-pop { animation: wrap-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes wrap-pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+.wrap-bar { transform-origin: bottom; animation: bar-up 0.8s var(--ease-out) both; }
+.wrap-blob { animation: wrap-blob 9s ease-in-out infinite; }
+@keyframes wrap-blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, 40px) scale(1.15); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wrap-in, .wrap-pop, .wrap-bar, .wrap-blob { animation: none; }
+}
+
+/* ---------- Bulles d'aide (CoachTour) ---------- */
+.coach-spot { transition: left 0.35s var(--ease-out), top 0.35s var(--ease-out), width 0.35s var(--ease-out), height 0.35s var(--ease-out); animation: coach-spot 0.4s var(--ease-out) both; }
+@keyframes coach-spot { from { opacity: 0; } to { opacity: 1; } }
+.coach-in-down { animation: coach-in-down 0.4s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+.coach-in-up { animation: coach-in-up 0.4s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+@keyframes coach-in-down { from { opacity: 0; transform: translateY(-10px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes coach-in-up { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .coach-spot, .coach-in-down, .coach-in-up { animation: none; transition: none; } }
+/* Wrapped : bandes lumineuses qui glissent depuis les coins, chiffre géant qui monte en brillant */
+.wrap-band-tr { animation: wrap-band-tr 0.9s var(--ease-out) both; }
+.wrap-band-bl { animation: wrap-band-bl 0.9s var(--ease-out) both; }
+@keyframes wrap-band-tr { from { opacity: 0; translate: 30% -30%; } }
+@keyframes wrap-band-bl { from { opacity: 0; translate: -30% 30%; } }
+.wrap-giant { transform: translateX(-50%); animation: wrap-giant 1.2s var(--ease-out) both, wrap-glow 3.5s ease-in-out 1.2s infinite; }
+@keyframes wrap-giant { from { opacity: 0; transform: translateX(-50%) translateY(18%) scale(0.92); } }
+@keyframes wrap-glow { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.75; } }
+@media (prefers-reduced-motion: reduce) {
+  .wrap-band-tr, .wrap-band-bl, .wrap-giant { animation: none; }
+}
+.wrap-count { animation: wrap-count 2.4s ease-in-out infinite; }
+@keyframes wrap-count { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.25); } }
+@media (prefers-reduced-motion: reduce) { .wrap-count { animation: none; } }
+/* Carte « Replay » : la boule de lumière respire doucement */
+.replay-orb { animation: replay-orb 6s ease-in-out infinite; }
+@keyframes replay-orb { 0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.9; } 50% { transform: scale(1.12) translate(-12px, -10px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .replay-orb { animation: none; } }
+
+/* ---------- Design des fêtes (Festive.tsx) ---------- */
+.festive-flake { animation: festive-fall linear infinite; will-change: transform; }
+@keyframes festive-fall {
+  0% { transform: translate(0, -10px) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translate(var(--drift, 0px), 105vh) rotate(240deg); opacity: 0.2; }
+}
+.festive-burst { width: 2px; height: 2px; animation: festive-burst 6s ease-out infinite; }
+.festive-ray { position: absolute; left: 0; top: 0; width: 2px; height: 26px; border-radius: 2px; transform-origin: 1px 0; background: linear-gradient(to bottom, var(--c), transparent); }
+@keyframes festive-burst {
+  0%, 70% { opacity: 0; transform: scale(0.1); }
+  75% { opacity: 1; transform: scale(0.6); }
+  90% { opacity: 0.8; transform: scale(1.3); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+.festive-twinkle { animation: festive-twinkle 2.4s ease-in-out infinite; }
+@keyframes festive-twinkle { 0%, 100% { opacity: 0.45; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.1); } }
+.festive-spin { animation: festive-spin 8s linear infinite; }
+@keyframes festive-spin { to { transform: rotate(360deg); } }
+.festive-card { animation: wrap-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+/* Bouton + aux couleurs des fêtes */
+html[data-festive="christmas"] .fab-add { background: linear-gradient(135deg, #DC2626, #16A34A) !important; color: #fff !important; box-shadow: 0 0 0 4px var(--color-white), 0 8px 24px -6px rgb(220 38 38 / 0.6) !important; }
+html[data-festive="newyear"] .fab-add { background: linear-gradient(135deg, #FDE047, #D97706) !important; color: #0B0B0F !important; box-shadow: 0 0 0 4px var(--color-white), 0 8px 24px -6px rgb(250 204 21 / 0.7) !important; }
+@media (prefers-reduced-motion: reduce) {
+  .festive-layer { display: none; }
+  .festive-twinkle, .festive-spin, .festive-card { animation: none; }
+}
+/* Wrapped : décors des années */
+.wrap-float { animation: wrap-band-tr 0.9s var(--ease-out) both, wrap-float 10s ease-in-out infinite; }
+@keyframes wrap-float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(24px, -30px); } }
+.wrap-ring { animation: wrap-ring 6s ease-out infinite; }
+@keyframes wrap-ring { from { transform: scale(0.2); opacity: 0.6; } to { transform: scale(1.4); opacity: 0; } }
+.wrap-eq { transform-origin: bottom; animation: wrap-eq 1.3s ease-in-out infinite alternate; }
+@keyframes wrap-eq { from { transform: scaleY(0.35); } to { transform: scaleY(1); } }
+.wrap-grid { animation: wrap-grid 1.6s linear infinite; }
+@keyframes wrap-grid { from { background-position: 0 0, 0 0; } to { background-position: 0 48px, 0 0; } }
+/* Petit téléphone : pas de flou ni d'ombre lumineuse, décor figé (le contenu s'anime toujours) */
+.wrap-lite * { filter: none !important; }
+.wrap-lite .wrap-float, .wrap-lite .wrap-ring, .wrap-lite .wrap-eq, .wrap-lite .wrap-grid, .wrap-lite .wrap-giant, .wrap-lite .replay-orb { animation: none !important; }
+.wrap-lite .wrap-giant { transform: translateX(-50%); }
+@media (prefers-reduced-motion: reduce) {
+  .wrap-float, .wrap-ring, .wrap-eq, .wrap-grid { animation: none; }
+}

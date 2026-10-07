@@ -9,4 +9,7 @@ export const ProfileView = lazy(() => import('./ProfileView').then((m) => ({ def
 export const RistourneView = lazy(() => import('./RistourneView').then((m) => ({ default: m.RistourneView })));
 export const CategoriesView = lazy(() => import('./CategoriesView').then((m) => ({ default: m.CategoriesView })));
 export const BudgetsView = lazy(() => import('./BudgetsView').then((m) => ({ default: m.BudgetsView })));
+export const PlacesView = lazy(() => import('./PlacesView').then((m) => ({ default: m.PlacesView })));
+export const GoalCelebration = lazy(() => import('./GoalCelebration').then((m) => ({ default: m.GoalCelebration })));
+export const UpcomingView = lazy(() => import('./UpcomingView').then((m) => ({ default: m.UpcomingView })));
 export const DebtsView = lazy(() => import('./DebtsView').then((m) => ({ default: m.DebtsView })));

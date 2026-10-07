@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { onOtherTabChange } from './crossTab';
 
 // Icônes SVG créées par l'utilisateur (Paramètres > Mes icônes).
 // On les affiche comme des images (jamais injectées dans la page) : un SVG ne peut donc
@@ -37,6 +38,11 @@ function save(next: CustomIcon[]) {
   }
   listeners.forEach((l) => l());
 }
+
+onOtherTabChange(KEY, () => {
+  icons = read();
+  listeners.forEach((l) => l());
+});
 
 export const getCustomIcon = (id: string) => icons.find((i) => i.id === id);
 

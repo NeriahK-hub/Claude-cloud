@@ -23,10 +23,30 @@ export function formatMoney(amount: number, currency: string, prefs: Pick<Displa
   }
 }
 
+// Montant dans une case étroite (demi-écran) : la police rétrécit pour les longs montants
+// (ex. « 2.231.947,50 CDF ») au lieu de déborder. `base` = taille pour un montant court.
+export function fitAmount(text: string, base: 'sm' | 'base' = 'sm'): string {
+  if (text.length <= 12) return base === 'base' ? 'text-base' : 'text-sm';
+  if (text.length <= 15) return base === 'base' ? 'text-sm' : 'text-[13px]';
+  return text.length <= 16 ? 'text-[12px]' : 'text-[11px]';
+}
+
 // Solde d'un portefeuille = solde de départ + somme de ses transactions
 // Les transferts et ajustements déplacent ou corrigent de l'argent : ce ne sont pas des dépenses/revenus
 export function countsInStats(t: Transaction): boolean {
   return t.type !== 'transfer' && t.type !== 'adjustment' && !t.excludeFromReport;
+}
+
+// Transfert qui sort du total (ex. vers un portefeuille « exclu du total ») ou qui y entre :
+// vu depuis le total, l'argent part (ou arrive) vraiment, c'est une vraie sortie (ou entrée).
+export function crossesTotal(t: Transaction, totalIds: Set<string>): boolean {
+  return t.type === 'transfer' && !t.excludeFromReport && !!t.counterpartWalletId && totalIds.has(t.walletId) && !totalIds.has(t.counterpartWalletId);
+}
+
+// Comptée dans les entrées / sorties ? `totalIds` = portefeuilles du total quand on regarde le total
+// (null pour un seul portefeuille : ses transferts restent de simples mouvements)
+export function countsInReport(t: Transaction, totalIds: Set<string> | null): boolean {
+  return countsInStats(t) || (!!totalIds && crossesTotal(t, totalIds));
 }
 
 export function walletBalance(wallet: Wallet, transactions: Transaction[]): number {

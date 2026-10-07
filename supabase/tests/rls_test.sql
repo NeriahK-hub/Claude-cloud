@@ -122,6 +122,87 @@ select pg_temp.login(:'carol', 'carol@test.cd');
 select leave_ristourne('bbbbbbbb-0000-0000-0000-000000000001');
 select pg_temp.check((select count(*) from ristournes) = 0, 'Carol quitte la ristourne et ne la voit plus');
 
+-- ===== Invitation par lien / code =====
+\set dave '44444444-4444-4444-4444-444444444444'
+reset role;
+insert into auth.users (id, email) values (:'dave', 'dave@test.cd');
+grant execute on all functions in schema pg_temp to authenticated, anon;
+set role authenticated;
+
+select pg_temp.login(:'alice', 'alice@test.cd');
+insert into wallets (id, name, currency) values ('aaaaaaaa-0000-0000-0000-0000000000b1', 'Maison', 'USD');
+select create_wallet_invite('aaaaaaaa-0000-0000-0000-0000000000b1') ->> 'code' as c1 \gset
+select pg_temp.check(:'c1' ~ '^[A-HJKMNP-Z2-9]{8}$', 'code de 8 caractères sans 0/O/1/I/L');
+select pg_temp.check((create_wallet_invite('aaaaaaaa-0000-0000-0000-0000000000b1') ->> 'code') = :'c1', 'le même code est repris tant qu''il est valable');
+select pg_temp.check(wallet_invite_check(:'c1') ->> 'status' = 'owner', 'la propriétaire ouvre son propre lien : « owner »');
+
+select pg_temp.login(:'dave', 'dave@test.cd');
+select pg_temp.must_fail($$select create_wallet_invite('aaaaaaaa-0000-0000-0000-0000000000b1')$$, 'un non-propriétaire crée un lien');
+select pg_temp.must_fail($$select person_name('11111111-1111-1111-1111-111111111111')$$, 'lire le nom (ou l''e-mail) de n''importe qui');
+select pg_temp.must_fail($$select * from wallet_invites$$, 'lire la table des codes directement');
+select pg_temp.check((select count(*) from wallets) = 0, 'Dave ne voit rien avant de rejoindre');
+select pg_temp.check(wallet_invite_check(lower(substr(:'c1', 1, 4)) || '-' || lower(substr(:'c1', 5))) ->> 'status' = 'ok', 'le code marche en minuscules et avec un tiret');
+select pg_temp.check((wallet_invite_check(:'c1') ->> 'owner_name') = 'Alice' and (wallet_invite_check(:'c1') ->> 'wallet_name') = 'Maison', 'aperçu : « Alice t''invite à rejoindre Maison »');
+select pg_temp.check(join_wallet(:'c1', ' Dave ') ->> 'status' = 'joined', 'Dave rejoint avec le code');
+select pg_temp.check((select count(*) from wallets) = 1, 'Dave voit « Maison »');
+select pg_temp.check((select name from wallet_members where user_id = :'dave') = 'Dave', 'son prénom est enregistré (sans espaces)');
+select pg_temp.check((select name from profiles where id = :'dave') = 'Dave', 'son profil vide prend ce prénom');
+select pg_temp.check(join_wallet(:'c1') ->> 'status' = 'already', 'rejoindre deux fois : « already »');
+insert into transactions (wallet_id, title, occurred_at, amount, currency, type) values ('aaaaaaaa-0000-0000-0000-0000000000b1', 'Loyer', now(), -300, 'USD', 'payment');
+select pg_temp.check((select count(*) from transactions where title = 'Loyer') = 1, 'Dave ajoute une opération dans « Maison »');
+
+-- Retiré par la propriétaire : le lien est annulé, il ne peut pas revenir avec
+select pg_temp.login(:'alice', 'alice@test.cd');
+update wallet_members set status = 'removed' where user_id = :'dave';
+select pg_temp.login(:'dave', 'dave@test.cd');
+select pg_temp.check((select count(*) from wallets) = 0, 'Dave retiré ne voit plus « Maison »');
+select pg_temp.check(join_wallet(:'c1') ->> 'status' = 'expired', 'l''ancien lien est annulé quand on retire quelqu''un');
+select pg_temp.login(:'alice', 'alice@test.cd');
+select create_wallet_invite('aaaaaaaa-0000-0000-0000-0000000000b1') ->> 'code' as c2 \gset
+select pg_temp.check(:'c2' <> :'c1', 'un nouveau lien a un nouveau code');
+select pg_temp.login(:'dave', 'dave@test.cd');
+select pg_temp.check(join_wallet(:'c2', 'Dave') ->> 'status' = 'joined', 'réinvité, Dave revient');
+select pg_temp.check((select count(*) from wallet_members where user_id = :'dave') = 1, 'il reprend sa place (pas de doublon)');
+-- Il quitte de lui-même : le lien reste valable pour les autres
+select leave_wallet('aaaaaaaa-0000-0000-0000-0000000000b1');
+select pg_temp.check(wallet_invite_check(:'c2') ->> 'status' = 'ok', 'quitter soi-même n''annule pas le lien');
+
+-- Annuler le lien à la main
+select pg_temp.login(:'alice', 'alice@test.cd');
+select revoke_wallet_invites('aaaaaaaa-0000-0000-0000-0000000000b1');
+select pg_temp.login(:'dave', 'dave@test.cd');
+select pg_temp.check(wallet_invite_check(:'c2') ->> 'status' = 'expired', 'lien annulé par la propriétaire');
+select pg_temp.must_fail($$select revoke_wallet_invites('aaaaaaaa-0000-0000-0000-0000000000b1')$$, 'un non-propriétaire annule un lien');
+
+-- Lien expiré (plus de 7 jours)
+select pg_temp.login(:'alice', 'alice@test.cd');
+select create_wallet_invite('aaaaaaaa-0000-0000-0000-0000000000b1') ->> 'code' as c3 \gset
+reset role;
+update wallet_invites set expires_at = now() - interval '1 minute' where code = :'c3';
+set role authenticated;
+select pg_temp.login(:'dave', 'dave@test.cd');
+select pg_temp.check(join_wallet(:'c3') ->> 'status' = 'expired', 'lien expiré refusé');
+
+-- Propriétaire noté « Moi » (pas de nom de profil) : les membres voient son vrai nom
+select pg_temp.login(:'carol', 'carol@test.cd');
+insert into wallets (id, name, currency) values ('aaaaaaaa-0000-0000-0000-0000000000b2', 'Colocation', 'CDF');
+select create_wallet_invite('aaaaaaaa-0000-0000-0000-0000000000b2') ->> 'code' as c4 \gset
+select pg_temp.login(:'dave', 'dave@test.cd');
+select pg_temp.check(wallet_invite_check(:'c4') ->> 'owner_name' = 'carol', 'sans nom de profil, on affiche le début de l''e-mail');
+select pg_temp.check(join_wallet(:'c4') ->> 'status' = 'joined', 'Dave rejoint « Colocation »');
+select pg_temp.check((select name from wallet_members where wallet_id = 'aaaaaaaa-0000-0000-0000-0000000000b2' and role = 'owner') = 'carol', 'la propriétaire n''apparaît plus comme « Moi »');
+
+-- Deviner des codes : bloqué après 20 essais faux en une heure
+select pg_temp.login(:'bob', 'Bob@Test.cd');
+select pg_temp.check(wallet_invite_check('ZZZZZZZZ') ->> 'status' = 'invalid', 'code inconnu : « invalid »');
+select count(*) from (select wallet_invite_check('ZZZZZZZ' || i) from generate_series(1, 19) i) x \gset
+select pg_temp.check(wallet_invite_check(:'c4') ->> 'status' = 'blocked', 'après 20 codes faux, même un bon code est bloqué');
+select pg_temp.check(join_wallet(:'c4') ->> 'status' = 'blocked', 'et on ne peut pas rejoindre');
+
+set role anon;
+select pg_temp.must_fail($$select wallet_invite_check('ABCDEFGH')$$, 'un visiteur non connecté teste un code');
+set role authenticated;
+
 -- ===== Supprimer son compte =====
 -- Bob : son portefeuille, une opération dans « Courses » d'Alice, un versement dans la ristourne d'Alice
 select pg_temp.login(:'alice', 'alice@test.cd');

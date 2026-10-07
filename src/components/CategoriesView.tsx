@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, Plus, Trash2, X, Layers } from 'lucide-react';
 import { Category, CategoryType } from '../data/categories';
 import { IconBadge, CATEGORY_ICON_CHOICES } from './AppIcon';
-import { IconPicker, COLOR_CHOICES } from './IconPicker';
+import { IconPicker, ColorPicker, COLOR_CHOICES } from './IconPicker';
 import { SelCheck } from './SelCheck';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 
 interface CategoriesViewProps {
   categories: Category[];
@@ -25,6 +26,7 @@ export const CategoryIcon: React.FC<{ cat: Category; size?: 'sm' | 'md' | 'lg' }
 );
 
 export const CategoriesView: React.FC<CategoriesViewProps> = ({ categories, onBack, onAdd, onDelete, onUpdate }) => {
+  const desktop = useIsDesktop(); // ordinateur : pas de retour ni de titre en double, contenu sur plusieurs colonnes
   const [tab, setTab] = useState<CategoryType>('expense');
   const [query, setQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -60,9 +62,9 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ categories, onBa
   );
 
   return (
-    <div className="px-5 pt-4 pb-8 animate-screen">
+    <div className={desktop ? 'max-w-5xl animate-screen' : 'px-5 pt-4 pb-8 animate-screen'}>
       {/* En-tête */}
-      <div className="flex items-center gap-3 mb-5">
+      <div className={`${desktop ? 'desk-head' : 'page-head'} flex items-center gap-3 mb-5`}>
         <button onClick={onBack} aria-label="Retour" className="w-11 h-11 rounded-full bg-white border border-slate-100 flex items-center justify-center cursor-pointer">
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -70,7 +72,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ categories, onBa
         <button
           onClick={() => setShowSearch((s) => !s)}
           aria-label="Rechercher"
-          className={`w-11 h-11 rounded-full border flex items-center justify-center cursor-pointer ${showSearch ? 'bg-[#D8FB52] border-lime-300' : 'bg-white border-slate-100'}`}
+          className={`w-11 h-11 rounded-full border flex items-center justify-center cursor-pointer ${showSearch ? 'bg-accent border-transparent' : 'bg-white border-slate-100'}`}
         >
           <Search className="w-4 h-4" />
         </button>
@@ -82,7 +84,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ categories, onBa
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Rechercher une catégorie"
-          className="w-full mb-4 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
+          className="w-full mb-4 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-accent"
         />
       )}
 
@@ -119,7 +121,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ categories, onBa
           )}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className={desktop ? 'columns-2 gap-4 [&>*]:mb-4 [&>*]:break-inside-avoid' : 'space-y-3'}>
           {parents.map((p) => (
             <div key={p.id} className="bg-white rounded-3xl border border-slate-100 overflow-hidden">
               <Row cat={p} />
@@ -194,7 +196,7 @@ const CategorySheet: React.FC<{
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
       <div className="w-full sm:max-w-[420px] max-h-[90dvh] overflow-y-auto bg-white rounded-t-[32px] sm:rounded-[32px] p-5 pb-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="sheet-head flex items-center justify-between mb-4">
           <h2 className="text-base font-bold">{category ? 'Modifier la catégorie' : 'Nouvelle catégorie'}</h2>
           <button onClick={onClose} aria-label="Fermer" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
             <X className="w-4 h-4" />
@@ -208,10 +210,11 @@ const CategorySheet: React.FC<{
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Nom (ex. Coiffeur)"
-            className="flex-1 px-4 py-3 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
+            className="flex-1 px-4 py-3 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
 
+        <div className="text-xs font-semibold text-slate-500 mb-1">Icône</div>
         <IconPicker
           choices={CATEGORY_ICON_CHOICES}
           icon={icon}
@@ -224,17 +227,7 @@ const CategorySheet: React.FC<{
         {!parent && (
           <>
             <label className="text-xs font-semibold text-slate-500">Couleur</label>
-            <div className="flex gap-2 mt-1 mb-4">
-              {COLORS.map((col) => (
-                <button
-                  key={col}
-                  onClick={() => setColor(col)}
-                  aria-label={`Couleur ${col}`}
-                  className={`w-7 h-7 rounded-full cursor-pointer ${color === col ? 'ring-2 ring-offset-2 ring-[var(--sel-ring)]' : ''}`}
-                  style={{ backgroundColor: col }}
-                />
-              ))}
-            </div>
+            <ColorPicker value={color} onChange={setColor} />
           </>
         )}
 
@@ -246,7 +239,7 @@ const CategorySheet: React.FC<{
                 <button
                   key={d}
                   onClick={() => setDirection(d)}
-                  className={`py-2.5 rounded-2xl text-sm font-semibold cursor-pointer ${direction === d ? 'bg-[#D8FB52]' : 'bg-slate-100 text-slate-600'}`}
+                  className={`py-2.5 rounded-2xl text-sm font-semibold cursor-pointer ${direction === d ? 'bg-accent' : 'bg-slate-100 text-slate-600'}`}
                 >
                   {d === 'out' ? 'sort' : 'entre'}
                 </button>
@@ -273,7 +266,7 @@ const CategorySheet: React.FC<{
                         <Layers className="w-4 h-4" />
                       </span>
                     )}
-                    <span className="text-[11px] font-semibold text-slate-700 leading-tight text-center line-clamp-2">
+                    <span className="text-[12px] font-semibold text-slate-700 leading-tight text-center line-clamp-2">
                       {p ? p.name : 'Aucune (principale)'}
                     </span>
                     {on && <SelCheck />}
@@ -307,7 +300,7 @@ const CategorySheet: React.FC<{
               custom: category ? category.custom : true,
             })
           }
-          className="w-full py-3.5 rounded-2xl bg-[#D8FB52] disabled:opacity-40 font-bold text-sm cursor-pointer"
+          className="w-full py-3.5 rounded-2xl bg-accent disabled:opacity-40 font-bold text-sm cursor-pointer"
         >
           {category ? 'Enregistrer' : 'Créer la catégorie'}
         </button>

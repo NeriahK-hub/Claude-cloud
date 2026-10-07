@@ -32,8 +32,26 @@ export const AccountSwitcherSheet: React.FC<AccountSwitcherSheetProps> = ({
       selected ? 'border-transparent is-selected' : 'border-slate-200 hover:bg-slate-50'
     }`;
   const check = (
-    <div className="w-6 h-6 rounded-full bg-[#D8FB52] flex items-center justify-center">
+    <div className="w-6 h-6 rounded-full bg-accent flex items-center justify-center">
       <Check className="w-3.5 h-3.5 text-slate-950 stroke-[3]" />
+    </div>
+  );
+
+  // Les portefeuilles exclus du total viennent en dernier, sous leur propre titre
+  const included = wallets.filter((w) => w.includeInTotal);
+  const excluded = wallets.filter((w) => !w.includeInTotal);
+  const row = (w: Wallet) => (
+    <div key={w.id} role="button" onClick={() => { onSelect(w.id); onClose(); }} className={rowCls(w.id === activeWalletId)}>
+      <div className="flex items-center gap-3">
+        <IconBadge icon={w.icon} image={w.image} color={w.color} />
+        <div>
+          <div className="text-sm font-bold text-slate-900">{w.name}</div>
+          <div className="text-xs font-bold text-slate-700 tabular-nums">
+            {formatMoney(walletBalance(w, transactions), w.currency)}
+          </div>
+        </div>
+      </div>
+      {w.id === activeWalletId && check}
     </div>
   );
 
@@ -53,7 +71,7 @@ export const AccountSwitcherSheet: React.FC<AccountSwitcherSheetProps> = ({
         </div>
 
         <div className="space-y-3 mb-5">
-          <div onClick={() => { onSelect('all'); onClose(); }} className={rowCls(activeWalletId === 'all')}>
+          <div role="button" onClick={() => { onSelect('all'); onClose(); }} className={rowCls(activeWalletId === 'all')}>
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center">
                 <Layers className="w-5 h-5 text-slate-600" />
@@ -68,20 +86,12 @@ export const AccountSwitcherSheet: React.FC<AccountSwitcherSheetProps> = ({
             {activeWalletId === 'all' && check}
           </div>
 
-          {wallets.map((w) => (
-            <div key={w.id} onClick={() => { onSelect(w.id); onClose(); }} className={rowCls(w.id === activeWalletId)}>
-              <div className="flex items-center gap-3">
-                <IconBadge icon={w.icon} image={w.image} color={w.color} />
-                <div>
-                  <div className="text-sm font-bold text-slate-900">{w.name}</div>
-                  <div className="text-xs font-bold text-slate-700 tabular-nums">
-                    {formatMoney(walletBalance(w, transactions), w.currency)}
-                  </div>
-                </div>
-              </div>
-              {w.id === activeWalletId && check}
-            </div>
-          ))}
+          {included.map(row)}
+
+          {excluded.length > 0 && (
+            <h4 className="pt-3 px-1 text-[12px] font-bold text-slate-400 tracking-wider uppercase">Exclus du total</h4>
+          )}
+          {excluded.map(row)}
         </div>
 
         <button

@@ -1,0 +1,21 @@
+@import "tailwindcss";
+@source "./";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+  --color-accent: #d8fb52;
+}
+
+/* Couleurs claires / sombres (suit le réglage de l'ordinateur ou du téléphone) */
+:root {
+  color-scheme: light dark;
+}
+body {
+  margin: 0;
+  background: #f4f6f5;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-color-scheme: dark) {
+  body { background: #0b0e13; color: #e5e7eb; }
+}

@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
-import { Settings, Transaction, Wallet } from '../types';
-import { countsInStats, formatMoney, toMain } from '../lib/money';
+import { track } from '../lib/usage';
+import { ChevronRight, Target, TrendingDown, TrendingUp } from 'lucide-react';
+import { Recurring, Settings, Transaction, Wallet } from '../types';
+import { occurrencesBetween, ymd } from '../lib/recurring';
+import { countsInReport, fitAmount, formatMoney, toMain, walletBalance } from '../lib/money';
 import { inPeriod, periodRange } from '../lib/periods';
 import { formatDate, useDisplayPrefs } from '../lib/display';
 import { haptic } from '../lib/haptics';
+import { monthGoalProgress } from '../lib/goals';
+import { getPrefs } from '../lib/display';
 
 interface MonthReportCardProps {
   allTransactions: Transaction[];
@@ -12,6 +16,8 @@ interface MonthReportCardProps {
   activeWallet: Wallet | null; // null = portefeuilles comptés dans le total
   settings: Settings;
   onOpenReports: () => void;
+  onOpenGoals?: () => void; // ligne « tu as avancé de 18 % vers Moto »
+  recurrings?: Recurring[]; // factures prévues (« À venir ») : prévision de fin de mois plus juste
 }
 
 type Side = 'expense' | 'income';
@@ -46,7 +52,7 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
 
 // Accueil : dépenses (ou revenus) cumulées jour après jour ce mois-ci,
 // comparées à la moyenne des 3 mois précédents au même jour du mois.
-export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransactions, wallets, activeWallet, settings, onOpenReports }) => {
+export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransactions, wallets, activeWallet, settings, onOpenReports, onOpenGoals, recurrings = [] }) => {
   const [side, setSide] = useState<Side>('expense');
   const [hover, setHover] = useState<number | null>(null); // jour survolé (index 0 = le 1er)
   const [boxRef, width] = useWidth<HTMLDivElement>();
@@ -70,7 +76,7 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
       const r = range(offset);
       const arr = new Array<number>(dayIndex(r.start, r.end)).fill(0);
       for (const t of allTransactions) {
-        if (!ids.has(t.walletId) || !countsInStats(t) || (s === 'expense' ? t.amount >= 0 : t.amount <= 0)) continue;
+        if (!ids.has(t.walletId) || !countsInReport(t, activeWallet ? null : ids) || (s === 'expense' ? t.amount >= 0 : t.amount <= 0)) continue;
         if (!inPeriod(t.createdAt, r)) continue;
         arr[dayIndex(r.start, new Date(t.createdAt))] += Math.abs(toMain(t.amount, t.currency, settings));
       }
@@ -89,9 +95,46 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
       const average = Array.from({ length: days }, (_, i) => (past[0][i] + past[1][i] + past[2][i]) / 3);
       return { current, average, total: current[today - 1] ?? 0 };
     };
-    return { days, today, start: cur.start, expense: build('expense'), income: build('income') };
+    const expense = build('expense');
+    const income = build('income');
+
+    // Prévision de fin de mois : solde d'aujourd'hui + ce qui reste habituellement à venir.
+    // Avec un historique : ce que les 3 derniers mois ont dépensé (ou gagné) après ce jour-ci
+    // (le loyer de fin de mois, le salaire…) ; sans historique : le rythme de ce mois-ci.
+    const left = days - today; // jours restants après aujourd'hui
+    const after = (b: { average: number[] }) => Math.max(0, (b.average[days - 1] ?? 0) - (b.average[today - 1] ?? 0));
+    const hasHistory = expense.average[days - 1] > 0;
+    // Plus juste : on mélange l'habitude des 3 derniers mois et le rythme de ce mois-ci (dès 5 jours),
+    // puis on s'assure de compter au moins les factures déjà prévues dans « À venir ».
+    const pace = today >= 5 ? (expense.total / today) * left : null;
+    const habit = hasHistory ? after(expense) : null;
+    const blended = habit !== null && pace !== null ? habit * 0.6 + pace * 0.4 : habit ?? pace;
+    const from = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+    const to = ymd(new Date(cur.end.getTime() - 1));
+    let billsOut = 0;
+    let billsIn = 0;
+    for (const r of recurrings) {
+      if (!r.active || !r.amount || !ids.has(r.walletId)) continue;
+      const n = occurrencesBetween(r, from, to).length;
+      const v = toMain(r.amount, r.currency, settings) * n;
+      if (r.direction === 'out') billsOut += v;
+      else billsIn += v;
+    }
+    const expenseAhead = blended === null ? (billsOut > 0 ? billsOut : null) : Math.max(blended, billsOut);
+    const incomeAhead = Math.max(income.average[days - 1] > 0 ? after(income) : 0, billsIn);
+    const balance = scope.reduce((sum, w) => sum + toMain(walletBalance(w, allTransactions), w.currency, settings), 0);
+    const forecast =
+      left > 0 && expenseAhead !== null ? { left, end: balance + incomeAhead - expenseAhead, expenseAhead, incomeAhead, hasHistory, billsOut } : null;
+    return { days, today, start: cur.start, expense, income, forecast };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allTransactions, wallets, activeWallet, settings, prefs]);
+  }, [allTransactions, wallets, activeWallet, settings, prefs, recurrings]);
+
+  // Objectifs : de combien ils ont avancé depuis le début du mois (le portefeuille choisi, ou tous)
+  const goals = useMemo(
+    () => monthGoalProgress(activeWallet ? [activeWallet] : wallets, allTransactions, data.start),
+    [activeWallet, wallets, allTransactions, data.start]
+  );
+  const hasGoals = (activeWallet ? [activeWallet] : wallets).some((w) => w.kind === 'goal' && !w.archived);
 
   const series = data[side];
   const hasData = series.total > 0 || series.average.some((v) => v > 0);
@@ -99,6 +142,8 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
   const cur = day < series.current.length ? series.current[day] : null;
   const avg = series.average[day] ?? 0;
   const money = (v: number) => formatMoney(v, main);
+  // Prévision : un ordre d'idée, donc arrondi (pas de centimes)
+  const about = (v: number) => formatMoney(Math.round(v), main, { ...getPrefs(), decimals: 'never' });
   const dateLabel = (i: number) => formatDate(new Date(data.start.getFullYear(), data.start.getMonth(), data.start.getDate() + i), true);
 
   // Écart avec la moyenne à la même date (aujourd'hui)
@@ -133,10 +178,10 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
         setSide(s);
       }}
       aria-pressed={side === s}
-      className={`flex-1 pb-2 text-center cursor-pointer border-b-2 transition-colors ${side === s ? 'chart-underline' : 'border-slate-100'}`}
+      className={`flex-1 min-w-0 pb-2 text-center cursor-pointer border-b-2 transition-colors ${side === s ? 'chart-underline' : 'border-slate-100'}`}
     >
       <div className="text-xs font-semibold text-slate-500">{label}</div>
-      <div className={`text-base font-bold ${side === s ? 'text-slate-900' : 'text-slate-500'}`}>{money(value)}</div>
+      <div className={`${fitAmount(money(value), 'base')} font-bold tabular-nums whitespace-nowrap ${side === s ? 'text-slate-900' : 'text-slate-500'}`}>{money(value)}</div>
     </button>
   );
 
@@ -144,7 +189,7 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
     <div className={`bg-white rounded-3xl border border-slate-100 p-4 ${side === 'expense' ? 'chart-exp' : 'chart-inc'}`}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-bold text-slate-900">Rapport de ce mois</h2>
-        <button onClick={onOpenReports} className="flex items-center gap-0.5 text-xs font-bold text-emerald-700 cursor-pointer">
+        <button onClick={() => { track('home.month'); onOpenReports(); }} className="flex items-center gap-0.5 text-xs font-bold text-emerald-700 cursor-pointer">
           Voir les rapports <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -166,12 +211,12 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
             <div className="flex items-center gap-2">
               <span className="w-3 h-0.5 rounded-full chart-key-series shrink-0" />
               <span className="font-bold text-slate-900 tabular-nums">{cur === null ? '—' : money(cur)}</span>
-              <span className="text-slate-500">ce mois-ci</span>
+              <span className="text-slate-500 truncate">ce mois-ci</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-0.5 rounded-full chart-key-ref shrink-0" />
               <span className="font-bold text-slate-900 tabular-nums">{money(avg)}</span>
-              <span className="text-slate-500">moyenne des 3 mois précédents</span>
+              <span className="text-slate-500 truncate">moyenne des 3 derniers mois</span>
             </div>
           </div>
 
@@ -198,13 +243,13 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
                 {ticks.map((t) => (
                   <g key={t}>
                     <line x1={PAD.left} x2={PAD.left + plotW} y1={yv(t)} y2={yv(t)} className="stroke-slate-100" strokeWidth={1} />
-                    <text x={width - 2} y={yv(t) + 4} textAnchor="end" className="fill-slate-400 text-[10px] tabular-nums">
+                    <text x={width - 2} y={yv(t) + 4} textAnchor="end" className="fill-slate-400 text-[11px] tabular-nums">
                       {compact(t)}
                     </text>
                   </g>
                 ))}
-                <text x={PAD.left} y={H - 4} className="fill-slate-400 text-[10px]">{dateLabel(0)}</text>
-                <text x={PAD.left + plotW} y={H - 4} textAnchor="end" className="fill-slate-400 text-[10px]">{dateLabel(data.days - 1)}</text>
+                <text x={PAD.left} y={H - 4} className="fill-slate-400 text-[11px]">{dateLabel(0)}</text>
+                <text x={PAD.left + plotW} y={H - 4} textAnchor="end" className="fill-slate-400 text-[11px]">{dateLabel(data.days - 1)}</text>
 
                 {/* Moyenne (référence grise) puis ce mois-ci (couleur + voile léger) */}
                 <path d={path(series.average)} fill="none" className="chart-ref" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
@@ -219,7 +264,7 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
           </div>
 
           {/* Légende (deux séries -> toujours présente) */}
-          <div className="flex items-center gap-4 mt-1 text-[11px] text-slate-500">
+          <div className="flex items-center gap-4 mt-1 text-[12px] text-slate-500">
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-0.5 rounded-full chart-key-series" /> Ce mois-ci
             </span>
@@ -236,6 +281,27 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
               </b>{' '}
               que d'habitude.
             </p>
+          )}
+
+          {data.forecast && (
+            <div className={`mt-3 rounded-2xl px-3.5 py-3 ${data.forecast.end < 0 ? 'bg-red-500/10' : 'bg-slate-100'}`}>
+              {/* Titre, puis le montant en grand sur sa propre ligne : rien ne se coupe */}
+              <div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-500">
+                {data.forecast.end < 0 ? <TrendingDown className="w-4 h-4 text-red-600 shrink-0" /> : <TrendingUp className="w-4 h-4 text-emerald-600 shrink-0" />}
+                Fin du mois, à ce rythme
+              </div>
+              <div className={`mt-1 text-[20px] leading-tight font-bold tabular-nums break-words ${data.forecast.end < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                ≈ {about(data.forecast.end)}
+              </div>
+              <p className="text-[12px] leading-snug text-slate-500 mt-1.5">
+                Encore ≈ <span className="whitespace-nowrap">{about(data.forecast.expenseAhead)}</span> de dépenses
+                {data.forecast.incomeAhead > 0 && <> et ≈ <span className="whitespace-nowrap">{about(data.forecast.incomeAhead)}</span> de revenus</>} d'ici {data.forecast.left} jour
+                {data.forecast.left > 1 ? 's' : ''}
+                {data.forecast.hasHistory ? ', d\u2019après tes 3 derniers mois et ce mois-ci' : ', au rythme de ce mois-ci'}
+                {data.forecast.billsOut > 0 ? <>, dont <span className="whitespace-nowrap">{about(data.forecast.billsOut)}</span> de factures prévues.</> : '.'}
+                {data.forecast.end < 0 && ' Attention : tu risques de manquer d\'argent.'}
+              </p>
+            </div>
           )}
 
           {/* Tableau pour les lecteurs d'écran (les valeurs ne dépendent pas du survol) */}
@@ -259,6 +325,25 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
             </tbody>
           </table>
         </>
+      )}
+      {hasGoals && (
+        <button
+          onClick={onOpenGoals}
+          disabled={!onOpenGoals}
+          className="mt-3 w-full rounded-2xl bg-emerald-500/10 px-3 py-2.5 text-xs text-left flex items-center gap-2 cursor-pointer disabled:cursor-default"
+        >
+          <Target className="w-4 h-4 text-emerald-600 shrink-0" />
+          {goals.length > 0 ? (
+            <span className="min-w-0 text-slate-700">
+              Ce mois-ci, tu as avancé de <b className="text-emerald-700 tabular-nums">{Math.max(1, Math.round(goals[0].points))} %</b> vers {goals[0].wallet.name}{' '}
+              <span className="tabular-nums">(+{formatMoney(goals[0].added, goals[0].wallet.currency, { ...getPrefs(), decimals: 'auto' })})</span>
+              {goals.length > 1 && <span className="text-slate-500"> · +{goals.length - 1} autre{goals.length > 2 ? 's' : ''}</span>}
+            </span>
+          ) : (
+            <span className="min-w-0 text-slate-700">Pas encore de dépôt dans tes objectifs ce mois-ci.</span>
+          )}
+          {onOpenGoals && <ChevronRight className="w-3.5 h-3.5 text-slate-400 ml-auto shrink-0" />}
+        </button>
       )}
     </div>
   );

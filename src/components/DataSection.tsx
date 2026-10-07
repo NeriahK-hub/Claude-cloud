@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Upload, FileSpreadsheet, DatabaseBackup, X, AlertTriangle, Loader2 } from 'lucide-react';
 import { Budget, Ristourne, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
+import { useFeature } from '../lib/remoteConfig';
 import { Backup, exportBackup, exportExcel, ImportPlan, planImport, readBackup, readImportFile, ReadResult } from '../lib/importExport';
 
 interface DataSectionProps {
@@ -19,6 +20,7 @@ const fmtDate = (d: Date | null) => (d ? d.toLocaleDateString('fr-FR', { day: 'n
 
 // Paramètres > Mes données : importer (Money Lover, Excel, CSV, sauvegarde) et exporter
 export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions, categories, budgets, ristournes, settings, onImport, onRestore }) => {
+  const importOn = useFeature('importData'); // désactivable depuis l'espace admin
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'read' | 'excel' | null>(null);
   const [error, setError] = useState('');
@@ -68,13 +70,13 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
     <>
       <input ref={input} type="file" accept=".xlsx,.csv,.json,.txt" onChange={onPick} className="hidden" />
       <div className="space-y-2">
-        <button onClick={() => input.current?.click()} disabled={!!busy} className={`${base} bg-[#D8FB52] hover:bg-[#cbed3b] text-slate-900`}>
+        {importOn && <button onClick={() => input.current?.click()} disabled={!!busy} className={`${base} bg-accent hover:bg-accent-hover text-slate-900`}>
           {busy === 'read' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
           <span className="flex-1">
             Importer un fichier
             <span className="block text-xs font-medium opacity-70">Money Lover, Excel (.xlsx), CSV ou sauvegarde</span>
           </span>
-        </button>
+        </button>}
         <button onClick={onExcel} disabled={!!busy || transactions.length === 0} className={btn}>
           {busy === 'excel' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileSpreadsheet className="w-5 h-5 text-emerald-600" />}
           <span className="flex-1">
@@ -108,7 +110,7 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
               <div key={w.name} className="flex items-center gap-2 px-3 py-2 text-sm">
                 <span className="flex-1 truncate font-semibold text-slate-800">{w.name}</span>
                 <span className="text-xs text-slate-400">{w.currency} · {w.count}</span>
-                {w.isNew && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#D8FB52] text-slate-900">NOUVEAU</span>}
+                {w.isNew && <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-accent text-slate-900">NOUVEAU</span>}
               </div>
             ))}
           </div>
@@ -151,7 +153,7 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
                 onImport(plan, replace);
                 setRead(null);
               }}
-              className="flex-[2] py-3 rounded-2xl bg-[#D8FB52] text-slate-900 text-sm font-bold cursor-pointer disabled:opacity-40"
+              className="flex-[2] py-3 rounded-2xl bg-accent text-slate-900 text-sm font-bold cursor-pointer disabled:opacity-40"
             >
               {plan.transactions.length > 0 || plan.categoryUpdates.length === 0
                 ? `Importer ${plan.transactions.length} transactions`
@@ -190,7 +192,7 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
 
 const Stat: React.FC<{ label: string; value: string; small?: boolean }> = ({ label, value, small }) => (
   <div className="p-3 rounded-2xl bg-slate-100">
-    <div className="text-[11px] font-semibold text-slate-500">{label}</div>
+    <div className="text-[12px] font-semibold text-slate-500">{label}</div>
     <div className={`font-bold tabular-nums text-slate-900 ${small ? 'text-xs mt-0.5' : 'text-lg'}`}>{value}</div>
   </div>
 );

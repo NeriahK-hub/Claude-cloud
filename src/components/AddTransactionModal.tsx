@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Delete, Settings2, ChevronDown, ChevronLeft, ArrowUpRight, ArrowDownLeft, X, EyeOff } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Delete, Settings2, ChevronDown, ChevronLeft, ArrowUpRight, ArrowDownLeft, X, EyeOff, CalendarDays, Users, HandCoins } from 'lucide-react';
+import { SplitPanel, SplitResult } from './SplitPanel';
 import { Category, categoriesFor } from '../data/categories';
 import { isShared, MemberChips, ME_ID } from './Members';
 import { useDisplayPrefs } from '../lib/display';
@@ -9,8 +10,22 @@ import { CURRENCIES } from '../data/currencies';
 import { convertBetween, formatMoney } from '../lib/money';
 import { haptic } from '../lib/haptics';
 import { SelCheck } from './SelCheck';
+import { DateField, DatePicker, localDay } from './DatePicker';
+import { NoteHistoryItem, suggestNotes } from '../lib/noteSuggestions';
+import { useFeature } from '../lib/remoteConfig';
+import { interestAmount } from '../lib/debtShares';
 
 export type AddMode = 'expense' | 'income' | 'debt';
+
+// Partage d'addition, prêt à être enregistré par App
+export interface SplitBill extends SplitResult {
+  category: Category;
+  note: string;
+  walletId: string;
+  currency: string;
+  memberId?: string;
+  createdAt: string;
+}
 
 interface AddTransactionModalProps {
   mode: AddMode | null; // null = fermé
@@ -20,11 +35,13 @@ interface AddTransactionModalProps {
   defaultWalletId: string;
   onClose: () => void;
   onChangeMode: (m: AddMode) => void;
-  onSave: (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string, excludeFromReport?: boolean) => void;
+  onSave: (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string, excludeFromReport?: boolean, createdAt?: string, interest?: number, dueDate?: string) => void;
   onManageCategories: () => void;
+  onSplit?: (bill: SplitBill) => void; // « Partager l'addition »
   // Ouverture pré-remplie (ex. « Il me rembourse » depuis Dettes et prêts)
   preset?: { categoryId?: string; withPerson?: string; amount?: number; currency?: string } | null;
   people?: string[]; // noms déjà utilisés (suggestions pour « Avec qui ? »)
+  noteHistory?: NoteHistoryItem[]; // notes déjà écrites (suggestions pendant la saisie)
 }
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
@@ -37,9 +54,24 @@ const DEBT_HINTS: Record<string, string> = {
   'loan-back': "On me rend mon argent",
 };
 
+const dayLabel = (day: string) => {
+  const now = new Date();
+  if (!day || day === localDay(now)) return "Aujourd'hui";
+  if (day === localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))) return 'Hier';
+  const d = new Date(`${day}T12:00`);
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) });
+};
+// Jour choisi -> date ISO : aujourd'hui = maintenant ; un autre jour = ce jour-là, à l'heure qu'il est
+const dayToIso = (day: string) => {
+  const now = new Date();
+  if (!day || day === localDay(now)) return now.toISOString();
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(y, m - 1, d, now.getHours(), now.getMinutes()).toISOString();
+};
+
 // Tout tient sur un écran : les choix (catégorie, portefeuille, devise) s'ouvrent
 // dans un panneau qui prend la place du clavier, au lieu de listes qui défilent.
-type Panel = null | 'category' | 'wallet' | 'currency';
+type Panel = null | 'category' | 'wallet' | 'currency' | 'date' | 'split';
 
 export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   mode,
@@ -50,9 +82,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   onClose,
   onChangeMode,
   onSave,
+  onSplit,
   onManageCategories,
   preset,
   people = [],
+  noteHistory = [],
 }) => {
   const [amount, setAmount] = useState('');
   const [parentId, setParentId] = useState(''); // catégorie principale choisie
@@ -62,8 +96,15 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const [currency, setCurrency] = useState('');
   const [memberId, setMemberId] = useState(ME_ID); // portefeuille partagé : qui fait l'opération
   const [person, setPerson] = useState(''); // Dette / Prêt : avec qui
+  const [interestText, setInterestText] = useState(''); // prêt / emprunt : intérêts prévus (facultatif)
+  const [interestPct, setInterestPct] = useState(false); // … en % du montant
+  const [dueDay, setDueDay] = useState(''); // prêt / emprunt : à rembourser le (facultatif, AAAA-MM-JJ)
   const [exclude, setExclude] = useState(false); // exclure du rapport (si l'option est activée)
-  const { excludeOption } = useDisplayPrefs();
+  const [day, setDay] = useState(''); // '' = aujourd'hui
+  const { excludeOption, simpleMode, iconsOnly } = useDisplayPrefs(); // mode simple : moins d'options, plus gros
+  const debtsOn = useFeature('debts'); // onglet Dette / Prêt (désactivable depuis l'espace admin)
+  // Mode simple : seulement « J'ai dépensé » / « J'ai reçu » (sauf si on arrive déjà sur Dette / Prêt)
+  const tabs: AddMode[] = debtsOn && (!simpleMode || mode === 'debt') ? ['expense', 'income', 'debt'] : ['expense', 'income'];
   const [panel, setPanel] = useState<Panel>(null);
   const [subOf, setSubOf] = useState<string | null>(null); // panneau catégorie : sous-catégories de…
 
@@ -75,12 +116,37 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
   const isOpen = mode !== null;
 
+  // Notes déjà écrites : les habituelles de la catégorie, ou celles qui commencent comme ce qu'on tape
+  const noteIdeas = useMemo(
+    () => (mode ? suggestNotes(noteHistory, note, available.map((c) => c.id), selectedId) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [noteHistory, note, mode, selectedId, categories]
+  );
+  const pickNote = (x: NoteHistoryItem) => {
+    setNote(x.text);
+    // Catégorie choisie jamais utilisée avec cette note : on prend celle d'habitude
+    if (!x.cats[selectedId]) {
+      const usual = Object.entries(x.cats)
+        .sort((a, b) => b[1] - a[1])
+        .map(([id]) => available.find((c) => c.id === id))
+        .find(Boolean);
+      if (usual) {
+        setSelectedId(usual.id);
+        setParentId(usual.parentId ?? usual.id);
+      }
+    }
+  };
+
   // À l'ouverture : tout remettre à zéro
   useEffect(() => {
     if (isOpen) {
       setAmount(preset?.amount ? String(Math.round(preset.amount * 100) / 100) : '');
       setNote('');
+      setDay('');
       setPerson(preset?.withPerson ?? '');
+      setInterestText('');
+      setInterestPct(false);
+      setDueDay('');
       setExclude(false);
       setMemberId(ME_ID);
       setWalletId(defaultWalletId);
@@ -122,10 +188,25 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const converted = wallet ? convertBetween(value, cur, wallet.currency, settings) : null;
   const rateMissing = !!wallet && converted === null;
   const canSave = value > 0 && !!selected && !!wallet && !rateMissing;
+  // Intérêts : seulement quand on prête ou qu'on emprunte (pas pour un remboursement)
+  const withInterest = mode === 'debt' && (selected?.id === 'loan-given' || selected?.id === 'debt-taken');
+  const interest = withInterest ? interestAmount(interestText, interestPct, value) : 0;
 
   const save = () => {
     if (!canSave || !selected || !wallet) return;
-    onSave(value, selected, note, wallet.id, cur, isShared(wallet) && memberId !== ME_ID ? memberId : undefined, mode === 'debt' ? person.trim() || undefined : undefined, excludeOption && exclude ? true : undefined);
+    onSave(
+      value,
+      selected,
+      note.trim(),
+      wallet.id,
+      cur,
+      isShared(wallet) && memberId !== ME_ID ? memberId : undefined,
+      mode === 'debt' ? person.trim() || undefined : undefined,
+      excludeOption && exclude ? true : undefined,
+      dayToIso(day),
+      interest > 0 ? interest : undefined,
+      withInterest && dueDay ? dueDay : undefined
+    );
     onClose();
   };
 
@@ -187,20 +268,24 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     <button
       key={key}
       onClick={onClick}
-      className={`relative min-w-0 flex flex-col items-center justify-center gap-0.5 px-1 py-2 rounded-2xl text-center transition cursor-pointer ${
+      className={`relative min-w-0 min-h-[84px] flex flex-col items-center justify-center gap-0.5 px-0.5 py-2 rounded-2xl text-center transition duration-200 ease-out active:scale-[0.95] cursor-pointer ${
         active ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200/70'
       }`}
     >
       {active && <SelCheck />}
       {badge}
-      <span className="w-full text-[11px] font-bold text-slate-900 leading-tight line-clamp-2 [overflow-wrap:anywhere]">{title}</span>
+      {/* Coupure à la française (« Rembour-sement »), jamais au milieu d'une syllabe */}
+      <span className="w-full text-[12px] font-bold text-slate-900 leading-tight line-clamp-2 hyphens-auto break-words" lang="fr">{title}</span>
       {sub}
     </button>
   );
 
   const renderPanel = () => {
     if (panel === 'category') {
-      const list = subOf ? [available.find((c) => c.id === subOf)!, ...childrenOf(subOf)] : parents;
+      // Dépense / Revenu : les catégories Dette / Prêt ont leur onglet (sauf celle déjà choisie)
+      const list = subOf
+        ? [available.find((c) => c.id === subOf)!, ...childrenOf(subOf)]
+        : parents.filter((c) => mode === 'debt' || c.type !== 'debt' || c.id === selectedId);
       const title = subOf ? available.find((c) => c.id === subOf)?.name : mode === 'debt' ? 'Que se passe-t-il ?' : 'Choisis une catégorie';
       return (
         <>
@@ -214,7 +299,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               </button>
             }
           />
-          <div className={`grid gap-1.5 ${mode === 'debt' ? 'grid-cols-2' : 'grid-cols-4'}`}>
+          <div className={`grid ${mode === 'debt' ? 'grid-cols-2 gap-1.5' : 'grid-cols-4 gap-1'}`}>
             {list.map((c, i) =>
               tile(
                 c.id,
@@ -224,20 +309,63 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 subOf && i === 0 ? 'Général' : c.name,
                 mode === 'debt' ? (
                   <>
-                    {DEBT_HINTS[c.id] && <span className="text-[10px] text-slate-500 leading-tight">{DEBT_HINTS[c.id]}</span>}
+                    {DEBT_HINTS[c.id] && <span className="text-[11px] text-slate-500 leading-tight">{DEBT_HINTS[c.id]}</span>}
                     {c.direction && (
-                      <span className={`flex items-center gap-0.5 text-[10px] font-bold ${c.direction === 'out' ? 'text-slate-600' : 'text-emerald-600'}`}>
+                      <span className={`flex items-center gap-0.5 text-[11px] font-bold ${c.direction === 'out' ? 'text-slate-600' : 'text-emerald-600'}`}>
                         {c.direction === 'out' ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownLeft className="w-3 h-3" />}
                         {c.direction === 'out' ? "L'argent sort" : "L'argent entre"}
                       </span>
                     )}
                   </>
                 ) : !subOf && childrenOf(c.id).length > 0 ? (
-                  <span className="text-[10px] leading-none text-slate-400">{childrenOf(c.id).length + 1} choix ›</span>
+                  // Des sous-catégories : une petite flèche suffit
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" aria-label={`${childrenOf(c.id).length + 1} choix`} />
                 ) : undefined
               )
             )}
           </div>
+        </>
+      );
+    }
+    if (panel === 'split') {
+      return (
+        <>
+          <PanelHeader title="Partager l'addition" onClose={() => setPanel(null)} />
+          <p className="text-[12px] text-slate-500 -mt-1 mb-3">Chacun sa part : Wallo note la tienne et retient qui doit combien.</p>
+          <SplitPanel
+            total={value}
+            onTotal={(v) => setAmount(v > 0 ? String(Math.round(v * 100) / 100) : '')}
+            currency={cur}
+            people={people}
+            canSave={canSave}
+            onSave={(r) => {
+              if (!selected || !wallet || !onSplit) return;
+              onSplit({
+                ...r,
+                category: selected,
+                note: note.trim(),
+                walletId: wallet.id,
+                currency: cur,
+                memberId: isShared(wallet) && memberId !== ME_ID ? memberId : undefined,
+                createdAt: dayToIso(day),
+              });
+              onClose();
+            }}
+          />
+        </>
+      );
+    }
+    if (panel === 'date') {
+      return (
+        <>
+          <PanelHeader title="Date de l'opération" onClose={() => setPanel(null)} />
+          <DatePicker
+            value={day}
+            onChange={(d) => {
+              setDay(d);
+              setPanel(null);
+            }}
+          />
         </>
       );
     }
@@ -258,7 +386,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 },
                 <IconBadge icon={w.icon} image={w.image} color={w.color} size="sm" />,
                 w.name,
-                <span className="text-[10px] text-slate-400">{w.currency}</span>
+                <span className="text-[11px] text-slate-400">{w.currency}</span>
               )
             )}
           </div>
@@ -281,14 +409,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 setPanel(null);
               }}
               className={`py-2.5 rounded-xl text-sm font-bold cursor-pointer transition ${
-                code === cur ? 'bg-[#D8FB52] text-slate-900' : 'bg-slate-100 text-slate-700 hover:bg-slate-200/70'
+                code === cur ? 'bg-accent text-slate-900' : 'bg-slate-100 text-slate-700 hover:bg-slate-200/70'
               }`}
             >
               {code}
             </button>
           ))}
         </div>
-        {wallet && <p className="text-[11px] text-slate-400 mt-2">Converti automatiquement en {wallet.currency} pour {wallet.name}.</p>}
+        {wallet && <p className="text-[12px] text-slate-400 mt-2">Converti automatiquement en {wallet.currency} pour {wallet.name}.</p>}
       </>
     );
   };
@@ -301,7 +429,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
       <div
-        className="w-full sm:max-w-[420px] max-h-[100dvh] overflow-y-auto bg-white rounded-t-[28px] sm:rounded-[32px] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-slide-up"
+        className="w-full sm:max-w-[420px] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-y-auto bg-white rounded-t-[28px] sm:rounded-[32px] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Fermer + type */}
@@ -309,29 +437,35 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
           <button onClick={onClose} aria-label="Annuler" className="w-10 h-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
             <X className="w-4 h-4" />
           </button>
-          <div className="flex-1 grid grid-cols-3 gap-1 p-1 rounded-2xl bg-slate-200/60">
-            {(['expense', 'income', 'debt'] as const).map((m) => (
+          <div className={`flex-1 grid ${tabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1 p-1 rounded-2xl bg-slate-200/60`}>
+            {tabs.map((m) => (
               <button
                 key={m}
                 onClick={() => { haptic(); onChangeMode(m); }}
-                className={`py-1.5 rounded-xl text-[13px] font-semibold transition cursor-pointer ${mode === m ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
+                className={`${simpleMode ? 'py-2 text-[15px]' : 'py-1.5 text-[13px]'} rounded-xl font-semibold transition cursor-pointer ${mode === m ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
               >
-                {m === 'expense' ? 'Dépense' : m === 'income' ? 'Revenu' : 'Dette / Prêt'}
+                {iconsOnly ? (
+                  // Icônes seules : flèche rouge (sort), verte (entre), mains (dette)
+                  <span className="flex justify-center" aria-label={m === 'expense' ? 'Dépense' : m === 'income' ? 'Revenu' : 'Dette / Prêt'}>
+                    {m === 'expense' ? <ArrowUpRight className="w-6 h-6 text-red-500" strokeWidth={2.6} /> : m === 'income' ? <ArrowDownLeft className="w-6 h-6 text-emerald-500" strokeWidth={2.6} /> : <HandCoins className="w-6 h-6 text-amber-500" strokeWidth={2.4} />}
+                  </span>
+                ) : m === 'expense' ? (simpleMode ? 'J\u2019ai dépensé' : 'Dépense') : m === 'income' ? (simpleMode ? 'J\u2019ai reçu' : 'Revenu') : 'Dette / Prêt'}
               </button>
             ))}
           </div>
         </div>
 
         {/* Montant */}
-        <div className="flex flex-col items-center pt-3 pb-2">
-          <div className="flex items-baseline gap-2">
+        <div className="flex flex-col items-center pt-4 pb-2">
+          <div className="flex items-center gap-2 max-w-full">
             <span
-              className={`text-[38px] leading-none font-extrabold tracking-tight tabular-nums ${
-                !amount ? 'text-slate-300' : direction === 'in' ? 'text-emerald-600' : 'text-slate-900'
+              className={`text-[46px] leading-none font-extrabold tracking-tight tabular-nums truncate ${
+                !amount ? 'text-slate-300' : direction === 'in' ? 'text-emerald-600' : direction === 'out' ? 'text-red-500' : 'text-slate-900'
               }`}
             >
               {amount && direction ? (direction === 'out' ? '−' : '+') : ''}
-              {amount ? amount.replace('.', ',') : '0'}
+              {/* « 25 000,5 » : séparateur de milliers pendant la saisie */}
+              {amount ? `${Number(amount.split('.')[0] || 0).toLocaleString('fr-FR')}${amount.includes('.') ? `,${amount.split('.')[1]}` : ''}` : '0'}
             </span>
             <button
               onClick={() => setPanel(panel === 'currency' ? null : 'currency')}
@@ -341,15 +475,29 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               {cur} <ChevronDown className="w-4 h-4" />
             </button>
           </div>
-          <p className={`mt-1.5 text-xs ${rateMissing ? 'text-amber-600' : 'text-slate-500'}`}>
-            {rateMissing
-              ? 'Taux de change manquant : ajoute-le dans Paramètres.'
-              : wallet && direction
-                ? `${direction === 'out' ? 'Sort de' : 'Entre sur'} ${wallet.name}${
-                    cur !== wallet.currency && value > 0 ? ` · ≈ ${formatMoney(converted ?? 0, wallet.currency)}` : ''
-                  }`
-                : 'Choisis ce qui se passe'}
-          </p>
+          {/* Seulement quand ça apporte quelque chose : le portefeuille est déjà dans « Payé avec » */}
+          {(rateMissing || (wallet && cur !== wallet.currency && value > 0) || !direction) && (
+            <p className={`mt-1.5 text-xs ${rateMissing ? 'text-amber-600' : 'text-slate-500'}`}>
+              {rateMissing
+                ? 'Taux de change manquant : ajoute-le dans Paramètres.'
+                : !direction
+                  ? 'Choisis ce qui se passe'
+                  : `≈ ${formatMoney(converted ?? 0, wallet!.currency)} sur ${wallet!.name}`}
+            </p>
+          )}
+          {/* Date : aujourd'hui par défaut, touche pour en choisir une autre */}
+          <button
+            onClick={() => setPanel(panel === 'date' ? null : 'date')}
+            aria-expanded={panel === 'date'}
+            aria-label={`Date : ${dayLabel(day)}`}
+            className={`mt-2.5 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition ${
+              day && day !== localDay(new Date()) ? 'bg-accent text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            <CalendarDays className="w-3.5 h-3.5" />
+            {dayLabel(day)}
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${panel === 'date' ? 'rotate-180' : ''}`} />
+          </button>
         </div>
 
         {/* Catégorie + portefeuille : deux boutons, toujours visibles */}
@@ -361,16 +509,16 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               <span className="w-9 h-9 rounded-full bg-slate-200 shrink-0" />
             )}
             <span className="min-w-0 flex-1">
-              <span className="block text-[10px] font-semibold text-slate-500">{mode === 'debt' ? 'Type' : 'Catégorie'}</span>
-              <span className={`block text-xs font-bold truncate ${selected ? 'text-slate-900' : 'text-slate-400'}`}>{selected ? categoryLabel : 'À choisir'}</span>
+              <span className="block text-[11px] font-semibold text-slate-500">{mode === 'debt' ? 'Type' : simpleMode ? 'Pour quoi\u00a0?' : 'Catégorie'}</span>
+              <span className={`block text-[13px] font-bold leading-tight line-clamp-2 ${selected ? 'text-slate-900' : 'text-slate-400'}`}>{selected ? categoryLabel : 'À choisir'}</span>
             </span>
             <ChevronDown className="w-4 h-4 shrink-0 text-slate-400" />
           </button>
           <button onClick={() => setPanel(panel === 'wallet' ? null : 'wallet')} className={selectorCls(panel === 'wallet')}>
             {wallet && <IconBadge icon={wallet.icon} image={wallet.image} color={wallet.color} size="sm" />}
             <span className="min-w-0 flex-1">
-              <span className="block text-[10px] font-semibold text-slate-500">{walletLabel}</span>
-              <span className="block text-xs font-bold text-slate-900 truncate">{wallet?.name}</span>
+              <span className="block text-[11px] font-semibold text-slate-500">{walletLabel}</span>
+              <span className="block text-[13px] font-bold leading-tight text-slate-900 line-clamp-2">{wallet?.name}</span>
             </span>
             <ChevronDown className="w-4 h-4 shrink-0 text-slate-400" />
           </button>
@@ -392,14 +540,63 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               {mode === 'debt' ? (
                 <>
                   {/* Dette / Prêt : avec qui (suggestions = noms déjà utilisés) */}
-                  <input
-                    value={person}
-                    onChange={(e) => setPerson(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && save()}
-                    list="wallo-people"
-                    placeholder="Avec qui ? (ex. Kemy)"
-                    className="w-full mb-2 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
-                  />
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      value={person}
+                      onChange={(e) => setPerson(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && save()}
+                      list="wallo-people"
+                      placeholder="Avec qui ? (ex. Kemy)"
+                      className="min-w-0 flex-1 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent"
+                    />
+                    <input
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && save()}
+                      placeholder="Note (facultatif)"
+                      className="min-w-0 flex-1 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
+                  {withInterest && (
+                    <div className="flex gap-2 mb-2 items-center">
+                      <input
+                        value={interestText}
+                        onChange={(e) => setInterestText(e.target.value.replace(/[^0-9.,]/g, ''))}
+                        onKeyDown={(e) => e.key === 'Enter' && save()}
+                        inputMode="decimal"
+                        placeholder="Intérêts (facultatif)"
+                        aria-label="Intérêts prévus"
+                        className="min-w-0 flex-1 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent tabular-nums"
+                      />
+                      {/* En montant ou en % du prêt */}
+                      <div className="flex shrink-0 p-0.5 rounded-xl bg-slate-100" role="group" aria-label="Intérêts en">
+                        {[false, true].map((pct) => (
+                          <button
+                            key={String(pct)}
+                            type="button"
+                            onClick={() => setInterestPct(pct)}
+                            aria-pressed={interestPct === pct}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${interestPct === pct ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
+                          >
+                            {pct ? '%' : cur}
+                          </button>
+                        ))}
+                      </div>
+                      {interestPct && interest > 0 && <span className="shrink-0 text-xs font-semibold text-slate-500 tabular-nums">= {formatMoney(interest, cur)}</span>}
+                    </div>
+                  )}
+                  {/* Échéance : un rappel la veille et le jour même */}
+                  {withInterest && (
+                    <DateField
+                      value={dueDay}
+                      onChange={setDueDay}
+                      placeholder={selected?.id === 'loan-given' ? 'À me rembourser le… (facultatif)' : 'À rembourser le… (facultatif)'}
+                      min={localDay(new Date())}
+                      shortcuts="future"
+                      label="Date de remboursement"
+                      className="mb-2"
+                    />
+                  )}
                   <datalist id="wallo-people">
                     {people.map((n) => (
                       <option key={n} value={n} />
@@ -407,16 +604,44 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   </datalist>
                 </>
               ) : (
-                <input
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && save()}
-                  placeholder="Note (facultatif) : ex. marché de Gambela"
-                  className="w-full mb-2 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
-                />
+                <div className="flex gap-2 mb-2">
+                  <input
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && save()}
+                    placeholder="Ajouter une note"
+                    className="min-w-0 flex-1 px-4 py-2 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent"
+                  />
+                  {/* Partager l'addition (restaurant, voyage…) : seulement pour une dépense */}
+                  {mode === 'expense' && debtsOn && onSplit && !simpleMode && (
+                    <button
+                      type="button"
+                      onClick={() => setPanel('split')}
+                      className="shrink-0 h-9 px-3 rounded-2xl bg-slate-100 hover:bg-slate-200/70 text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Users className="w-3.5 h-3.5" /> Partager
+                    </button>
+                  )}
+                </div>
+              )}
+              {noteIdeas.length > 0 && (
+                <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mt-0.5 mb-2 animate-fade-in" aria-label="Notes déjà utilisées">
+                  {noteIdeas.map((x) => (
+                    <button
+                      key={x.text}
+                      type="button"
+                      // garde le clavier ouvert pendant qu'on touche la suggestion
+                      onPointerDown={(e) => e.preventDefault()}
+                      onClick={() => pickNote(x)}
+                      className="shrink-0 max-w-[70%] px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-semibold text-slate-700 truncate cursor-pointer hover:bg-slate-50"
+                    >
+                      {x.text}
+                    </button>
+                  ))}
+                </div>
               )}
               </div>
-              {excludeOption && (
+              {excludeOption && !simpleMode && (
                 <button
                   type="button"
                   onClick={() => setExclude((x) => !x)}
@@ -436,7 +661,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                     key={k}
                     onClick={() => pressKey(k)}
                     aria-label={k === 'del' ? 'Effacer' : k}
-                    className="h-11 rounded-2xl bg-slate-100 active:bg-slate-200 font-bold text-lg text-slate-800 flex items-center justify-center cursor-pointer"
+                    className={`${simpleMode ? 'h-14 text-2xl' : 'h-12 text-xl'} rounded-2xl bg-slate-100 active:bg-slate-200 font-semibold text-slate-800 flex items-center justify-center cursor-pointer select-none`}
                   >
                     {k === 'del' ? <Delete className="w-5 h-5" /> : k === '.' ? ',' : k}
                   </button>
@@ -445,7 +670,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               <button
                 disabled={!canSave}
                 onClick={save}
-                className="w-full mt-2 py-3.5 rounded-2xl bg-[#D8FB52] disabled:bg-slate-100 disabled:text-slate-400 text-slate-900 font-bold text-sm cursor-pointer disabled:cursor-default"
+                className={`w-full mt-2 ${simpleMode ? 'py-4 text-base' : 'py-3.5 text-sm'} rounded-2xl bg-accent disabled:bg-slate-100 disabled:text-slate-400 text-slate-900 font-bold cursor-pointer disabled:cursor-default`}
               >
                 {saveLabel}
               </button>

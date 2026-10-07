@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
-import { ChevronLeft, ChevronDown, Sun, Moon, SmartphoneIcon } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronDown, ChevronRight, Sun, Moon, SmartphoneIcon, Check, Palette, Type, Bell, Lock, Coins, ArrowLeftRight, Database, Shapes } from 'lucide-react';
+import { useNotifyState } from '../lib/notify';
+import { useLockConfig } from '../lib/lock';
+import { useCustomIcons } from '../lib/customIcons';
+import { formatMoney } from '../lib/money';
+import { formatDate } from '../lib/display';
 import { Budget, Ristourne, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { Backup, ImportPlan } from '../lib/importExport';
@@ -10,7 +15,14 @@ import { currenciesNeedingRate } from '../lib/money';
 import { getThemePref, setThemePref, ThemePref } from '../lib/theme';
 import { CustomIconsSection } from './CustomIconsSection';
 import { DisplaySettings } from './DisplaySettings';
+import { NotificationsSettings } from './NotificationsSettings';
+import { setAutoRates, useAutoRates } from '../lib/rates';
+import { LockSettings } from './AppLock';
 import { hapticsEnabled, setHapticsEnabled } from '../lib/haptics';
+import { ACCENTS, accentVars, setAccent, useAccent } from '../lib/accent';
+import { useIsDesktop } from '../hooks/useIsDesktop';
+import { InterfacePicker } from './InterfacePicker';
+import { useDisplayPrefs } from '../lib/display';
 
 interface SettingsViewProps {
   settings: Settings;
@@ -25,14 +37,16 @@ interface SettingsViewProps {
   onBack: () => void;
 }
 
-const Section: React.FC<{ title: string; hint?: string; children: React.ReactNode }> = ({ title, hint, children }) => (
-  <div className="bg-white rounded-3xl border border-slate-100 p-5 mb-4">
-    <h2 className="text-sm font-bold text-slate-900">{title}</h2>
-    {hint && <p className="text-xs text-slate-400 mt-0.5 mb-3">{hint}</p>}
-    {!hint && <div className="mb-3" />}
-    {children}
+// Un bloc de réglages (carte blanche), avec un petit titre et une explication facultatifs
+const Block: React.FC<{ title?: string; hint?: string; children: React.ReactNode }> = ({ title, hint, children }) => (
+  <div className="mb-4">
+    {title && <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 px-4 mb-1.5">{title}</h3>}
+    <div className="bg-white rounded-3xl border border-slate-100 p-4">{children}</div>
+    {hint && <p className="text-[12px] text-slate-400 px-4 mt-1.5 leading-snug">{hint}</p>}
   </div>
 );
+
+type PanelId = 'appearance' | 'display' | 'notifications' | 'lock' | 'currencies' | 'rates' | 'data' | 'icons';
 
 // Bouton qui déplie la liste de devises (évite deux longues listes à l'écran)
 const Collapsible: React.FC<{ label: string; children: (close: () => void) => React.ReactNode }> = ({ label, children }) => {
@@ -64,13 +78,34 @@ const THEMES: { id: ThemePref; label: string; Icon: typeof Sun }[] = [
 ];
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, budgets, ristournes, onImport, onRestore, onChange, onBack }) => {
+  const desktop = useIsDesktop(); // ordinateur : pas de retour ni de titre en double, contenu sur plusieurs colonnes
   const [theme, setTheme] = useState(getThemePref);
   const [haptics, setHaptics] = useState(hapticsEnabled);
+  const accent = useAccent();
+  // Mode simple : les réglages techniques sont rangés sous « Réglages avancés »
+  const { simpleMode } = useDisplayPrefs();
+  const [advanced, setAdvanced] = useState(false);
+  const showAll = !simpleMode || advanced;
+  const [panel, setPanel] = useState<PanelId | null>(null); // écran de réglage ouvert (null = la liste)
+  const notify = useNotifyState();
+  const lock = useLockConfig();
+  const customIcons = useCustomIcons();
+  // Chaque écran commence en haut
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [panel]);
   const needed = currenciesNeedingRate(wallets, settings);
   // Texte tapé dans les champs de taux (on garde le texte pour ne pas gêner la saisie)
   const [draft, setDraft] = useState<Record<string, string>>(() =>
     Object.fromEntries(Object.entries(settings.rates).map(([k, v]) => [k, String(v)]))
   );
+  const autoRates = useAutoRates();
+  // Taux automatiques : les champs montrent les taux reçus (virgule à la française)
+  const ratesKey = JSON.stringify(settings.rates);
+  useEffect(() => {
+    if (autoRates.on) setDraft(Object.fromEntries(Object.entries(settings.rates).map(([k, v]) => [k, String(v).replace('.', ',')])));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRates.on, ratesKey]);
 
   const setMain = (code: string) => {
     if (code === settings.mainCurrency) return;
@@ -92,91 +127,163 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
     onChange({ ...settings, rates });
   };
 
-  return (
-    <div className="px-5 pt-4 pb-8 animate-screen">
-      <div className="flex items-center gap-3 mb-5">
-        <button onClick={onBack} aria-label="Retour" className="w-11 h-11 rounded-full bg-white border border-slate-100 flex items-center justify-center cursor-pointer">
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-xl font-bold text-slate-900">Paramètres</h1>
-      </div>
-
-      <Section title="Mes données" hint="Importe ton historique (Money Lover, Excel…) ou exporte tout.">
-        <DataSection
-          wallets={wallets}
-          transactions={transactions}
-          categories={categories}
-          budgets={budgets}
-          ristournes={ristournes}
-          settings={settings}
-          onImport={onImport}
-          onRestore={onRestore}
-        />
-      </Section>
-
-      <Section title="Apparence" hint="« Système » suit le réglage clair / sombre de ton téléphone.">
-        <div className="grid grid-cols-3 gap-1 p-1 rounded-2xl bg-slate-100">
-          {THEMES.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              onClick={() => {
-                setTheme(id);
-                setThemePref(id);
+  // ---------- Contenu de chaque écran de réglage (réutilisé tel quel) ----------
+  const panels: Record<PanelId, React.ReactNode> = {
+    appearance: (
+      <>
+        <Block title="Interface">
+          <InterfacePicker />
+        </Block>
+        <Block title="Couleur de l'app">
+          <div className="grid grid-cols-4 gap-2">
+            {ACCENTS.map((a) => {
+              const on = a.id === accent.id;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => setAccent(a.id)}
+                  aria-pressed={on}
+                  className={`flex flex-col items-center gap-1.5 py-2.5 rounded-2xl cursor-pointer transition ${on ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                >
+                  <span className={`w-10 h-10 rounded-full flex items-center justify-center transition ${on ? 'ring-2 ring-offset-2 ring-slate-400 scale-105' : ''}`} style={{ backgroundColor: a.hex }}>
+                    {on && <Check className="w-4 h-4" strokeWidth={3} style={{ color: accentVars(a.hex)['--on-accent'] }} />}
+                  </span>
+                  <span className={`text-[12px] leading-tight text-center ${on ? 'font-bold text-slate-900' : 'font-semibold text-slate-500'}`}>{a.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Block>
+        <Block title="Thème" hint="« Système » suit le réglage clair / sombre de ton téléphone.">
+          <div className="grid grid-cols-3 gap-2">
+            {THEMES.map(({ id, label, Icon }) => {
+              const on = theme === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => {
+                    setTheme(id);
+                    setThemePref(id);
+                  }}
+                  aria-pressed={on}
+                  className={`relative rounded-2xl p-2 pb-2.5 flex flex-col items-center gap-2 cursor-pointer transition ${on ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                >
+                  {/* Petit aperçu de l'écran */}
+                  <span
+                    className="w-full h-16 rounded-xl border overflow-hidden flex flex-col gap-1 p-1.5"
+                    style={
+                      id === 'dark'
+                        ? { background: '#0f1218', borderColor: '#262b33' }
+                        : id === 'light'
+                          ? { background: '#f4f6f8', borderColor: '#e2e8f0' }
+                          : { background: 'linear-gradient(90deg, #f4f6f8 50%, #0f1218 50%)', borderColor: '#94a3b8' }
+                    }
+                  >
+                    <span className="h-1.5 w-1/2 rounded-full" style={{ background: id === 'dark' ? '#334155' : '#cbd5e1' }} />
+                    <span className="h-4 rounded-md" style={{ background: id === 'dark' ? '#1e2530' : '#ffffff' }} />
+                    <span className="h-1.5 w-2/3 rounded-full bg-accent" />
+                  </span>
+                  <span className={`text-[13px] flex items-center gap-1 ${on ? 'font-bold text-slate-900' : 'font-semibold text-slate-500'}`}>
+                    <Icon className="w-3.5 h-3.5" /> {label}
+                  </span>
+                  {on && (
+                    <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-accent text-on-accent flex items-center justify-center">
+                      <Check className="w-3 h-3" strokeWidth={3} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </Block>
+        <Block>
+          <label className="flex items-center justify-between gap-3 cursor-pointer">
+            <span>
+              <span className="block text-sm font-semibold text-slate-800">Retour haptique</span>
+              <span className="block text-xs text-slate-400">Petite vibration au toucher (iPhone avec iOS 18 ou plus récent, Android).</span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={haptics}
+              onChange={(e) => {
+                setHaptics(e.target.checked);
+                setHapticsEnabled(e.target.checked);
               }}
-              aria-pressed={theme === id}
-              className={`py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                theme === id ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
-              }`}
-            >
-              <Icon className="w-4 h-4" /> {label}
-            </button>
-          ))}
-        </div>
-        <label className="flex items-center justify-between gap-3 mt-4 cursor-pointer">
-          <span>
-            <span className="block text-sm font-semibold text-slate-800">Retour haptique</span>
-            <span className="block text-xs text-slate-400">Petite vibration au toucher (iPhone avec iOS 18 ou plus récent, Android).</span>
-          </span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={haptics}
-            onChange={(e) => {
-              setHaptics(e.target.checked);
-              setHapticsEnabled(e.target.checked);
-            }}
-            className="toggle shrink-0"
-          />
-        </label>
-      </Section>
-
-      <Section title="Affichage">
-        <DisplaySettings currency={settings.mainCurrency} />
-      </Section>
-
-      <Section title="Devise principale" hint="Le solde de l'accueil est affiché dans cette devise.">
-        <Collapsible label={label(settings.mainCurrency)}>
-          {(close) => <CurrencyPicker value={settings.mainCurrency} onChange={(c) => { if (c) { setMain(c); close(); } }} />}
-        </Collapsible>
-        <p className="text-xs text-slate-400 mt-2">Changer de devise principale remet les taux de change à zéro.</p>
-      </Section>
-
-      <Section title="Deuxième devise (facultatif)" hint="Le total est aussi affiché dans cette devise, en plus petit.">
-        <Collapsible label={label(settings.secondCurrency)}>
-          {(close) => (
-            <CurrencyPicker
-              allowNone
-              exclude={settings.mainCurrency}
-              value={settings.secondCurrency}
-              onChange={(c) => { onChange({ ...settings, secondCurrency: c }); close(); }}
+              className="toggle shrink-0"
             />
-          )}
-        </Collapsible>
-      </Section>
-
-      <Section title="Taux de change" hint={`Combien vaut 1 unité de chaque devise en ${settings.mainCurrency}. Tape le taux toi-même.`}>
+          </label>
+        </Block>
+      </>
+    ),
+    display: (
+      <Block>
+        <DisplaySettings currency={settings.mainCurrency} />
+      </Block>
+    ),
+    notifications: (
+      <Block hint="Budget dépassé, tour de ristourne, remboursement à confirmer, invitation… Avec un compte connecté, elles arrivent même quand Wallo est fermé.">
+        <NotificationsSettings />
+      </Block>
+    ),
+    lock: (
+      <Block hint="Un code (et Face ID ou l'empreinte si ton téléphone le permet) pour ouvrir Wallo.">
+        <LockSettings />
+      </Block>
+    ),
+    currencies: (
+      <>
+        <Block title="Devise principale" hint="Le solde de l'accueil est affiché dans cette devise. La changer remet les taux à zéro.">
+          <Collapsible label={label(settings.mainCurrency)}>
+            {(close) => (
+              <CurrencyPicker
+                value={settings.mainCurrency}
+                onChange={(c) => {
+                  if (c) {
+                    setMain(c);
+                    close();
+                  }
+                }}
+              />
+            )}
+          </Collapsible>
+        </Block>
+        <Block title="Deuxième devise (facultatif)" hint="Le total est aussi affiché dans cette devise, en plus petit.">
+          <Collapsible label={label(settings.secondCurrency)}>
+            {(close) => (
+              <CurrencyPicker
+                allowNone
+                exclude={settings.mainCurrency}
+                value={settings.secondCurrency}
+                onChange={(c) => {
+                  onChange({ ...settings, secondCurrency: c });
+                  close();
+                }}
+              />
+            )}
+          </Collapsible>
+        </Block>
+      </>
+    ),
+    rates: (
+      <Block hint={`Combien vaut 1 unité de chaque devise en ${settings.mainCurrency}.`}>
+        {needed.length > 0 && (
+          <label className="flex items-center justify-between gap-3 mb-4 cursor-pointer">
+            <span>
+              <span className="block text-sm font-semibold text-slate-800">Taux du marché, automatique</span>
+              <span className="block text-xs text-slate-400">
+                {autoRates.on
+                  ? autoRates.at
+                    ? `Mis à jour ${new Date(autoRates.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · source ExchangeRate-API`
+                    : 'Mise à jour dès que tu es en ligne…'
+                  : 'Sinon, tape ton propre taux (celui de ton cambiste par exemple).'}
+              </span>
+            </span>
+            <input type="checkbox" role="switch" checked={autoRates.on} onChange={(e) => setAutoRates(e.target.checked)} className="toggle shrink-0" />
+          </label>
+        )}
         {needed.length === 0 ? (
-          <p className="text-sm text-slate-400">Aucune autre devise n'est utilisée pour l'instant.</p>
+          <p className="text-sm text-slate-400">Aucune autre devise n&rsquo;est utilisée pour l&rsquo;instant.</p>
         ) : (
           <div className="space-y-3">
             {needed.map((code) => {
@@ -184,15 +291,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
               return (
                 <div key={code}>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">
-                      {currencyInfo(code).flag} 1 {code} =
-                    </span>
+                    <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">1 {code} =</span>
                     <input
                       inputMode="decimal"
                       value={draft[code] ?? ''}
-                      onChange={(e) => setRate(code, e.target.value)}
+                      onChange={(e) => {
+                        if (autoRates.on) setAutoRates(false); // taux tapé à la main : on arrête de le remplacer
+                        setRate(code, e.target.value);
+                      }}
                       placeholder="Taux"
-                      className={`flex-1 min-w-0 px-3 py-2.5 rounded-2xl bg-slate-100 text-sm tabular-nums outline-none focus:ring-2 focus:ring-[#D8FB52] ${missing ? 'ring-1 ring-amber-300' : ''}`}
+                      className={`flex-1 min-w-0 px-3 py-2.5 rounded-2xl bg-slate-100 text-sm tabular-nums outline-none focus:ring-2 focus:ring-accent ${missing ? 'ring-1 ring-amber-300' : ''}`}
                     />
                     <span className="text-sm font-semibold text-slate-500">{settings.mainCurrency}</span>
                   </div>
@@ -202,10 +310,154 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
             })}
           </div>
         )}
-      </Section>
-      <Section title="Mes icônes" hint="Ajoute tes propres icônes (SVG, PNG ou JPG) pour tes catégories et portefeuilles.">
+      </Block>
+    ),
+    data: (
+      <Block hint="Importe ton historique (Money Lover, Excel…) ou exporte tout.">
+        <DataSection wallets={wallets} transactions={transactions} categories={categories} budgets={budgets} ristournes={ristournes} settings={settings} onImport={onImport} onRestore={onRestore} />
+      </Block>
+    ),
+    icons: (
+      <Block hint="Ajoute tes propres icônes (SVG, PNG ou JPG) pour tes catégories et portefeuilles.">
         <CustomIconsSection />
-      </Section>
+      </Block>
+    ),
+  };
+
+  // ---------- Les lignes de la page principale, avec leur valeur actuelle ----------
+  const themeName = THEMES.find((t) => t.id === theme)?.label ?? '';
+  const firstRate = needed[0];
+  const rateText = autoRates.on
+    ? 'Automatique'
+    : needed.length === 0
+      ? 'Aucune autre devise'
+      : settings.rates[firstRate]
+        ? // Dans le sens qui se lit bien : « 1 USD = 2 304 CDF » plutôt que « 1 CDF = 0,0004 USD »
+          settings.rates[firstRate] >= 1
+          ? `1 ${firstRate} = ${Math.round(settings.rates[firstRate]).toLocaleString('fr-FR')} ${settings.mainCurrency}`
+          : `1 ${settings.mainCurrency} = ${Math.round(1 / settings.rates[firstRate]).toLocaleString('fr-FR')} ${firstRate}`
+        : 'Taux à ajouter';
+  const rows: { id: PanelId; title: string; value: string; Icon: typeof Sun; color: string; advanced?: boolean; alert?: boolean }[] = [
+    { id: 'appearance', title: 'Apparence', value: `${themeName} · ${accent.name}`, Icon: Palette, color: '#A855F7' },
+    { id: 'display', title: 'Affichage', value: `${formatMoney(1234.56, settings.mainCurrency)} · ${formatDate(new Date())}`, Icon: Type, color: '#3B82F6', advanced: true },
+    { id: 'notifications', title: 'Notifications', value: notify === 'on' ? 'Activées' : notify === 'denied' ? 'Bloquées' : notify === 'off' ? 'Coupées' : 'À activer', Icon: Bell, color: '#EF4444' },
+    { id: 'lock', title: 'Verrouillage', value: lock ? 'Code activé' : 'Désactivé', Icon: Lock, color: '#10B981' },
+    { id: 'currencies', title: 'Devises', value: settings.secondCurrency ? `${settings.mainCurrency} · ${settings.secondCurrency}` : settings.mainCurrency, Icon: Coins, color: '#F59E0B', advanced: true },
+    { id: 'rates', title: 'Taux de change', value: rateText, Icon: ArrowLeftRight, color: '#14B8A6', alert: needed.some((c) => !settings.rates[c]) },
+    { id: 'data', title: 'Mes données', value: 'Importer, exporter, sauvegarder', Icon: Database, color: '#0EA5E9', advanced: true },
+    { id: 'icons', title: 'Mes icônes', value: customIcons.length ? `${customIcons.length} icône${customIcons.length > 1 ? 's' : ''}` : 'Ajouter les tiennes', Icon: Shapes, color: '#EC4899', advanced: true },
+  ];
+  const visible = rows.filter((r) => showAll || !r.advanced);
+  const groups: { title: string; ids: PanelId[] }[] = [
+    { title: 'Général', ids: ['appearance', 'display', 'notifications', 'lock'] },
+    { title: 'Argent', ids: ['currencies', 'rates'] },
+    { title: 'Données', ids: ['data', 'icons'] },
+  ];
+  const current = rows.find((r) => r.id === (desktop ? (panel ?? 'appearance') : panel));
+
+  const list = (
+    <div>
+      {/* « Ton Wallo » : un résumé du look, en couleur */}
+      <div className="relative overflow-hidden rounded-[28px] p-4 mb-5 flex items-center gap-3.5" style={{ background: `linear-gradient(135deg, ${accent.hex}33, ${accent.hex}0d)` }}>
+        <span className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-xs" style={{ background: accent.hex }}>
+          <img src="/icons/wallo.svg" alt="" className="w-10 h-10" />
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-[17px] font-bold text-slate-900">Ton Wallo</span>
+          <span className="block text-[13px] text-slate-500 leading-snug">
+            {themeName} · {accent.name} · {simpleMode ? 'Mode simple' : 'Interface complète'}
+          </span>
+        </span>
+      </div>
+
+      {groups.map((g) => {
+        const items = g.ids.map((id) => visible.find((r) => r.id === id)).filter(Boolean) as typeof rows;
+        if (!items.length) return null;
+        return (
+          <div key={g.title} className="mb-5">
+            <h2 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 px-4 mb-1.5">{g.title}</h2>
+            <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100">
+              {items.map((r) => {
+                const on = desktop && current?.id === r.id;
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => setPanel(r.id)}
+                    aria-current={on ? 'page' : undefined}
+                    className={`w-full flex items-center gap-3 pl-3.5 pr-3 py-3 text-left cursor-pointer transition-colors ${on ? 'bg-slate-100' : 'hover:bg-slate-50 active:bg-slate-100'}`}
+                  >
+                    <span className="w-9 h-9 rounded-[11px] flex items-center justify-center shrink-0" style={{ background: r.color }}>
+                      <r.Icon className="w-[18px] h-[18px]" style={{ color: '#fff' }} strokeWidth={2.2} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[15px] font-semibold text-slate-900">{r.title}</span>
+                      <span className={`block text-[12px] truncate ${r.alert ? 'text-amber-600 font-semibold' : 'text-slate-500'}`}>{r.value}</span>
+                    </span>
+                    {r.alert && <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />}
+                    <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      {simpleMode && (
+        <button
+          onClick={() => setAdvanced((a) => !a)}
+          aria-expanded={advanced}
+          className="w-full py-3.5 rounded-2xl bg-white border border-slate-100 text-[14px] font-semibold text-slate-600 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition"
+        >
+          {advanced ? 'Cacher les réglages avancés' : 'Voir les réglages avancés'}
+          <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${advanced ? 'rotate-180' : ''}`} />
+        </button>
+      )}
+      <p className="text-center text-[12px] text-slate-400 mt-5">Wallo · Ton argent, en clair</p>
+    </div>
+  );
+
+  // Écran de détail : grande icône, titre, puis le réglage
+  const detail = current && (
+    <div key={current.id} className={desktop ? 'animate-fade-in' : 'animate-pick-in'}>
+      <div className="flex flex-col items-center text-center mb-5 mt-1">
+        <span className="w-16 h-16 rounded-[20px] flex items-center justify-center shadow-xs" style={{ background: current.color }}>
+          <current.Icon className="w-8 h-8" style={{ color: '#fff' }} strokeWidth={2} />
+        </span>
+        <h2 className="text-[22px] font-bold tracking-tight text-slate-900 mt-3">{current.title}</h2>
+      </div>
+      {panels[current.id]}
+    </div>
+  );
+
+  // Ordinateur : la liste à gauche, le réglage à droite
+  if (desktop) {
+    return (
+      <div className="max-w-6xl animate-screen">
+        <div className="desk-head flex items-center gap-3 mb-5">
+          <h1 className="text-xl font-bold text-slate-900">Paramètres</h1>
+        </div>
+        <div className="grid grid-cols-[340px_minmax(0,1fr)] gap-6 items-start">
+          <div className="sticky top-4">{list}</div>
+          <div className="max-w-2xl">{detail}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 pt-4 pb-8 animate-screen">
+      <div className="page-head flex items-center gap-3 mb-5">
+        <button
+          onClick={() => (panel ? setPanel(null) : onBack())}
+          aria-label="Retour"
+          className="w-11 h-11 rounded-full bg-white border border-slate-100 flex items-center justify-center cursor-pointer"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-xl font-bold text-slate-900">{panel ? 'Paramètres' : 'Paramètres'}</h1>
+      </div>
+      {panel ? detail : <div className="animate-pick-back">{list}</div>}
     </div>
   );
 };

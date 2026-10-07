@@ -2,10 +2,36 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { initTheme } from './lib/theme';
+import { initAccent } from './lib/accent';
+import { installTapHaptics } from './lib/haptics';
+import { initRemoteConfig } from './lib/remoteConfig';
+import { initMarketRates } from './lib/marketRate';
+import { installScrollLock } from './lib/scrollLock';
+import { installKeyboardFit } from './lib/keyboard';
+import { installSheetClose } from './lib/sheetClose';
+import { installFeedbackSync } from './lib/feedback';
+import { initUsage } from './lib/usage';
+import { getPrefs } from './lib/display';
 
 initTheme();
+initAccent();
+installTapHaptics();
+initRemoteConfig();
+initMarketRates();
+installScrollLock();
+installKeyboardFit();
+installSheetClose();
+installFeedbackSync();
+{
+  const p = getPrefs();
+  initUsage({ simple: p.simpleMode, icons: p.iconsOnly, festiveOff: p.festiveOff });
+}
 
 createRoot(document.getElementById('root')!).render(<App />);
+
+// Demande au navigateur de ne jamais effacer les données de l'app (sinon Safari peut vider
+// le stockage d'un site pas ouvert depuis quelques jours : réglages et opérations perdus)
+navigator.storage?.persist?.().catch(() => {});
 
 // Hors ligne : l'app s'ouvre même sans réseau (voir scripts/serviceWorker.ts)
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

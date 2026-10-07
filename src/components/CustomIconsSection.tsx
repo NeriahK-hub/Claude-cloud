@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FileUp, Trash2 } from 'lucide-react';
 import { AppIcon } from './AppIcon';
+import { askConfirm } from '../lib/confirm';
 import { addCustomIcon, deleteCustomIcon, hasEmbeddedImage, isHeavySvg, prepareSvg, rasterizeIcon, svgToDataUrl, useCustomIcons } from '../lib/customIcons';
 
 // Paramètres > Mes icônes : importer ou coller une icône SVG
@@ -115,9 +116,9 @@ export const CustomIconsSection: React.FC = () => {
           {icons.map((i) => (
             <div key={i.id} className="relative flex flex-col items-center gap-1 p-2 rounded-2xl bg-slate-100">
               <AppIcon name={i.id} className="w-6 h-6" style={{ color: '#059669' }} />
-              <span className="w-full text-center text-[10px] font-semibold text-slate-600 truncate">{i.name}</span>
+              <span className="w-full text-center text-[11px] font-semibold text-slate-600 truncate">{i.name}</span>
               <button
-                onClick={() => confirm(`Supprimer l'icône « ${i.name} » ?`) && deleteCustomIcon(i.id)}
+                onClick={async () => (await askConfirm({ title: `Supprimer l'icône « ${i.name} » ?`, message: 'Les catégories et portefeuilles qui l\'utilisent afficheront une icône par défaut.', confirmLabel: 'Supprimer', danger: true })) && deleteCustomIcon(i.id)}
                 aria-label={`Supprimer ${i.name}`}
                 className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-red-500 flex items-center justify-center cursor-pointer"
               >
@@ -140,7 +141,7 @@ export const CustomIconsSection: React.FC = () => {
         onChange={(e) => setCode(e.target.value)}
         placeholder={'…ou colle le code ici : <svg viewBox="0 0 24 24">…</svg>'}
         rows={3}
-        className="w-full mt-2 px-3 py-2 rounded-2xl bg-slate-100 text-xs font-mono outline-none focus:ring-2 focus:ring-[#D8FB52]"
+        className="w-full mt-2 px-3 py-2 rounded-2xl bg-slate-100 text-xs font-mono outline-none focus:ring-2 focus:ring-accent"
       />
       {busy && <p className="text-xs text-slate-500 mt-1">Préparation de l'icône…</p>}
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
@@ -158,10 +159,10 @@ export const CustomIconsSection: React.FC = () => {
                 <span className="w-11 h-11 rounded-full flex items-center justify-center" style={{ backgroundColor: '#05966922' }}>
                   {preview(px, '#059669')}
                 </span>
-                <span className="text-[10px] text-slate-500">{px} px</span>
+                <span className="text-[11px] text-slate-500">{px} px</span>
               </div>
             ))}
-            <span className="text-[11px] text-slate-500 leading-snug">Aperçu tel qu'il apparaîtra dans l'app.</span>
+            <span className="text-[12px] text-slate-500 leading-snug">Aperçu tel qu'il apparaîtra dans l'app.</span>
           </div>
           {notSquare && (
             <p className="text-xs text-amber-600 mt-1">
@@ -172,13 +173,13 @@ export const CustomIconsSection: React.FC = () => {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Nom de l'icône (ex. Moto)"
-            className="w-full mt-2 px-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-[#D8FB52]"
+            className="w-full mt-2 px-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent"
           />
           <label className="flex items-center gap-2 mt-2 text-sm text-slate-700 cursor-pointer">
             <input type="checkbox" checked={keepColors} onChange={(e) => setKeepColors(e.target.checked)} className="w-4 h-4 accent-emerald-600" />
             Garder mes couleurs (logo multicolore)
           </label>
-          <button onClick={add} className="w-full mt-3 py-3 rounded-2xl bg-[#D8FB52] font-bold text-sm text-slate-900 cursor-pointer">
+          <button onClick={add} className="w-full mt-3 py-3 rounded-2xl bg-accent font-bold text-sm text-slate-900 cursor-pointer">
             Ajouter l'icône
           </button>
         </div>
