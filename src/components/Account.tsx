@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace, Trash2, ChevronLeft } from 'lucide-react';
+import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace, Trash2, ChevronLeft, ClipboardPaste } from 'lucide-react';
 import type { Cloud } from '../lib/sync/useCloud';
 import { useFeature } from '../lib/remoteConfig';
 
@@ -340,7 +340,7 @@ export const LoginSheet: React.FC<{ cloud: Cloud; onClose: () => void }> = ({ cl
       ) : (
         <>
           <p className="text-sm text-slate-500 text-center mb-6">
-            Code envoyé à <b className="text-slate-800">{email.trim()}</b>. Tape les chiffres reçus, ou touche le lien dans l'e-mail. Pense à regarder les spams.
+            Code envoyé à <b className="text-slate-800">{email.trim()}</b>. Copie les chiffres de l'e-mail et reviens ici. Pense à regarder les spams.
           </p>
           <input
             inputMode="numeric"
@@ -352,6 +352,21 @@ export const LoginSheet: React.FC<{ cloud: Cloud; onClose: () => void }> = ({ cl
             className={`${field} text-center text-2xl font-bold tracking-[0.4em] tabular-nums`}
             autoFocus
           />
+          {/* Coller le code copié dans l'e-mail (et valider tout de suite) */}
+          {'clipboard' in navigator && 'readText' in navigator.clipboard && (
+            <button
+              onClick={async () => {
+                const digits = (await navigator.clipboard.readText().catch(() => '')).replace(/\D/g, '').slice(0, 10);
+                if (digits.length < 6) return setError('Aucun code copié. Copie les chiffres dans l’e-mail, puis réessaie.');
+                setCode(digits);
+                run(() => cloud.verifyCode(email, digits));
+              }}
+              disabled={busy}
+              className="w-full mt-3 py-3 rounded-2xl bg-slate-100 text-slate-900 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+            >
+              <ClipboardPaste className="w-4 h-4" /> Coller le code
+            </button>
+          )}
           <button
             onClick={() => run(() => cloud.verifyCode(email, code))}
             disabled={code.length < 6 || busy}

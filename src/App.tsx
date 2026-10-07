@@ -38,6 +38,8 @@ import { buildNoteHistory } from './lib/noteSuggestions';
 import { canConfirm as canConfirmRistourne } from './lib/ristourne';
 import { shouldShowSplash, Splash } from './components/Splash';
 import { shouldShowNews, shouldShowTutorial, Tutorial } from './components/Tutorial';
+import { InstallGuide } from './components/InstallGuide';
+import { shouldOfferInstall } from './lib/install';
 import { ConfirmHost } from './components/ConfirmHost';
 import { FeatureKey, featureOn, useRemoteConfig } from './lib/remoteConfig';
 import { TransactionDetailModal } from './components/TransactionDetailModal';
@@ -88,7 +90,14 @@ export default function App() {
   const [notifications, setNotifications] = usePersistentState<NotificationItem[]>('ap.notifications', WELCOME);
   const remote = useRemoteConfig(); // fonctionnalités, annonces, icônes (espace admin)
   const [showSplash, setShowSplash] = useState(shouldShowSplash); // écran d'accueil : 1re ouverture seulement
-  const [showTutorial, setShowTutorial] = useState(shouldShowTutorial); // prise en main : nouvelles personnes, ou Profil › Comment ça marche
+  const [showTutorial, setShowTutorial] = useState(shouldShowTutorial);
+  // « Installe Wallo sur ton écran d'accueil » : après le tutoriel ; pour qui l'a déjà vu, une fois au lancement
+  const [showInstall, setShowInstall] = useState(false);
+  useEffect(() => {
+    if (showTutorial || showNews) return; // sinon : proposé à la fin du tutoriel / des nouveautés
+    const t = setTimeout(() => shouldOfferInstall() && setShowInstall(true), 2500);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps // prise en main : nouvelles personnes, ou Profil › Comment ça marche
   const [showNews, setShowNews] = useState(shouldShowNews); // « Quoi de neuf » : une fois, pour celles et ceux qui avaient déjà vu le tutoriel
 
   // Réglages : on complète avec les valeurs par défaut si la donnée sauvegardée est incomplète
@@ -1298,8 +1307,25 @@ export default function App() {
         <MobileApp {...shared} onOpenDrawer={() => setIsDrawerOpen(true)} />
       )}
       {/* Sous l'écran d'accueil (z-100), qui s'efface dessus */}
-      {showTutorial && <Tutorial onDone={() => setShowTutorial(false)} />}
-      {!showTutorial && showNews && <Tutorial news onDone={() => setShowNews(false)} />}
+      {showTutorial && (
+        <Tutorial
+          onDone={() => {
+            setShowTutorial(false);
+            // Juste après le tutoriel : comment installer Wallo (une seule fois, sur téléphone)
+            if (shouldOfferInstall()) setTimeout(() => setShowInstall(true), 450);
+          }}
+        />
+      )}
+      {showInstall && <InstallGuide onClose={() => setShowInstall(false)} />}
+      {!showTutorial && showNews && (
+        <Tutorial
+          news
+          onDone={() => {
+            setShowNews(false);
+            if (shouldOfferInstall()) setTimeout(() => setShowInstall(true), 450);
+          }}
+        />
+      )}
       {/* Code / Face ID : par-dessus tout, au démarrage et au retour dans l'app */}
       <AppLock cloud={cloud} />
 
@@ -1374,6 +1400,10 @@ export default function App() {
           initialCode={joinCode}
           profileName={profile.name}
           onClose={closeJoin}
+          onScan={() => {
+            closeJoin();
+            setScan('camera');
+          }}
           onJoined={(name) => {
             closeJoin();
             navigate('wallets');
@@ -1388,6 +1418,10 @@ export default function App() {
           initialCode={ristourneCode}
           profileName={profile.name}
           onClose={closeRistourneJoin}
+          onScan={() => {
+            closeRistourneJoin();
+            setScan('camera');
+          }}
           onJoined={(name) => {
             closeRistourneJoin();
             navigate('ristourne');
@@ -1404,6 +1438,10 @@ export default function App() {
           people={people}
           wallets={wallets.filter((w) => !w.archived)}
           onClose={closeDebtJoin}
+          onScan={() => {
+            closeDebtJoin();
+            setScan('camera');
+          }}
           onDone={(message, history) => {
             if (history) setHistoryTo(history);
             closeDebtJoin();

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Loader2, Users, PartyPopper, Check } from 'lucide-react';
+import { X, Loader2, Users, PartyPopper, Check, ScanLine } from 'lucide-react';
 import type { Cloud, RistourneInviteInfo } from '../lib/sync/useCloud';
 import { cleanCode, formatCode } from '../lib/invite';
 import { frenchError, LoginSheet } from './Account';
@@ -23,7 +23,8 @@ export const JoinRistourneSheet: React.FC<{
   profileName: string;
   onClose: () => void;
   onJoined: (name: string) => void;
-}> = ({ cloud, initialCode, profileName, onClose, onJoined }) => {
+  onScan?: () => void; // « Scanner un code QR » : ouvre le scanner de l'app
+}> = ({ cloud, initialCode, profileName, onClose, onJoined, onScan }) => {
   const [code, setCode] = useState(cleanCode(initialCode));
   const [checked, setChecked] = useState<string | null>(null); // code déjà vérifié
   const [info, setInfo] = useState<RistourneInviteInfo | null>(null);
@@ -203,6 +204,12 @@ export const JoinRistourneSheet: React.FC<{
         <button onClick={() => check(code)} disabled={!ready || busy} className={`${primary} mt-3`}>
           {busy && <Loader2 className="w-4 h-4 animate-spin" />} Continuer
         </button>
+        {/* Ou scanner le code QR montré par l'autre personne (scanner de l'app) */}
+        {onScan && (
+          <button onClick={onScan} className="mt-2 w-full h-12 rounded-full bg-slate-100 text-slate-900 text-[15px] font-bold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition">
+            <ScanLine className="w-4.5 h-4.5" /> Scanner un code QR
+          </button>
+        )}
       </>
     );
   }

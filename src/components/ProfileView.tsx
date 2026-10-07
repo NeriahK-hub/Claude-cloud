@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone, HandCoins, PieChart, Share, MapPin, GraduationCap, CalendarClock, MessageSquareHeart, MessageCircleQuestion } from 'lucide-react';
+import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone, HandCoins, PieChart, Share, MapPin, GraduationCap, CalendarClock, MessageSquareHeart, MessageCircleQuestion, Download } from 'lucide-react';
+import { useInstallWay } from '../lib/install';
+import { InstallGuide } from './InstallGuide';
 import { resetCoach } from './CoachTour';
 import { FeedbackSheet } from './FeedbackSheet';
 import { Page } from './BottomNav';
@@ -18,6 +20,8 @@ interface ProfileViewProps {
 
 // Profil : ton nom (utilisé dans l'app) et les raccourcis vers les réglages
 export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud, onOpenTutorial }) => {
+  const installWay = useInstallWay();
+  const [showInstall, setShowInstall] = useState(false);
   const desktop = useIsDesktop(); // ordinateur : pas de retour ni de titre en double, contenu sur plusieurs colonnes
   const { name } = useProfile();
   const [editing, setEditing] = useState(!name);
@@ -124,6 +128,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud, onO
           </span>
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </button>
+        {/* Pas encore installé : comment mettre Wallo sur l'écran d'accueil */}
+        {installWay !== 'installed' && (
+          <button onClick={() => setShowInstall(true)} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
+            <span className="w-9 h-9 rounded-full bg-accent/30 flex items-center justify-center shrink-0">
+              <Download className="w-4 h-4 text-slate-800" />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-semibold text-slate-900">Installer Wallo</span>
+              <span className="block text-xs text-slate-500 truncate">Sur ton écran d'accueil, comme une vraie app</span>
+            </span>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </button>
+        )}
+        {showInstall && <InstallGuide onClose={() => setShowInstall(false)} />}
         <button onClick={onOpenTutorial} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
           <span className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
             <GraduationCap className="w-4 h-4 text-slate-700" />

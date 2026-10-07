@@ -498,14 +498,19 @@ const IlluSimple = () => (
   </>
 );
 
+// Code QR de {APP_URL} (https://wallo-b13b0.web.app), généré une fois avec la librairie qrcode (29 × 29)
+const QR_WALLO =
+  'M0 0.5h7m1 0h1m1 0h1m4 0h2m1 0h3m1 0h7M0 1.5h1m5 0h1m1 0h2m1 0h2m1 0h2m6 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m3 0h1m1 0h4m3 0h2m1 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m1 0h1m3 0h1m3 0h3m3 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m3 0h1m2 0h1m5 0h1m2 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m3 0h1m1 0h1m1 0h1m2 0h4m1 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M8 7.5h1m3 0h3m2 0h1m1 0h1M0 8.5h1m1 0h2m1 0h3m3 0h1m1 0h2m1 0h5m1 0h1m2 0h1m1 0h2M1 9.5h1m1 0h3m2 0h1m1 0h1m4 0h2m1 0h7m3 0h1M0 10.5h2m1 0h1m2 0h1m2 0h2m3 0h2m1 0h1m2 0h4m2 0h2M3 11.5h2m3 0h1m1 0h1m1 0h4m2 0h1m1 0h2m1 0h2m3 0h1M0 12.5h3m3 0h1m1 0h2m2 0h1m3 0h2m1 0h1m1 0h1m3 0h2M0 13.5h2m3 0h1m2 0h1m1 0h1m1 0h2m3 0h4m1 0h1m3 0h3M0 14.5h2m3 0h2m1 0h2m1 0h2m1 0h1m4 0h1m1 0h1m4 0h3M1 15.5h1m1 0h3m3 0h1m1 0h1m1 0h1m1 0h1m2 0h1m4 0h1m3 0h1M1 16.5h1m2 0h1m1 0h4m1 0h2m5 0h1m2 0h1m1 0h3m1 0h1M1 17.5h3m4 0h1m3 0h2m4 0h1m4 0h1m1 0h3M0 18.5h1m3 0h1m1 0h5m1 0h1m5 0h1m2 0h1m1 0h2m1 0h1M3 19.5h1m1 0h1m2 0h1m6 0h3m1 0h2m1 0h2m2 0h1M1 20.5h4m1 0h1m1 0h2m1 0h1m1 0h1m1 0h1m3 0h8M8 21.5h2m1 0h1m1 0h3m1 0h2m1 0h1m3 0h5M0 22.5h7m1 0h1m3 0h2m2 0h1m1 0h3m1 0h1m1 0h2m1 0h1M0 23.5h1m5 0h1m1 0h2m1 0h2m3 0h2m2 0h1m3 0h2m1 0h1M0 24.5h1m1 0h3m1 0h1m4 0h2m1 0h2m4 0h5m1 0h3M0 25.5h1m1 0h3m1 0h1m1 0h1m1 0h5m1 0h2m1 0h1m3 0h3m1 0h1M0 26.5h1m1 0h3m1 0h1m1 0h2m2 0h5m2 0h1m1 0h1m1 0h1m2 0h1m1 0h1M0 27.5h1m5 0h1m5 0h1m3 0h1m2 0h3m1 0h1m1 0h1m1 0h1M0 28.5h7m1 0h2m1 0h1m1 0h5m2 0h2m3 0h1m1 0h1';
+
 const IlluQr = () => (
   <>
     <Phone>
       <p className="text-[11px] font-bold text-slate-900 mb-3 text-center">Fais scanner ce code</p>
-      <div className="mx-auto w-28 h-28 rounded-2xl bg-white border border-slate-200 p-2 grid grid-cols-5 gap-0.5">
-        {Array.from({ length: 25 }, (_, i) => (
-          <span key={i} className={`rounded-[2px] ${[0, 1, 3, 4, 5, 7, 9, 12, 14, 15, 17, 19, 20, 21, 23, 24, 6, 18].includes(i) ? 'bg-slate-900' : 'bg-transparent'}`} />
-        ))}
+      {/* Un vrai code QR : scanné, il ouvre Wallo. Noir sur blanc, même en mode sombre (sinon illisible) */}
+      <div className="mx-auto w-28 h-28 rounded-2xl border border-slate-200 p-2.5" style={{ background: '#fff' }}>
+        <svg viewBox="0 0 29 29" className="w-full h-full" shapeRendering="crispEdges" role="img" aria-label="Code QR vers Wallo">
+          <path stroke="#0F172A" d={QR_WALLO} />
+        </svg>
       </div>
       <p className="text-[13px] font-extrabold tracking-[0.15em] text-slate-900 text-center mt-2">K7P4-QX9M</p>
     </Phone>

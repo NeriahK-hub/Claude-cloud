@@ -11,6 +11,7 @@ import { installKeyboardFit } from './lib/keyboard';
 import { installSheetClose } from './lib/sheetClose';
 import { installFeedbackSync } from './lib/feedback';
 import { initUsage } from './lib/usage';
+import { initInstall } from './lib/install';
 import { getPrefs } from './lib/display';
 
 initTheme();
@@ -22,6 +23,7 @@ installScrollLock();
 installKeyboardFit();
 installSheetClose();
 installFeedbackSync();
+initInstall();
 {
   const p = getPrefs();
   initUsage({ simple: p.simpleMode, icons: p.iconsOnly, festiveOff: p.festiveOff });
