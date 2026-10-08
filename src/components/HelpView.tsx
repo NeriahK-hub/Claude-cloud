@@ -1,9 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronDown, Search, X, LifeBuoy, Smartphone } from 'lucide-react';
+import { ChevronLeft, ChevronDown, Search, X, LifeBuoy, Smartphone, GraduationCap, MessageCircleQuestion, Download, MessageSquareHeart, Check } from 'lucide-react';
 import { HELP_ARTICLES, HELP_CATEGORIES, HelpArticle } from '../data/help';
 import { useRemoteConfig } from '../lib/remoteConfig';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { FeedbackSheet } from './FeedbackSheet';
+import { InstallGuide } from './InstallGuide';
+import { resetCoach } from './CoachTour';
+import { useInstallWay } from '../lib/install';
 
 // Aide et astuces : on cherche, ou on parcourt par thème. Les astuces du téléphone qu'on tient viennent en premier.
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -50,7 +53,7 @@ const Body: React.FC<{ text: string }> = ({ text }) => (
   </div>
 );
 
-export const HelpView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+export const HelpView: React.FC<{ onBack: () => void; onOpenTutorial: () => void }> = ({ onBack, onOpenTutorial }) => {
   const desktop = useIsDesktop();
   const remote = useRemoteConfig();
   const mine = phone();
@@ -58,6 +61,9 @@ export const HelpView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [cat, setCat] = useState('Tout');
   const [open, setOpen] = useState<string | null>(null);
   const [feedback, setFeedback] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
+  const [tipsReset, setTipsReset] = useState(false);
+  const installWay = useInstallWay();
 
   const all = useMemo(() => [...HELP_ARTICLES, ...remote.help], [remote.help]);
   const cats = useMemo(() => ['Tout', ...HELP_CATEGORIES, ...[...new Set(remote.help.map((h) => h.category))].filter((c) => !HELP_CATEGORIES.includes(c))], [remote.help]);
@@ -124,6 +130,41 @@ export const HelpView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </button>
         )}
       </label>
+
+      {/* Les autres façons d'être aidé, au même endroit */}
+      {!q && cat === 'Tout' && (
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {(
+            [
+              { key: 'tuto', label: 'Revoir le tutoriel', hint: 'Les écrans de bienvenue', Icon: GraduationCap, tint: '#64748B', run: onOpenTutorial },
+              {
+                key: 'tips',
+                label: 'Revoir les astuces',
+                hint: tipsReset ? 'Fait : va à l’accueil' : 'Les bulles sur chaque écran',
+                Icon: tipsReset ? Check : MessageCircleQuestion,
+                tint: '#0EA5E9',
+                run: () => {
+                  resetCoach();
+                  setTipsReset(true);
+                },
+              },
+              ...(installWay !== 'installed' ? [{ key: 'install', label: 'Installer Wallo', hint: 'Sur ton écran d’accueil', Icon: Download, tint: '#059669', run: () => setShowInstall(true) }] : []),
+              { key: 'avis', label: 'Donner mon avis', hint: 'Une idée, un problème', Icon: MessageSquareHeart, tint: '#F43F5E', run: () => setFeedback(true) },
+            ] as { key: string; label: string; hint: string; Icon: typeof Search; tint: string; run: () => void }[]
+          ).map(({ key, label, hint, Icon, tint, run }) => (
+            <button key={key} onClick={run} className="text-left p-3 rounded-2xl bg-white border border-slate-100 cursor-pointer active:scale-[0.98] transition flex items-start gap-2.5">
+              <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: `${tint}1f`, color: tint }}>
+                <Icon className="w-[18px] h-[18px]" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[13px] font-semibold text-slate-900 leading-tight">{label}</span>
+                <span className="block text-[11px] text-slate-500 leading-tight mt-0.5">{hint}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {showInstall && <InstallGuide onClose={() => setShowInstall(false)} />}
 
       {/* Thèmes */}
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-5 px-5 mb-4">

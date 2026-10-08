@@ -1,9 +1,5 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, ChevronRight, Tags, Pencil, Check, Smartphone, Share, MapPin, GraduationCap, MessageSquareHeart, MessageCircleQuestion, Download, LifeBuoy } from 'lucide-react';
-import { useInstallWay } from '../lib/install';
-import { InstallGuide } from './InstallGuide';
-import { resetCoach } from './CoachTour';
-import { FeedbackSheet } from './FeedbackSheet';
+import { Settings as SettingsIcon, ChevronRight, Tags, Pencil, Check, Smartphone, Share, MapPin, LifeBuoy } from 'lucide-react';
 import { Page } from './BottomNav';
 import { initialsOf, setProfileName, useProfile } from '../lib/profile';
 import type { Cloud } from '../lib/sync/useCloud';
@@ -14,20 +10,15 @@ import { useIsDesktop } from '../hooks/useIsDesktop';
 interface ProfileViewProps {
   onNavigate: (page: Page) => void;
   cloud: Cloud;
-  onOpenTutorial: () => void;
 }
 
 // Profil : ton nom (utilisé dans l'app) et les raccourcis vers les réglages
-export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud, onOpenTutorial }) => {
-  const installWay = useInstallWay();
-  const [showInstall, setShowInstall] = useState(false);
+export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) => {
   const desktop = useIsDesktop(); // ordinateur : pas de retour ni de titre en double, contenu sur plusieurs colonnes
   const { name } = useProfile();
   const [editing, setEditing] = useState(!name);
   const [draft, setDraft] = useState(name);
   const [shared, setShared] = useState<'copied' | 'failed' | null>(null);
-  const [tipsReset, setTipsReset] = useState(false);
-  const [feedback, setFeedback] = useState(false);
 
   const share = async () => {
     const r = await shareApp();
@@ -120,69 +111,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud, onO
           </span>
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </button>
-        {/* Pas encore installé : comment mettre Wallo sur l'écran d'accueil */}
-        {installWay !== 'installed' && (
-          <button onClick={() => setShowInstall(true)} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
-            <span className="w-9 h-9 rounded-full bg-accent/30 flex items-center justify-center shrink-0">
-              <Download className="w-4 h-4 text-slate-800" />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-sm font-semibold text-slate-900">Installer Wallo</span>
-              <span className="block text-xs text-slate-500 truncate">Sur ton écran d'accueil, comme une vraie app</span>
-            </span>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          </button>
-        )}
-        {showInstall && <InstallGuide onClose={() => setShowInstall(false)} />}
         <button onClick={() => onNavigate('help')} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
           <span className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
             <LifeBuoy className="w-4 h-4 text-emerald-600" />
           </span>
           <span className="flex-1 min-w-0">
             <span className="block text-sm font-semibold text-slate-900">Aide et astuces</span>
-            <span className="block text-xs text-slate-500 truncate">Cherche une réponse, astuces pour ton téléphone</span>
-          </span>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
-        </button>
-        <button onClick={onOpenTutorial} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
-          <span className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-            <GraduationCap className="w-4 h-4 text-slate-700" />
-          </span>
-          <span className="flex-1 min-w-0">
-            <span className="block text-sm font-semibold text-slate-900">Comment ça marche</span>
-            <span className="block text-xs text-slate-500 truncate">Revoir le tutoriel de Wallo</span>
-          </span>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
-        </button>
-        {/* Bulles d'aide : on les remontre dès qu'on revient à l'accueil */}
-        <button
-          onClick={() => {
-            resetCoach();
-            setTipsReset(true);
-          }}
-          className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left"
-        >
-          <span className="w-9 h-9 rounded-full bg-sky-500/10 flex items-center justify-center shrink-0">
-            <MessageCircleQuestion className="w-4 h-4 text-sky-500" />
-          </span>
-          <span className="flex-1 min-w-0">
-            <span className="block text-sm font-semibold text-slate-900">Revoir les astuces</span>
-            <span className="block text-xs text-slate-500 truncate">{tipsReset ? 'C\u2019est fait\u00a0: retourne à l\u2019accueil' : 'Les bulles qui expliquent chaque écran'}</span>
-          </span>
-          {tipsReset ? <Check className="w-4 h-4 text-emerald-500" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
-        </button>
-        <button onClick={() => setFeedback(true)} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
-          <span className="w-9 h-9 rounded-full bg-rose-500/10 flex items-center justify-center shrink-0">
-            <MessageSquareHeart className="w-4 h-4 text-rose-500" />
-          </span>
-          <span className="flex-1 min-w-0">
-            <span className="block text-sm font-semibold text-slate-900">Donner mon avis</span>
-            <span className="block text-xs text-slate-500 truncate">Une idée, un problème ? Dis-le nous</span>
+            <span className="block text-xs text-slate-500 truncate">Questions, tutoriel, astuces, ton avis</span>
           </span>
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </button>
       </div>
-      {feedback && <FeedbackSheet onClose={() => setFeedback(false)} />}
 
       <p className="text-center text-xs text-slate-400 mt-6">Wallo</p>
       </div>

@@ -360,9 +360,9 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         {page === 'settings' && (
           <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onRestoreTrash={p.onRestoreTrash} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
         )}
-        {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} onOpenTutorial={p.onOpenTutorial} />}
+        {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} />}
         {page === 'places' && <PlacesView onBack={() => onNavigate('profile')} />}
-        {page === 'help' && <HelpView onBack={() => onNavigate('profile')} />}
+        {page === 'help' && <HelpView onBack={() => onNavigate('profile')} onOpenTutorial={p.onOpenTutorial} />}
         </Suspense>
       </div>
 
