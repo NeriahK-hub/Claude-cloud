@@ -511,10 +511,10 @@ const RecurringSheet: React.FC<{
                   ))}
                 </Group>
 
-                <Group title="Personnalisé">
-                  <div className="flex items-center gap-3 px-4 min-h-[56px]">
+                <Group title="Personnalisé" hint={frequencyText({ frequency, everyDays: Number(count) || 1, every: Number(count) || 1 })}>
+                  <div className="flex items-center gap-3 px-4 py-3">
                     <span className="flex-1 text-[15px] text-slate-900">Tous les</span>
-                    <button type="button" aria-label="Moins" onClick={() => setCount(String(Math.max(1, (Number(count) || 1) - 1)))} className="w-9 h-9 rounded-full bg-white border border-slate-200 text-[20px] leading-none text-slate-700 cursor-pointer active:scale-90 transition">
+                    <button type="button" aria-label="Moins" onClick={() => setCount(String(Math.max(1, (Number(count) || 1) - 1)))} className="w-10 h-10 rounded-full bg-white shadow-sm text-[22px] leading-none text-slate-700 cursor-pointer active:scale-90 transition">
                       −
                     </button>
                     <input
@@ -522,25 +522,33 @@ const RecurringSheet: React.FC<{
                       aria-label="Nombre"
                       value={count}
                       onChange={(e) => setCount(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                      className="w-12 bg-transparent text-center text-[20px] font-bold tabular-nums text-slate-900 outline-none field-plain"
+                      className="w-14 bg-transparent text-center text-[24px] font-bold tabular-nums text-slate-900 outline-none field-plain"
                     />
-                    <button type="button" aria-label="Plus" onClick={() => setCount(String(Math.min(365, (Number(count) || 0) + 1)))} className="w-9 h-9 rounded-full bg-white border border-slate-200 text-[20px] leading-none text-slate-700 cursor-pointer active:scale-90 transition">
+                    <button type="button" aria-label="Plus" onClick={() => setCount(String(Math.min(365, (Number(count) || 0) + 1)))} className="w-10 h-10 rounded-full bg-white shadow-sm text-[22px] leading-none text-slate-700 cursor-pointer active:scale-90 transition">
                       +
                     </button>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 px-4 pb-3">
-                    {([
-                      ['days', 'jours'],
-                      ['week', 'semaines'],
-                      ['month', 'mois'],
-                      ['year', 'ans'],
-                    ] as const).map(([f, label]) => (
-                      <button key={f} type="button" onClick={() => setFrequency(f)} className={chip(frequency === f)}>
-                        {label}
-                      </button>
-                    ))}
+                  <div className="px-3 pb-3">
+                    <div role="tablist" className="flex gap-1 p-1 rounded-full bg-slate-100">
+                      {([
+                        ['days', 'Jours'],
+                        ['week', 'Semaines'],
+                        ['month', 'Mois'],
+                        ['year', 'Ans'],
+                      ] as const).map(([f, label]) => (
+                        <button
+                          key={f}
+                          type="button"
+                          role="tab"
+                          aria-selected={frequency === f}
+                          onClick={() => setFrequency(f)}
+                          className={`flex-1 min-w-0 h-9 rounded-full text-[13px] font-semibold cursor-pointer transition ${frequency === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <p className="px-4 pb-3 text-[13px] text-slate-500">{frequencyText({ frequency, everyDays: Number(count) || 1, every: Number(count) || 1 })}</p>
                 </Group>
               </>
             )}
