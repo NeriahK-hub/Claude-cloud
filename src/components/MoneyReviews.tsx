@@ -385,7 +385,6 @@ export const WhenTool: React.FC<{ txs: Transaction[]; settings: Settings }> = ({
   if (r.count < 5) return <p className="text-center text-[14px] text-slate-500 py-10">Note encore quelques dépenses&nbsp;: il en faut au moins 5 sur les 3 derniers mois.</p>;
   return (
     <div>
-      <p className="text-[14px] text-slate-500 mb-4 leading-snug">D&rsquo;après tes dépenses des 3 derniers mois.</p>
       <div className="rounded-2xl bg-red-500/10 p-4 flex items-center gap-3">
         <span className="w-11 h-11 rounded-full bg-red-500/15 flex items-center justify-center shrink-0">
           <Flame className="w-5 h-5 text-red-500" />
@@ -447,9 +446,7 @@ export const SmallTool: React.FC<{ txs: Transaction[]; settings: Settings; categ
   if (r.count === 0) return <p className="text-center text-[14px] text-slate-500 py-10">Pas de petites dépenses ces 30 derniers jours.</p>;
   return (
     <div>
-      <p className="text-[14px] text-slate-500 mb-4 leading-snug">
-        Les dépenses de moins de <b className="text-slate-700 whitespace-nowrap">{round(r.limit)}</b> (pain, crédit, taxi, sucreries…) sur les 30 derniers jours.
-      </p>
+      <p className="text-[13px] text-slate-500 mb-4 px-1">Moins de <b className="text-slate-700 whitespace-nowrap">{round(r.limit)}</b> chacune.</p>
       <div className="relative overflow-hidden rounded-[28px] p-5 text-center" style={{ background: 'linear-gradient(135deg, #F59E0B, #EF4444)' }}>
         <div className="text-[13px] font-semibold" style={{ color: 'rgb(255 255 255 / 0.85)' }}>
           Sur un an, elles font

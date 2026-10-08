@@ -133,9 +133,9 @@ const ReviewHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClose: 
 
 // « Habitudes » : trois façons de voir où part l'argent, chacune avec une phrase qui dit à quoi elle sert
 const HABIT_TABS: { id: HabitTab; label: string; hint: string; Icon: typeof Search }[] = [
-  { id: 'what', label: 'Fréquents', hint: 'Ce que tu achètes souvent, et combien ça coûte sur un an.', Icon: Search },
-  { id: 'when', label: 'Jour / heure', hint: 'Quels jours et à quel moment de la journée tu dépenses le plus.', Icon: Clock },
-  { id: 'small', label: 'Petits achats', hint: 'Les petits achats de tous les jours, qui s’additionnent sans qu’on le voie.', Icon: Coins },
+  { id: 'what', label: 'Fréquents', hint: 'Tes achats les plus répétés ces 30 derniers jours.', Icon: Search },
+  { id: 'when', label: 'Jour / heure', hint: 'Quand tu dépenses le plus (3 derniers mois).', Icon: Clock },
+  { id: 'small', label: 'Petits achats', hint: 'Les petits achats du quotidien (30 derniers jours).', Icon: Coins },
 ];
 const HabitsHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClose: () => void }> = (props) => {
   const [tab, setTab] = useState<HabitTab>('what');
@@ -553,8 +553,6 @@ const HabitsTool: React.FC<React.ComponentProps<typeof ReportTools> & { onClose:
   const medal = ['#F59E0B', '#94A3B8', '#B45309'];
   return (
     <div>
-      <p className="text-[14px] text-slate-500 mb-4 leading-snug">Sur les 30 derniers jours, les dépenses qui reviennent le plus souvent, et ce qu'elles coûtent sur une année.</p>
-
       {h.top.length === 0 ? (
         <div className="rounded-2xl bg-slate-100 p-5 text-center">
           <Coins className="w-8 h-8 text-slate-400 mx-auto mb-2" />
@@ -591,10 +589,12 @@ const HabitsTool: React.FC<React.ComponentProps<typeof ReportTools> & { onClose:
                   <Amount text={round(x.yearly)} size="lg" prefix="≈" tone="#EF4444" />
                 </div>
               </div>
-              <p className="mt-3 text-[13px] text-slate-600 leading-snug flex gap-2 [text-wrap:pretty]">
-                <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                En dépensant 25 % de moins ici, tu garderais ≈ {round(x.yearly * 0.25)} par an.
-              </p>
+              {i === 0 && (
+                <p className="mt-3 text-[13px] text-slate-600 leading-snug flex gap-2 [text-wrap:pretty]">
+                  <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  25 % de moins ici = ≈ {round(x.yearly * 0.25)} gardés par an.
+                </p>
+              )}
             </div>
           ))}
         </div>
