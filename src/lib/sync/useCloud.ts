@@ -400,10 +400,13 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
   const registerDevice = async () => {
     try {
       const last = Number(localStorage.getItem('ap.deviceSeen') ?? 0);
-      if (Date.now() - last < 20 * 60_000) return;
+      const name = deviceName();
+      // Le nom change tout de suite si l'appareil n'est plus décrit pareil (ex. mode mobile des outils du navigateur coupé)
+      if (Date.now() - last < 20 * 60_000 && localStorage.getItem('ap.deviceName') === name) return;
       const sb = await getClient();
-      await sb.rpc('register_device', { p_key: deviceKey(), p_name: deviceName() });
+      await sb.rpc('register_device', { p_key: deviceKey(), p_name: name });
       localStorage.setItem('ap.deviceSeen', String(Date.now()));
+      localStorage.setItem('ap.deviceName', name);
     } catch {
       // pas grave : la liste d'appareils est un confort (migration pas encore passée, hors ligne…)
     }

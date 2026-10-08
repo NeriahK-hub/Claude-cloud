@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace, Trash2, ChevronLeft, ClipboardPaste, Smartphone, Monitor, ChevronDown } from 'lucide-react';
-import { deviceKey, DeviceRow } from '../lib/devices';
+import { deviceKey, deviceName, DeviceRow } from '../lib/devices';
 import type { Cloud } from '../lib/sync/useCloud';
 import { useFeature } from '../lib/remoteConfig';
 
@@ -230,12 +230,13 @@ const DevicesList: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
             <div className="rounded-2xl bg-slate-100 divide-y divide-slate-200/70 overflow-hidden">
               {list.map((d) => {
                 const here = d.device_key === me;
-                const Icon = /iPhone|Android|iPad/.test(d.name) ? Smartphone : Monitor;
+                const label = here ? deviceName() : d.name; // cet appareil : son nom du moment, pas celui gardé en ligne
+                const Icon = /iPhone|Android|iPad/.test(label) ? Smartphone : Monitor;
                 return (
                   <div key={d.id} className="flex items-center gap-3 px-3.5 py-2.5">
                     <Icon className="w-5 h-5 text-slate-500 shrink-0" />
                     <span className="flex-1 min-w-0">
-                      <span className="block text-[14px] font-semibold text-slate-900 truncate">{d.name}</span>
+                      <span className="block text-[14px] font-semibold text-slate-900 truncate">{label}</span>
                       <span className="block text-[12px] text-slate-500">{here ? 'Cet appareil · en ce moment' : `Vu ${seenAgo(d.last_seen)}`}</span>
                     </span>
                   </div>
