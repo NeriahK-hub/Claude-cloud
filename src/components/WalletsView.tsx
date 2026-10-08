@@ -1,8 +1,9 @@
 import React, { Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { takeJump } from '../lib/jumpTo';
 import { DuplicatePlan, findDuplicateWallets } from '../lib/dedupe';
-import { Plus, Target, Pencil, ChevronRight, CalendarPlus, Flag, Flame, Quote, BellRing, Coins, Sofa, Trophy, Lightbulb, PartyPopper, TrendingUp, CircleCheck, Clock, CalendarClock, CalendarX, Pause, Sprout, ArrowRight, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowUpDown, GripVertical, ChevronUp, ChevronDown, History, Users, CopyX, Lock, Sparkles } from 'lucide-react';
+import { Plus, Target, Pencil, ChevronRight, CalendarPlus, Flag, Flame, Quote, BellRing, Coins, Sofa, Trophy, Lightbulb, PartyPopper, TrendingUp, CircleCheck, Clock, CalendarClock, CalendarX, Pause, Sprout, ArrowRight, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowUpDown, GripVertical, ChevronUp, ChevronDown, History, Users, CopyX, Lock, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { SortableList } from './SortableList';
+import { SecretMoney } from './MatrixSwap';
 import { Settings, Transaction, Wallet, WalletKind } from '../types';
 import { TransactionItem } from './TransactionItem';
 import { AppIcon, IconBadge, WALLET_ICON_CHOICES } from './AppIcon';
@@ -15,7 +16,7 @@ import { TransactionHistoryView } from './pages';
 import { inThisMonth } from '../lib/periods';
 import { challengeDay, challengeWeek, goalEquivalence, goalInsight, GoalInsight, goalSeries, goalStreak, niceAmount, reminderDue, timeLeftLabel, weekendSaving, weekKey, weekRoundUps } from '../lib/goals';
 import { GoalDraft, consumeDepositRequest, consumeNewGoalRequest, consumeViewGoal, markRoundUpPaid, roundUpAlreadyPaid } from '../lib/goalMilestones';
-import { getPrefs, useDisplayPrefs } from '../lib/display';
+import { getPrefs, setPrefs, useDisplayPrefs } from '../lib/display';
 import { isShared, MembersSheet, MemberStack, SharingBlock, activeMembers, memberOf, MemberAvatar, ME_ID } from './Members';
 import { useFeature } from '../lib/remoteConfig';
 import { haptic } from '../lib/haptics';
@@ -46,6 +47,8 @@ interface WalletsViewProps {
 export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions, defaultCurrency, onAdd, onUpdate, onDelete, onSelectTransaction, onTransfer, onAdjustBalance, onReorder, settings, cloud, onJoin, onRemoveDuplicates, goalsOnly, onBack }) => {
   const sharingOn = useFeature('sharedWallets'); // désactivable depuis l'espace admin
   const desktop = useIsDesktop(); // ordinateur : grille de cartes et détail en deux colonnes
+  const { hideBalance } = useDisplayPrefs(); // œil : masque les soldes (le même réglage que sur l'accueil)
+  const EyeIcon = hideBalance ? EyeOff : Eye;
   const [editing, setEditing] = useState<Wallet | 'new' | null>(null);
   const [goalDraft, setGoalDraft] = useState<GoalDraft | null>(null); // objectif proposé par Wallo, déjà rempli
   const [deleting, setDeleting] = useState<Wallet | null>(null);
@@ -155,7 +158,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
           </div>
         </div>
         <div className={`mt-5 text-2xl font-extrabold tracking-tight tabular-nums truncate ${bal < 0 ? 'text-red-500' : 'text-slate-900'}`}>
-          {formatMoney(bal, w.currency)}
+          <SecretMoney text={formatMoney(bal, w.currency)} />
         </div>
         <WalletProgress wallet={w} balance={bal} />
         {isShared(w) && (
@@ -180,7 +183,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
       <div className="flex-1 min-w-0">
         <div className="text-[15px] font-semibold text-slate-900 truncate">{w.name}</div>
         <div className="text-sm font-bold tabular-nums text-slate-700">
-          {formatMoney(walletBalance(w, transactions), w.currency)}
+          <SecretMoney text={formatMoney(walletBalance(w, transactions), w.currency)} />
         </div>
         <WalletProgress wallet={w} balance={walletBalance(w, transactions)} />
         {isShared(w) && (
@@ -499,19 +502,23 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
               Total · {included.length} portefeuille{included.length > 1 ? 's' : ''}
             </div>
             <div className={`text-[34px] leading-tight font-extrabold tracking-tight tabular-nums ${total < 0 ? 'text-red-500' : 'text-slate-900'}`}>
-              {formatMoney(total, main)}
+              <SecretMoney text={formatMoney(total, main)} />
             </div>
             {byCurrency.size > 1 && (
               <div className="flex flex-wrap gap-2 mt-3">
                 {[...byCurrency].map(([cur, v]) => (
                   <span key={cur} className="px-3 py-1.5 rounded-full bg-slate-100 text-xs font-bold tabular-nums text-slate-700">
-                    {formatMoney(v, cur)}
+                    <SecretMoney text={formatMoney(v, cur)} />
                   </span>
                 ))}
               </div>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => setPrefs({ hideBalance: !hideBalance })} aria-pressed={hideBalance} className={toolBtn}>
+              <EyeIcon className="w-4 h-4" />
+              {hideBalance ? 'Afficher les soldes' : 'Masquer les soldes'}
+            </button>
             {archived.length > 0 && (
               <button onClick={() => setShowArchives(true)} className={toolBtn}>
                 <Archive className="w-4 h-4" />
@@ -598,6 +605,17 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
       <div className={`${desktop ? '' : 'page-head '}flex items-center justify-between mb-5`}>
         <h1 className="text-xl font-bold text-slate-900">{desktop ? 'Réorganiser' : 'Portefeuilles'}</h1>
         <div className="flex items-center gap-2">
+        {!reordering && (
+          <button
+            onClick={() => setPrefs({ hideBalance: !hideBalance })}
+            aria-pressed={hideBalance}
+            aria-label={hideBalance ? 'Afficher les soldes' : 'Masquer les soldes'}
+            title={hideBalance ? 'Afficher les soldes' : 'Masquer les soldes'}
+            className="w-10 h-10 rounded-full bg-white border border-slate-100 text-slate-700 flex items-center justify-center cursor-pointer hover:bg-slate-50 active:scale-95 transition"
+          >
+            <EyeIcon key={String(hideBalance)} className="w-4 h-4 animate-fade-in" />
+          </button>
+        )}
         {archived.length > 0 && !reordering && (
           <button
             onClick={() => setShowArchives(true)}
@@ -647,7 +665,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
                 <IconBadge icon={w.icon} image={w.image} color={w.color} size="sm" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-slate-900 truncate">{w.name}</div>
-                  <div className="text-xs font-semibold tabular-nums text-slate-500">{formatMoney(walletBalance(w, transactions), w.currency)}</div>
+                  <div className="text-xs font-semibold tabular-nums text-slate-500"><SecretMoney text={formatMoney(walletBalance(w, transactions), w.currency)} /></div>
                 </div>
                 <button
                   onClick={() => move(-1)}
@@ -749,13 +767,14 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
 
 // ---------- Barre de progression (crédit utilisé / objectif atteint) ----------
 const WalletProgress: React.FC<{ wallet: Wallet; balance: number }> = ({ wallet: w, balance }) => {
+  const { hideBalance } = useDisplayPrefs();
   let ratio: number;
   let label: string;
   let bar: string;
   if (w.kind === 'credit' && w.creditLimit) {
     const used = Math.max(0, -balance);
     ratio = used / w.creditLimit;
-    label = `Disponible ${formatMoney(Math.max(0, w.creditLimit - used), w.currency)} sur ${formatMoney(w.creditLimit, w.currency)}`;
+    label = hideBalance ? 'Disponible •••••• sur ••••••' : `Disponible ${formatMoney(Math.max(0, w.creditLimit - used), w.currency)} sur ${formatMoney(w.creditLimit, w.currency)}`;
     bar = ratio >= 0.9 ? 'bg-red-500' : ratio >= 0.7 ? 'bg-amber-500' : 'bg-pink-500';
   } else if (w.kind === 'goal' && w.goalAmount) {
     ratio = Math.max(0, balance) / w.goalAmount;
@@ -2123,7 +2142,7 @@ const WalletDetail: React.FC<{
               {w.archived && <span className="px-2 py-0.5 rounded-full bg-black/20">Archivé</span>}
               {!w.includeInTotal && <span className="px-2 py-0.5 rounded-full bg-black/20">Exclu du total</span>}
             </div>
-            <div className="text-[32px] font-extrabold tabular-nums tracking-tight mt-2">{money(balance)}</div>
+            <div className="text-[32px] font-extrabold tabular-nums tracking-tight mt-2"><SecretMoney text={money(balance)} /></div>
             <div className="text-xs opacity-90">{kind === 'credit' ? 'Solde (négatif = ce que tu dois)' : 'Solde actuel'}</div>
           </div>
 
@@ -2475,7 +2494,7 @@ const WalletPicker: React.FC<{
           <span className="block text-[12px] font-semibold text-slate-500">{label}</span>
           <span className="block text-sm font-bold text-slate-900 truncate">{w?.name ?? 'Choisir un portefeuille'}</span>
         </span>
-        {w && <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-500">{formatMoney(balanceOf(w), w.currency)}</span>}
+        {w && <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-500"><SecretMoney text={formatMoney(balanceOf(w), w.currency)} /></span>}
         <ChevronDown className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
@@ -2492,7 +2511,7 @@ const WalletPicker: React.FC<{
             >
               <IconBadge icon={x.icon} image={x.image} color={x.color} size="sm" />
               <span className="flex-1 min-w-0 text-sm font-semibold text-slate-900 truncate">{x.name}</span>
-              <span className="shrink-0 text-xs tabular-nums text-slate-500">{formatMoney(balanceOf(x), x.currency)}</span>
+              <span className="shrink-0 text-xs tabular-nums text-slate-500"><SecretMoney text={formatMoney(balanceOf(x), x.currency)} /></span>
             </button>
           ))}
         </div>

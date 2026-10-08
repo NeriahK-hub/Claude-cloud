@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useDisplayPrefs } from '../lib/display';
 
 // Solde masqué / affiché avec un petit effet « Matrix » : des caractères verts défilent,
 // puis le texte se fixe de gauche à droite. Seulement quand on touche l'œil (pas quand le
@@ -54,4 +55,10 @@ export const MatrixSwap: React.FC<{ hidden: boolean; text: string }> = ({ hidden
       </span>
     </span>
   );
+};
+
+// Un montant qui suit le bouton œil (Masquer / Afficher) : à utiliser partout où un solde est écrit
+export const SecretMoney: React.FC<{ text: string }> = ({ text }) => {
+  const { hideBalance } = useDisplayPrefs();
+  return <MatrixSwap hidden={hideBalance} text={text} />;
 };
