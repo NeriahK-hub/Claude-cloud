@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
-import { ArrowLeft, Search, X, Loader2, Layers, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Search, X, Loader2, Layers, ChevronDown, ChevronRight, BarChart2 } from 'lucide-react';
 import { Settings, Transaction, Wallet } from '../types';
 import { IconBadge, WalletChipIcon } from './AppIcon';
 import { TransactionItem } from './TransactionItem';
@@ -113,22 +113,39 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
 
   // Morceaux communs aux mises en page téléphone et ordinateur
   const balanceBox = balances && (
-      <div className="mt-3 px-4 py-3.5 rounded-2xl bg-white border border-slate-100">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[13px] font-semibold text-slate-500">Solde de fin</span>
-          {onOpenReport && (
-            <button onClick={() => onOpenReport(period)} className="flex items-center gap-0.5 text-[13px] font-bold text-emerald-600 cursor-pointer">
-              Rapport <ChevronRight className="w-4 h-4" />
-            </button>
-          )}
+      <div className="mt-3 rounded-2xl bg-white border border-slate-100 overflow-hidden">
+        <div className="px-4 pt-3.5 pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[13px] font-semibold text-slate-500">Solde de fin</span>
+            {onOpenReport && (
+              <button
+                onClick={() => onOpenReport(period)}
+                aria-label="Voir le détail de cette période"
+                className="h-8 pl-2.5 pr-2 rounded-full bg-emerald-500/10 flex items-center gap-1 text-[13px] font-bold text-emerald-600 cursor-pointer active:scale-95 transition"
+              >
+                <BarChart2 className="w-3.5 h-3.5" /> Voir le détail <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 mt-0.5">
+            <span className="text-[24px] font-extrabold tabular-nums tracking-tight text-slate-900 whitespace-nowrap">{formatMoney(balances.closing, main)}</span>
+            <span className={`text-[15px] font-bold tabular-nums whitespace-nowrap ${balances.closing - balances.opening >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              {signed(balances.closing - balances.opening)}
+            </span>
+          </div>
+          <div className="text-[12px] text-slate-400 mt-0.5 tabular-nums">Ouverture : {formatMoney(balances.opening, main)}</div>
         </div>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 mt-0.5">
-          <span className="text-[24px] font-extrabold tabular-nums tracking-tight text-slate-900 whitespace-nowrap">{formatMoney(balances.closing, main)}</span>
-          <span className={`text-[15px] font-bold tabular-nums whitespace-nowrap ${balances.closing - balances.opening >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-            {signed(balances.closing - balances.opening)}
-          </span>
+        {/* Entrées et sorties dans la même carte */}
+        <div className="grid grid-cols-2 border-t border-slate-100 divide-x divide-slate-100">
+          <div className="min-w-0 px-4 py-2.5">
+            <div className="text-[12px] font-semibold text-slate-500">Entrées</div>
+            <div className="text-[15px] font-bold tabular-nums whitespace-nowrap text-emerald-600">+{formatMoney(totalIn, main)}</div>
+          </div>
+          <div className="min-w-0 px-4 py-2.5">
+            <div className="text-[12px] font-semibold text-slate-500">Sorties</div>
+            <div className="text-[15px] font-bold tabular-nums whitespace-nowrap text-red-500">−{formatMoney(totalOut, main)}</div>
+          </div>
         </div>
-        <div className="text-[12px] text-slate-400 mt-0.5 tabular-nums">Ouverture : {formatMoney(balances.opening, main)}</div>
       </div>
     );
   const totalsRow = (
@@ -262,8 +279,7 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
             )}
             <div>
               <PeriodBar value={period} onChange={setPeriod} />
-              {balanceBox}
-              {totalsRow}
+              {balanceBox ?? totalsRow}
             </div>
             <div className="flex gap-2">
               {filters.map((filter) => (
@@ -412,8 +428,7 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
       <div className="px-5 pt-3">
         <PeriodBar value={period} onChange={setPeriod} />
         {/* Ouverture, fin, différence + lien vers le Rapport de la même période (comme Money Lover) */}
-        {balanceBox}
-        {totalsRow}
+        {balanceBox ?? totalsRow}
       </div>
 
       {/* Filter Tabs */}
