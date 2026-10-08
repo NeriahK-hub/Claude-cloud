@@ -254,7 +254,7 @@ export const UpcomingView: React.FC<{
         </>
       )}
 
-      {subs.length > 0 && (
+      {transactions.length > 0 && (
         <button onClick={() => setShowSubs(true)} className="w-full flex items-center gap-3 px-4 py-3.5 mb-5 bg-white rounded-3xl border border-slate-100 text-left cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors">
           <span className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-teal-500/10 text-teal-600">
             <Repeat className="w-5 h-5" />
@@ -262,7 +262,9 @@ export const UpcomingView: React.FC<{
           <span className="flex-1 min-w-0">
             <span className="block text-[15px] font-semibold text-slate-900">Abonnements repérés</span>
             <span className="block text-[12px] text-slate-500 truncate">
-              {subs.length} dépense{subs.length > 1 ? 's' : ''} qui revien{subs.length > 1 ? 'nent' : 't'} chaque mois{newSubs > 0 ? ` · ${newSubs} pas encore ici` : ''}
+              {subs.length === 0
+                ? 'Aucun pour l’instant'
+                : `${subs.length} dépense${subs.length > 1 ? 's' : ''} qui revien${subs.length > 1 ? 'nent' : 't'} chaque mois${newSubs > 0 ? ` · ${newSubs} pas encore ici` : ''}`}
             </span>
           </span>
           <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
