@@ -430,6 +430,8 @@ export const recurringRow = (r: Recurring): Row => ({
   category_id: r.categoryId ?? null,
   frequency: r.frequency,
   every_days: r.frequency === 'days' ? r.everyDays ?? 1 : null,
+  // seulement si > 1 : tant que la migration 20261019 n'est pas passée, les anciennes lignes ne changent pas
+  ...(r.frequency !== 'days' && (r.every ?? 1) > 1 ? { every_n: r.every } : {}),
   next_date: r.nextDate,
   anchor_day: r.anchorDay ?? null,
   mode: r.mode,
@@ -449,6 +451,7 @@ export const recurringFromRow = (r: Row, me: string): Recurring => ({
   categoryId: (r.category_id as string | null) ?? undefined,
   frequency: r.frequency as Recurring['frequency'],
   everyDays: r.every_days != null ? Number(r.every_days) : undefined,
+  every: r.every_n != null && Number(r.every_n) > 1 ? Number(r.every_n) : undefined,
   nextDate: String(r.next_date).slice(0, 10),
   anchorDay: r.anchor_day != null ? Number(r.anchor_day) : undefined,
   mode: r.mode === 'auto' ? 'auto' : 'ask',

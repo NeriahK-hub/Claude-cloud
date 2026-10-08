@@ -393,7 +393,8 @@ const RecurringSheet: React.FC<{
   const [walletId, setWalletId] = useState(seed?.walletId ?? wallets[0]?.id ?? '');
   const [categoryId, setCategoryId] = useState(seed?.categoryId ?? '');
   const [frequency, setFrequency] = useState<Recurring['frequency']>(seed?.frequency ?? 'month');
-  const [everyDays, setEveryDays] = useState(String(seed?.everyDays ?? 14));
+  // « Tous les N » + unité : jours, semaines, mois ou années
+  const [count, setCount] = useState(String((seed?.frequency === 'days' ? seed.everyDays : seed?.every) ?? (seed?.frequency === 'days' ? 14 : 1)));
   const [nextDate, setNextDate] = useState(seed?.nextDate ?? ymd(new Date()));
   const [mode, setMode] = useState<Recurring['mode']>(seed?.mode ?? 'ask');
   const [remindDays, setRemindDays] = useState(initial?.remindDays ?? 3);
@@ -408,7 +409,7 @@ const RecurringSheet: React.FC<{
   const catName = (c?: Category) => (c ? (parentOf(c) ? `${parentOf(c)!.name} › ${c.name}` : c.name) : 'Aucune');
   const value = parseFloat(amount.replace(/\s/g, '').replace(',', '.'));
   const askAmount = kind === 'bill' && variable;
-  const valid = title.trim() !== '' && !!wallet && nextDate !== '' && (askAmount || value > 0) && (frequency !== 'days' || Number(everyDays) >= 1);
+  const valid = title.trim() !== '' && !!wallet && nextDate !== '' && (askAmount || value > 0) && Number(count) >= 1;
   const symbol = currency === 'USD' ? '$' : currency === 'CDF' ? 'FC' : currency === 'EUR' ? '€' : currency;
 
   const chip = (on: boolean) => `h-9 px-3.5 rounded-full text-[13px] font-semibold cursor-pointer transition ${on ? 'bg-accent' : 'bg-white text-slate-600 border border-slate-200'}`;
@@ -487,25 +488,61 @@ const RecurringSheet: React.FC<{
             )}
 
             {picking === 'frequency' && (
-              <Group>
-                {([
-                  ['week', 'Chaque semaine', 'Ex. la cotisation du dimanche'],
-                  ['month', 'Chaque mois', 'Ex. le loyer, le salaire, la SNEL'],
-                  ['year', 'Chaque année', 'Ex. le minerval, une assurance'],
-                  ['days', 'Tous les X jours', 'Tu choisis le nombre de jours'],
-                ] as const).map(([f, t, h]) => (
-                  <PickRow
-                    key={f}
-                    selected={frequency === f}
-                    onClick={() => {
-                      setFrequency(f);
-                      setPicking(null);
-                    }}
-                    title={t}
-                    sub={h}
-                  />
-                ))}
-              </Group>
+              <>
+                <Group>
+                  {([
+                    ['week', 1, 'Chaque semaine', 'Ex. la cotisation du dimanche'],
+                    ['week', 2, 'Toutes les 2 semaines', 'Ex. une paie à la quinzaine'],
+                    ['month', 1, 'Chaque mois', 'Ex. le loyer, le salaire, la SNEL'],
+                    ['month', 3, 'Tous les 3 mois', 'Ex. une assurance, un abonnement trimestriel'],
+                    ['year', 1, 'Chaque année', 'Ex. le minerval, une assurance'],
+                  ] as const).map(([f, n, t, h]) => (
+                    <PickRow
+                      key={t}
+                      selected={frequency === f && Number(count) === n}
+                      onClick={() => {
+                        setFrequency(f);
+                        setCount(String(n));
+                        setPicking(null);
+                      }}
+                      title={t}
+                      sub={h}
+                    />
+                  ))}
+                </Group>
+
+                <Group title="Personnalisé">
+                  <div className="flex items-center gap-3 px-4 min-h-[56px]">
+                    <span className="flex-1 text-[15px] text-slate-900">Tous les</span>
+                    <button type="button" aria-label="Moins" onClick={() => setCount(String(Math.max(1, (Number(count) || 1) - 1)))} className="w-9 h-9 rounded-full bg-white border border-slate-200 text-[20px] leading-none text-slate-700 cursor-pointer active:scale-90 transition">
+                      −
+                    </button>
+                    <input
+                      inputMode="numeric"
+                      aria-label="Nombre"
+                      value={count}
+                      onChange={(e) => setCount(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                      className="w-12 bg-transparent text-center text-[20px] font-bold tabular-nums text-slate-900 outline-none field-plain"
+                    />
+                    <button type="button" aria-label="Plus" onClick={() => setCount(String(Math.min(365, (Number(count) || 0) + 1)))} className="w-9 h-9 rounded-full bg-white border border-slate-200 text-[20px] leading-none text-slate-700 cursor-pointer active:scale-90 transition">
+                      +
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+                    {([
+                      ['days', 'jours'],
+                      ['week', 'semaines'],
+                      ['month', 'mois'],
+                      ['year', 'ans'],
+                    ] as const).map(([f, label]) => (
+                      <button key={f} type="button" onClick={() => setFrequency(f)} className={chip(frequency === f)}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="px-4 pb-3 text-[13px] text-slate-500">{frequencyText({ frequency, everyDays: Number(count) || 1, every: Number(count) || 1 })}</p>
+                </Group>
+              </>
             )}
           </div>
         ) : (
@@ -605,21 +642,9 @@ const RecurringSheet: React.FC<{
           <Group title="Quand">
             <NavRow
               label="Revient"
-              display={frequency === 'days' ? `Tous les ${everyDays || '?'} jours` : frequency === 'week' ? 'Chaque semaine' : frequency === 'month' ? 'Chaque mois' : 'Chaque année'}
+              display={frequencyText({ frequency, everyDays: Number(count) || 1, every: Number(count) || 1 })}
               onClick={() => setPicking('frequency')}
             />
-            {frequency === 'days' && (
-              <label className="flex items-center gap-3 px-4 min-h-[48px] cursor-text transition-colors focus-within:bg-slate-200/50">
-                <span className="flex-1 text-[15px] text-slate-900">Tous les</span>
-                <input
-                  inputMode="numeric"
-                  value={everyDays}
-                  onChange={(e) => setEveryDays(e.target.value.replace(/\D/g, ''))}
-                  className="w-14 bg-transparent text-right text-[15px] font-semibold text-slate-900 outline-none field-plain"
-                />
-                <span className="text-[15px] text-slate-500">jours</span>
-              </label>
-            )}
             <div className="px-3 py-2">
               <div className="text-[13px] text-slate-500 px-1 mb-1">{kind === 'bill' ? 'À payer avant le' : 'Prochaine fois'}</div>
               <DateField value={nextDate} onChange={setNextDate} shortcuts="future" label="Prochaine date" />
@@ -681,7 +706,8 @@ const RecurringSheet: React.FC<{
                 direction,
                 categoryId: categoryId || undefined,
                 frequency,
-                everyDays: frequency === 'days' ? Math.max(1, Number(everyDays)) : undefined,
+                everyDays: frequency === 'days' ? Math.max(1, Number(count)) : undefined,
+                every: frequency !== 'days' && Number(count) > 1 ? Math.min(60, Math.round(Number(count))) : undefined,
                 nextDate,
                 // Chaque mois / année : on retient le jour choisi (un 31 reste un 31 après février)
                 anchorDay: frequency === 'month' || frequency === 'year' ? Number(nextDate.slice(8, 10)) : undefined,

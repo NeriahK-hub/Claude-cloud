@@ -12,12 +12,13 @@ const DAY = 86400000;
 export const daysBetween = (a: string, b: string) => Math.round((parseDay(b).getTime() - parseDay(a).getTime()) / DAY);
 
 // Date suivante (fin de mois respectée : le 31 janvier -> le 28 ou 29 février)
-export function nextAfter(day: string, r: Pick<Recurring, 'frequency' | 'everyDays' | 'anchorDay'>): string {
+export function nextAfter(day: string, r: Pick<Recurring, 'frequency' | 'everyDays' | 'every' | 'anchorDay'>): string {
   const d = parseDay(day);
-  if (r.frequency === 'week') d.setDate(d.getDate() + 7);
+  const n = Math.max(1, Math.round(r.every ?? 1));
+  if (r.frequency === 'week') d.setDate(d.getDate() + 7 * n);
   else if (r.frequency === 'days') d.setDate(d.getDate() + Math.max(1, r.everyDays ?? 1));
   else {
-    const months = r.frequency === 'year' ? 12 : 1;
+    const months = (r.frequency === 'year' ? 12 : 1) * n;
     const target = new Date(d.getFullYear(), d.getMonth() + months, 1);
     const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
     // Le jour voulu (anchorDay) : un 31 ramené au 28 février revient au 31 en mars
@@ -99,5 +100,10 @@ export const FREQUENCY_LABEL: Record<Recurring['frequency'], string> = {
   days: 'Tous les X jours',
 };
 
-export const frequencyText = (r: Pick<Recurring, 'frequency' | 'everyDays'>) =>
-  r.frequency === 'days' ? `Tous les ${r.everyDays ?? 1} jours` : FREQUENCY_LABEL[r.frequency];
+// « Chaque mois », « Toutes les 2 semaines », « Tous les 3 mois », « Tous les 10 jours »
+export const frequencyText = (r: Pick<Recurring, 'frequency' | 'everyDays' | 'every'>) => {
+  const n = Math.max(1, Math.round(r.every ?? 1));
+  if (r.frequency === 'days') return `Tous les ${r.everyDays ?? 1} jours`;
+  if (n === 1) return FREQUENCY_LABEL[r.frequency];
+  return r.frequency === 'week' ? `Toutes les ${n} semaines` : r.frequency === 'month' ? `Tous les ${n} mois` : `Tous les ${n} ans`;
+};

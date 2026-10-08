@@ -99,6 +99,7 @@ export interface Recurring {
   categoryId?: string;
   frequency: 'week' | 'month' | 'year' | 'days';
   everyDays?: number; // seulement 'days' : tous les N jours
+  every?: number; // semaine / mois / année : tous les N (absent = 1 : « toutes les 2 semaines », « tous les 3 mois »)
   nextDate: string; // AAAA-MM-JJ : prochaine fois (facture : date limite)
   anchorDay?: number; // chaque mois / année : le jour voulu (31 -> 28 février puis de nouveau 31 mars)
   mode: 'ask' | 'auto'; // me demander / créer toute seule
