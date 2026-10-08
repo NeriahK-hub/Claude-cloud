@@ -131,9 +131,9 @@ Tu peux régler la fréquence : chaque semaine, toutes les 2 semaines, tous les 
     id: 'curve',
     category: 'Suivi',
     title: 'Évolution du solde et « Et si… »',
-    body: `Dans Transactions › Rapport, « Évolution du solde » montre ton solde à la fin de chacun des 12 derniers mois. Touche ou glisse sur la courbe pour lire un mois.
+    body: `Dans Transactions › Rapport, ouvre « Évolution ». L’onglet « Mon solde » montre ton solde à la fin de chacun des 12 derniers mois : touche ou glisse sur la courbe pour lire un mois.
 
-« Et si je dépensais moins ? » calcule ce que tu garderais en un mois, un an et 5 ans si tu réduisais une catégorie de 5 à 50 %.`,
+L’onglet « Et si… » calcule ce que tu garderais en un mois, un an et 5 ans si tu réduisais une catégorie de 5 à 50 %.`,
   },
   {
     id: 'unusual',

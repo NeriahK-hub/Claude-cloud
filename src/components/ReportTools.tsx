@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, ArrowLeftRight, Search, FileText, ChevronRight, ChevronLeft, X, Check, TrendingUp, TrendingDown, Loader2, Lightbulb, Flame, Coins, Equal, ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, PiggyBank, CalendarRange, Sparkles, Clock } from 'lucide-react';
+import { CalendarDays, ArrowLeftRight, Search, FileText, ChevronRight, ChevronLeft, X, Check, TrendingUp, TrendingDown, Loader2, Lightbulb, Flame, Coins, Equal, ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, PiggyBank, CalendarRange, Sparkles, Clock, FileSpreadsheet } from 'lucide-react';
 import { Budget, Settings, Transaction, Wallet } from '../types';
 import { SmallTool, WeekTool, WhenTool, YearTool } from './MoneyReviews';
 import { BalanceCurveTool, WhatIfTool } from './BalanceTools';
+import { exportExcel } from '../lib/importExport';
 import { track } from '../lib/usage';
 import { Category } from '../data/categories';
 import { formatMoney, toMain } from '../lib/money';
@@ -20,8 +21,8 @@ import type { Page } from './BottomNav';
 // calendrier des dépenses, comparer deux mois, rapport PDF.
 // (Les abonnements repérés sont dans « À venir ».)
 
-type Tool = 'calendar' | 'compare' | 'pdf' | 'review' | 'balance' | 'whatif';
-type ReviewTab = 'week' | 'year' | 'habits';
+type Tool = 'understand' | 'evolution' | 'share';
+type UnderstandTab = 'week' | 'year' | 'habits' | 'compare' | 'calendar';
 type HabitTab = 'what' | 'when' | 'small';
 
 export interface ReportPdfData {
@@ -49,22 +50,16 @@ export const ReportTools: React.FC<{
 }> = (props) => {
   const [tool, setTool] = useState<Tool | null>(null);
   type Row = { id: Tool; title: string; sub: string; Icon: typeof CalendarDays; color: string };
-  // Comprendre son argent : un seul écran pour les bilans et les habitudes
-  const understand: Row[] = [
-    { id: 'review', title: 'Mes bilans et habitudes', sub: 'Ta semaine, ton année, ce que tu achètes souvent', Icon: Sparkles, color: '#EC4899' },
-  ];
+  // Trois entrées seulement : on comprend, on regarde l'évolution, on partage
   const rows: Row[] = [
-    { id: 'calendar', title: 'Calendrier des dépenses', sub: 'Jour par jour, les jours qui coûtent cher', Icon: CalendarDays, color: '#0EA5E9' },
-    { id: 'compare', title: 'Comparer deux mois', sub: 'Ce qui a augmenté, ce qui a baissé', Icon: ArrowLeftRight, color: '#8B5CF6' },
-    { id: 'balance', title: 'Évolution du solde', sub: 'Ton solde à la fin de chaque mois, sur un an', Icon: TrendingUp, color: '#6366F1' },
-    { id: 'whatif', title: 'Et si je dépensais moins ?', sub: 'Ce que tu garderais en un an, en 5 ans', Icon: PiggyBank, color: '#10B981' },
-    { id: 'pdf', title: 'Rapport PDF', sub: 'À imprimer ou à envoyer', Icon: FileText, color: '#EF4444' },
+    { id: 'understand', title: 'Comprendre', sub: 'Bilans, habitudes, comparer deux mois, calendrier', Icon: Sparkles, color: '#EC4899' },
+    { id: 'evolution', title: 'Évolution', sub: 'Ton solde sur 12 mois, et si tu dépensais moins', Icon: TrendingUp, color: '#6366F1' },
+    { id: 'share', title: 'Partager', sub: 'Rapport PDF, export Excel', Icon: FileText, color: '#EF4444' },
   ];
-  const all = [...understand, ...rows];
   const list = (title: string, items: Row[]) => (
     <>
       <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-2 mt-1 px-1">{title}</h3>
-      <div data-coach={title === 'Comprendre mon argent' ? 'insights' : undefined} className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100 mb-4">
+      <div data-coach="insights" className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100 mb-4">
         {items.map((r) => (
           <button key={r.id} onClick={() => { track(`tool.${r.id}`); setTool(r.id); }} className="w-full flex items-center gap-3 px-4 py-3.5 text-left cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors">
             <span className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0" style={{ background: `${r.color}1f`, color: r.color }}>
@@ -82,55 +77,128 @@ export const ReportTools: React.FC<{
   );
   return (
     <>
-      {list('Comprendre mon argent', understand)}
-      {list('Outils', rows)}
+      {list('Mon argent en clair', rows)}
       {tool && (
-        <ToolSheet onClose={() => setTool(null)} title={all.find((r) => r.id === tool)!.title}>
-          {tool === 'review' && <ReviewHub {...props} onClose={() => setTool(null)} />}
-          {tool === 'balance' && <BalanceCurveTool wallets={props.wallets} allTransactions={props.allTransactions} settings={props.settings} />}
-          {tool === 'whatif' && <WhatIfTool allTransactions={props.allTransactions} categories={props.categories} settings={props.settings} />}
-          {tool === 'calendar' && <CalendarTool {...props} />}
-          {tool === 'compare' && <CompareTool {...props} />}
-          {tool === 'pdf' && <PdfTool {...props} />}
+        <ToolSheet onClose={() => setTool(null)} title={rows.find((r) => r.id === tool)!.title}>
+          {tool === 'understand' && <UnderstandHub {...props} onClose={() => setTool(null)} />}
+          {tool === 'evolution' && <EvolutionHub {...props} />}
+          {tool === 'share' && <ShareHub {...props} />}
         </ToolSheet>
       )}
     </>
   );
 };
 
-// « Mes bilans et habitudes » : la semaine, l'année et les habitudes de dépense, au même endroit
-const REVIEW_TABS: { id: ReviewTab; label: string; Icon: typeof Search }[] = [
+// Une rangée d'onglets : pastilles qui défilent quand il y en a beaucoup, contrôle segmenté sinon
+function Tabs<T extends string>({ items, value, onChange }: { items: { id: T; label: string; Icon: typeof Search }[]; value: T; onChange: (id: T) => void }) {
+  const scroll = items.length > 3;
+  return (
+    <div role="tablist" className={scroll ? 'flex gap-1.5 overflow-x-auto no-scrollbar -mx-5 px-5 mb-4' : 'flex gap-1 p-1 rounded-full bg-slate-100 mb-4'}>
+      {items.map(({ id, label, Icon }) => (
+        <button
+          key={id}
+          role="tab"
+          aria-selected={value === id}
+          onClick={() => {
+            track(`tool.${id}`);
+            onChange(id);
+          }}
+          className={
+            scroll
+              ? `shrink-0 h-9 px-3.5 rounded-full flex items-center gap-1.5 text-[13px] font-semibold cursor-pointer transition ${value === id ? 'is-selected' : 'bg-slate-100 text-slate-600'}`
+              : `flex-1 min-w-0 h-9 rounded-full flex items-center justify-center gap-1.5 text-[13px] font-semibold cursor-pointer transition ${value === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`
+          }
+        >
+          <Icon className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// « Comprendre » : la semaine, l'année, les habitudes, comparer deux mois et le calendrier, au même endroit
+const UNDERSTAND_TABS: { id: UnderstandTab; label: string; Icon: typeof Search }[] = [
   { id: 'week', label: 'Semaine', Icon: CalendarRange },
   { id: 'year', label: 'Année', Icon: Sparkles },
   { id: 'habits', label: 'Habitudes', Icon: Search },
+  { id: 'compare', label: 'Comparer', Icon: ArrowLeftRight },
+  { id: 'calendar', label: 'Calendrier', Icon: CalendarDays },
 ];
-const ReviewHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClose: () => void }> = (props) => {
-  const [tab, setTab] = useState<ReviewTab>('week');
+const UnderstandHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClose: () => void }> = (props) => {
+  const [tab, setTab] = useState<UnderstandTab>('week');
   return (
     <>
-      <div role="tablist" className="flex gap-1 p-1 rounded-full bg-slate-100 mb-4">
-        {REVIEW_TABS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => {
-              track(`tool.${id}`);
-              setTab(id);
-            }}
-            className={`flex-1 min-w-0 h-9 rounded-full flex items-center justify-center gap-1.5 text-[13px] font-semibold cursor-pointer transition ${
-              tab === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">{label}</span>
-          </button>
-        ))}
-      </div>
+      <Tabs items={UNDERSTAND_TABS} value={tab} onChange={setTab} />
       <div key={tab} className="animate-fade-in">
         {tab === 'week' && <WeekTool txs={props.txs} settings={props.settings} categories={props.categories} />}
         {tab === 'year' && <YearTool txs={props.txs} settings={props.settings} categories={props.categories} />}
         {tab === 'habits' && <HabitsHub {...props} />}
+        {tab === 'compare' && <CompareTool {...props} />}
+        {tab === 'calendar' && <CalendarTool {...props} />}
+      </div>
+    </>
+  );
+};
+
+// « Évolution » : le solde sur 12 mois, et ce que donnerait une dépense en moins
+const EVOLUTION_TABS: { id: 'balance' | 'whatif'; label: string; Icon: typeof Search }[] = [
+  { id: 'balance', label: 'Mon solde', Icon: TrendingUp },
+  { id: 'whatif', label: 'Et si…', Icon: PiggyBank },
+];
+const EvolutionHub: React.FC<React.ComponentProps<typeof ReportTools>> = (props) => {
+  const [tab, setTab] = useState<'balance' | 'whatif'>('balance');
+  return (
+    <>
+      <Tabs items={EVOLUTION_TABS} value={tab} onChange={setTab} />
+      <div key={tab} className="animate-fade-in">
+        {tab === 'balance' && <BalanceCurveTool wallets={props.wallets} allTransactions={props.allTransactions} settings={props.settings} />}
+        {tab === 'whatif' && <WhatIfTool allTransactions={props.allTransactions} categories={props.categories} settings={props.settings} />}
+      </div>
+    </>
+  );
+};
+
+// « Partager » : le rapport en PDF, ou toutes les opérations en Excel
+const SHARE_TABS: { id: 'pdf' | 'excel'; label: string; Icon: typeof Search }[] = [
+  { id: 'pdf', label: 'PDF', Icon: FileText },
+  { id: 'excel', label: 'Excel', Icon: FileSpreadsheet },
+];
+const ExcelTool: React.FC<React.ComponentProps<typeof ReportTools>> = ({ wallets, allTransactions, settings }) => {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div>
+      <div className="rounded-3xl bg-slate-100 p-5 text-center">
+        <span className="w-14 h-14 mx-auto rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-3">
+          <FileSpreadsheet className="w-7 h-7 text-emerald-600" />
+        </span>
+        <p className="text-[15px] font-semibold text-slate-900">Toutes tes opérations dans un fichier Excel</p>
+        <p className="text-[13px] text-slate-500 mt-1 max-w-[290px] mx-auto">{allTransactions.length} opération{allTransactions.length > 1 ? 's' : ''}, au format Money Lover : tu peux le rouvrir ici ou ailleurs.</p>
+      </div>
+      <button
+        disabled={busy || allTransactions.length === 0}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await exportExcel({ wallets, transactions: allTransactions, settings });
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="mt-4 w-full h-12 rounded-2xl bg-accent hover:bg-accent-hover disabled:opacity-40 text-[15px] font-bold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition"
+      >
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Exporter en Excel
+      </button>
+    </div>
+  );
+};
+const ShareHub: React.FC<React.ComponentProps<typeof ReportTools>> = (props) => {
+  const [tab, setTab] = useState<'pdf' | 'excel'>('pdf');
+  return (
+    <>
+      <Tabs items={SHARE_TABS} value={tab} onChange={setTab} />
+      <div key={tab} className="animate-fade-in">
+        {tab === 'pdf' ? <PdfTool {...props} /> : <ExcelTool {...props} />}
       </div>
     </>
   );
