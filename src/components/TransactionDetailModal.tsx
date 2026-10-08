@@ -7,6 +7,7 @@ import { convertBetween, formatMoney } from '../lib/money';
 import { DateField, localDay } from './DatePicker';
 import { isShared, memberOf, MemberAvatar, MemberChips, ME_ID } from './Members';
 import { useDisplayPrefs } from '../lib/display';
+import { Group, SelectRow, SwitchRow } from './FormRows';
 
 interface TransactionDetailModalProps {
   transaction: Transaction | null;
@@ -97,7 +98,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
               </button>
             )}
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              {mode === 'edit' ? 'Modifier la transaction' : 'Détail de la transaction'}
+              {mode === 'edit' ? 'Modifier' : 'Détail de la transaction'}
             </span>
           </div>
           <button
@@ -293,92 +294,91 @@ const EditForm: React.FC<{
     onSave(changes);
   };
 
-  const field = 'w-full mt-1 px-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent';
-  const label = 'block text-xs font-semibold text-slate-500 mt-3';
+  const rowInput = 'flex-1 min-w-0 bg-transparent text-right text-[15px] text-slate-900 outline-none field-plain';
+  const selectedCat = categories.find((c) => c.id === categoryId);
 
   return (
     <div>
-      <label className={label}>
-        Montant ({tx.currency}) · {isOut ? 'sortie' : 'entrée'}
-      </label>
-      <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={`${field} text-lg font-bold tabular-nums`} />
+      {/* Le montant en grand, au centre : c'est le plus important */}
+      <div className="text-center pt-1 pb-5">
+        <div className="text-[12px] font-semibold text-slate-500">{isOut ? 'Sortie' : 'Entrée'}</div>
+        <input
+          inputMode="decimal"
+          aria-label="Montant"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className={`w-full bg-transparent text-center text-[40px] leading-tight font-extrabold tabular-nums outline-none field-plain ${isOut ? 'text-red-500' : 'text-emerald-600'}`}
+        />
+        <div className="text-[13px] font-medium text-slate-400">{tx.currency}</div>
+      </div>
 
-      <label className={label}>Titre</label>
-      <input value={title} onChange={(e) => setTitle(e.target.value)} className={field} />
-
-      {simple && (
-        <>
-          <label className={label}>Catégorie</label>
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={field}>
-            {!tx.categoryId && <option value="">{tx.category}</option>}
-            {choices.map((c) => (
-              <option key={c.id} value={c.id}>
-                {nameOf(c)}
-              </option>
-            ))}
-          </select>
-        </>
+      <Group>
+        <label className="flex items-center gap-3 px-4 min-h-[48px] cursor-text transition-colors focus-within:bg-slate-200/50">
+          <span className="text-[15px] text-slate-900 shrink-0">Titre</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className={rowInput} />
+        </label>
+        {simple && (
+          <SelectRow
+            label="Catégorie"
+            value={categoryId}
+            display={selectedCat ? nameOf(selectedCat) : tx.category}
+            onChange={setCategoryId}
+            options={[...(!tx.categoryId ? [{ value: '', label: tx.category }] : []), ...choices.map((c) => ({ value: c.id, label: nameOf(c) }))]}
+          />
+        )}
+        {simple && walletChoices.length > 1 && (
+          <SelectRow
+            label="Portefeuille"
+            value={walletId}
+            display={editWallet ? `${editWallet.name} (${editWallet.currency})` : ''}
+            onChange={setWalletId}
+            options={walletChoices.map((w) => ({ value: w.id, label: `${w.name} (${w.currency})` }))}
+          />
+        )}
+        {isDebt && (
+          <label className="flex items-center gap-3 px-4 min-h-[48px] cursor-text transition-colors focus-within:bg-slate-200/50">
+            <span className="text-[15px] text-slate-900 shrink-0">Avec qui</span>
+            <input value={person} onChange={(e) => setPerson(e.target.value)} placeholder="ex. Kemy" className={rowInput} />
+          </label>
+        )}
+      </Group>
+      {converted !== null && (
+        <p className="text-[12px] text-slate-500 -mt-3 mb-5 px-4">
+          Converti : {formatMoney(Math.abs(converted), editWallet!.currency)} dans ce portefeuille (taux de tes Paramètres).
+        </p>
       )}
-
-      {simple && walletChoices.length > 1 && (
-        <>
-          <label className={label}>Portefeuille</label>
-          <select value={walletId} onChange={(e) => setWalletId(e.target.value)} className={field}>
-            {walletChoices.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name} ({w.currency})
-              </option>
-            ))}
-          </select>
-          {converted !== null && (
-            <p className="text-xs text-slate-500 mt-1">
-              Converti : {formatMoney(Math.abs(converted), editWallet!.currency)} dans ce portefeuille (taux de tes Paramètres).
-            </p>
-          )}
-          {rateMissing && (
-            <p className="text-xs text-amber-600 mt-1">
-              Taux {tx.currency} → {editWallet!.currency} manquant : ajoute-le dans Paramètres › Taux de change.
-            </p>
-          )}
-        </>
-      )}
-
-      {isDebt && (
-        <>
-          <label className={label}>Avec qui ?</label>
-          <input value={person} onChange={(e) => setPerson(e.target.value)} placeholder="ex. Kemy" className={field} />
-        </>
+      {rateMissing && (
+        <p className="text-[12px] text-amber-600 -mt-3 mb-5 px-4">
+          Taux {tx.currency} → {editWallet!.currency} manquant : ajoute-le dans Paramètres › Taux de change.
+        </p>
       )}
 
       {isShared(editWallet) && (
-        <div className="mt-3">
+        <div className="mb-5">
           <MemberChips wallet={editWallet} value={memberId} onChange={setMemberId} label={isOut ? 'Fait par' : 'Versé par'} />
         </div>
       )}
 
+      <section className="mb-5">
+        <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 px-4">Date</h3>
+        <DateField value={day} onChange={setDay} shortcuts="past" label="Date" />
+        {tx.transferId && <p className="text-[12px] text-slate-400 mt-1.5 px-4">La date s'applique aux deux côtés du transfert.</p>}
+      </section>
+
       {simple && (excludeOption || tx.excludeFromReport) && (
-        <label className="flex items-center justify-between gap-3 mt-3 cursor-pointer">
-          <span>
-            <span className="block text-sm font-semibold text-slate-700">Exclure du rapport</span>
-            <span className="block text-xs text-slate-400">Compte dans le solde, mais pas dans les statistiques ni les budgets.</span>
-          </span>
-          <input type="checkbox" role="switch" checked={exclude} onChange={(e) => setExclude(e.target.checked)} className="toggle shrink-0" />
-        </label>
+        <Group hint="Compte dans le solde, mais pas dans les statistiques ni les budgets.">
+          <SwitchRow label="Exclure du rapport" checked={exclude} onChange={setExclude} />
+        </Group>
       )}
 
-      <label className={label}>Date</label>
-      <DateField value={day} onChange={setDay} shortcuts="past" label="Date" className="mb-1" />
-
-      {tx.transferId && <p className="text-[12px] text-slate-400 mt-2">La date s'applique aux deux côtés du transfert.</p>}
-
-      <div className="flex gap-2 mt-4">
-        <button onClick={onCancel} className="flex-1 py-3 rounded-xl bg-slate-100 text-sm font-semibold cursor-pointer">
+      <div className="flex gap-2 mt-2">
+        <button onClick={onCancel} className="flex-1 h-12 rounded-2xl bg-slate-100 text-[15px] font-semibold cursor-pointer active:scale-[0.98] transition">
           Annuler
         </button>
         <button
           disabled={!valid}
           onClick={save}
-          className="flex-[2] py-3 rounded-xl bg-accent disabled:opacity-40 text-slate-900 text-sm font-bold cursor-pointer"
+          className="flex-[2] h-12 rounded-2xl bg-accent hover:bg-accent-hover disabled:opacity-40 text-[15px] font-bold cursor-pointer active:scale-[0.98] transition"
         >
           Enregistrer
         </button>
