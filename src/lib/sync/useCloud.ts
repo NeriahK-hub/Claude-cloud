@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { deviceKey, deviceName, DeviceRow } from '../devices';
 import { cloudConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from '../config';
 import { idsOf, keepLocalEdits, migrateIds, runSync, SyncMeta, SyncPatch } from './engine';
 import type { SyncData } from './mapping';
@@ -394,6 +395,43 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
     setStatus('signed-out');
   };
 
+  // ---------- Appareils connectés ----------
+  // Cet appareil se déclare (au plus une fois par 20 minutes) ; la liste vient du compte.
+  const registerDevice = async () => {
+    try {
+      const last = Number(localStorage.getItem('ap.deviceSeen') ?? 0);
+      if (Date.now() - last < 20 * 60_000) return;
+      const sb = await getClient();
+      await sb.rpc('register_device', { p_key: deviceKey(), p_name: deviceName() });
+      localStorage.setItem('ap.deviceSeen', String(Date.now()));
+    } catch {
+      // pas grave : la liste d'appareils est un confort (migration pas encore passée, hors ligne…)
+    }
+  };
+  // Connecté : cet appareil apparaît dans la liste des appareils du compte
+  useEffect(() => {
+    if (user) void registerDevice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+  const listDevices = async (): Promise<DeviceRow[]> => {
+    await registerDevice();
+    const sb = await getClient();
+    const { data, error: e } = await sb.rpc('my_devices');
+    if (e) throw new Error(e.message);
+    return (data ?? []) as DeviceRow[];
+  };
+  const forgetDevice = async (id: string) => {
+    const sb = await getClient();
+    const { error: e } = await sb.rpc('forget_device', { p_id: id });
+    if (e) throw new Error(e.message);
+  };
+  // Tous les autres appareils sont déconnectés (celui-ci reste connecté)
+  const signOutOthers = async () => {
+    const sb = await getClient();
+    const { error: e } = await sb.auth.signOut({ scope: 'others' });
+    if (e) throw new Error(e.message);
+  };
+
   // ---------- Invitation par lien ----------
   const rpc = async <T>(fn: string, args: Record<string, unknown>): Promise<T> => {
     const sb = await getClient();
@@ -482,6 +520,9 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
     signInWithGoogle,
     signOut,
     deleteAccount,
+    listDevices,
+    forgetDevice,
+    signOutOthers,
     createInvite,
     revokeInvites,
     checkInvite,

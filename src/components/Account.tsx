@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace, Trash2, ChevronLeft, ClipboardPaste } from 'lucide-react';
+import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace, Trash2, ChevronLeft, ClipboardPaste, Smartphone, Monitor, ChevronDown } from 'lucide-react';
+import { deviceKey, DeviceRow } from '../lib/devices';
 import type { Cloud } from '../lib/sync/useCloud';
 import { useFeature } from '../lib/remoteConfig';
 
@@ -132,6 +133,7 @@ export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
           <RefreshCw className={`w-4 h-4 ${status === 'syncing' ? 'animate-spin' : ''}`} />
         </button>
       </div>
+      <DevicesList cloud={cloud} />
       {confirmOut ? (
         <div className="mt-3 p-3 rounded-2xl bg-red-50">
           <p className="text-sm text-slate-700 mb-2">
@@ -157,6 +159,113 @@ export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
         </div>
       )}
       {deleting && <DeleteAccountSheet cloud={cloud} onClose={() => setDeleting(false)} />}
+    </div>
+  );
+};
+
+// Appareils où ton compte est ouvert : on les voit, et on peut déconnecter tous les autres d'un coup
+const seenAgo = (iso: string) => {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 2) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `il y a ${h} h`;
+  const d = Math.round(h / 24);
+  return d === 1 ? 'hier' : `il y a ${d} jours`;
+};
+
+const DevicesList: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState<DeviceRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [done, setDone] = useState(false);
+  const me = deviceKey();
+
+  const load = async () => {
+    setError('');
+    try {
+      setList(await cloud.listDevices());
+    } catch (e) {
+      setError(frenchError(e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && !list) void load();
+  };
+  const others = (list ?? []).filter((d) => d.device_key !== me);
+  const kickOthers = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await cloud.signOutOthers();
+      await Promise.all(others.map((d) => cloud.forgetDevice(d.id).catch(() => {})));
+      setConfirm(false);
+      setDone(true);
+      await load();
+    } catch (e) {
+      setError(frenchError(e instanceof Error ? e.message : String(e)));
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-100">
+      <button onClick={toggle} aria-expanded={open} className="w-full flex items-center justify-between text-left cursor-pointer">
+        <span className="text-[13px] font-semibold text-slate-700">Appareils connectés</span>
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="mt-2 animate-fade-in">
+          {!list && !error && (
+            <div className="py-3 flex justify-center">
+              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+            </div>
+          )}
+          {error && <p className="text-[13px] text-red-600 py-2">{error}</p>}
+          {list && (
+            <div className="rounded-2xl bg-slate-100 divide-y divide-slate-200/70 overflow-hidden">
+              {list.map((d) => {
+                const here = d.device_key === me;
+                const Icon = /iPhone|Android|iPad/.test(d.name) ? Smartphone : Monitor;
+                return (
+                  <div key={d.id} className="flex items-center gap-3 px-3.5 py-2.5">
+                    <Icon className="w-5 h-5 text-slate-500 shrink-0" />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[14px] font-semibold text-slate-900 truncate">{d.name}</span>
+                      <span className="block text-[12px] text-slate-500">{here ? 'Cet appareil · en ce moment' : `Vu ${seenAgo(d.last_seen)}`}</span>
+                    </span>
+                  </div>
+                );
+              })}
+              {list.length === 0 && <p className="px-3.5 py-3 text-[13px] text-slate-500">Aucun appareil pour l’instant.</p>}
+            </div>
+          )}
+          {done && <p className="text-[13px] text-emerald-700 mt-2 px-1">Les autres appareils sont déconnectés. Ils devront se reconnecter avec un code.</p>}
+          {others.length > 0 &&
+            (confirm ? (
+              <div className="mt-2 p-3 rounded-2xl bg-red-50">
+                <p className="text-sm text-slate-700 mb-2">Déconnecter les autres appareils ? Celui-ci reste connecté. Ils devront se reconnecter avec un code.</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setConfirm(false)} className="flex-1 py-2.5 rounded-xl bg-white text-sm font-semibold cursor-pointer">
+                    Annuler
+                  </button>
+                  <button onClick={kickOthers} disabled={busy} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold cursor-pointer disabled:opacity-60">
+                    {busy ? '…' : 'Déconnecter'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setConfirm(true)} className="mt-2 text-[13px] font-semibold text-red-600 cursor-pointer">
+                Déconnecter les autres appareils
+              </button>
+            ))}
+          <p className="text-[12px] text-slate-400 mt-2 px-1 leading-snug">Perdu ou prêté ton téléphone ? Déconnecte les autres appareils : ils n’auront plus accès à ton compte.</p>
+        </div>
+      )}
     </div>
   );
 };
