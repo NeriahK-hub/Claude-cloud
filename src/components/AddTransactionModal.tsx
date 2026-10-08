@@ -294,11 +294,39 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
             onBack={subOf ? () => setSubOf(null) : undefined}
             onClose={() => setPanel(null)}
             extra={
-              <button onClick={onManageCategories} className="text-xs font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-1 cursor-pointer">
-                <Settings2 className="w-3.5 h-3.5" /> Gérer
-              </button>
+              // Dette / Prêt : les 4 choix sont fixes, rien à gérer
+              mode === 'debt' ? undefined : (
+                <button onClick={onManageCategories} className="text-xs font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-1 cursor-pointer">
+                  <Settings2 className="w-3.5 h-3.5" /> Gérer
+                </button>
+              )
             }
           />
+          {mode === 'debt' && !subOf ? (
+            // Dette / Prêt : deux groupes, « l'argent sort » puis « l'argent entre » (au lieu de le répéter sur chaque tuile)
+            (['out', 'in'] as const).map((dir) => (
+              <section key={dir} className="mb-3">
+                <h4 className={`flex items-center gap-1 px-1 mb-1.5 text-[12px] font-bold uppercase tracking-wider ${dir === 'out' ? 'text-slate-500' : 'text-emerald-600'}`}>
+                  {dir === 'out' ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownLeft className="w-3.5 h-3.5" />}
+                  {dir === 'out' ? "L'argent sort" : "L'argent entre"}
+                </h4>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {list
+                    .filter((c) => c.direction === dir)
+                    .map((c) =>
+                      tile(
+                        c.id,
+                        selectedId === c.id,
+                        () => pickCategory(c),
+                        <IconBadge icon={c.icon} image={c.image} color={c.color} size="sm" />,
+                        c.name,
+                        DEBT_HINTS[c.id] ? <span className="text-[11px] text-slate-500 leading-tight">{DEBT_HINTS[c.id]}</span> : undefined
+                      )
+                    )}
+                </div>
+              </section>
+            ))
+          ) : (
           <div className={`grid ${mode === 'debt' ? 'grid-cols-2 gap-1.5' : 'grid-cols-4 gap-1'}`}>
             {list.map((c, i) =>
               tile(
@@ -324,6 +352,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               )
             )}
           </div>
+          )}
         </>
       );
     }
@@ -476,7 +505,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
             </button>
           </div>
           {/* Seulement quand ça apporte quelque chose : le portefeuille est déjà dans « Payé avec » */}
-          {(rateMissing || (wallet && cur !== wallet.currency && value > 0) || !direction) && (
+          {(rateMissing || (wallet && cur !== wallet.currency && value > 0) || (!direction && !(mode === 'debt' && panel === 'category'))) && (
             <p className={`mt-1.5 text-xs ${rateMissing ? 'text-amber-600' : 'text-slate-500'}`}>
               {rateMissing
                 ? 'Taux de change manquant : ajoute-le dans Paramètres.'
