@@ -4,7 +4,7 @@ import { Recurring, Settings, Transaction } from '../types';
 import { Category } from '../data/categories';
 import { formatMoney, toMain } from '../lib/money';
 import { getPrefs, useDisplayPrefs } from '../lib/display';
-import { DAY_PARTS, findSubscriptions, smallExpenses, weekReview, whenYouSpend, yearReview } from '../lib/review';
+import { DAY_PARTS, findSubscriptions, type Subscription, smallExpenses, weekReview, whenYouSpend, yearReview } from '../lib/review';
 import { IconBadge } from './AppIcon';
 import { Amount } from './MoneyText';
 import { YearWrapped, personaOf } from './YearWrapped';
@@ -483,7 +483,7 @@ export const SmallTool: React.FC<{ txs: Transaction[]; settings: Settings; categ
 };
 
 // ---------- Abonnements repérés ----------
-export const SubsTool: React.FC<{ txs: Transaction[]; settings: Settings; categories: Category[]; recurrings: Recurring[]; onNavigate?: (p: Page) => void }> = ({ txs, settings, categories, recurrings, onNavigate }) => {
+export const SubsTool: React.FC<{ txs: Transaction[]; settings: Settings; categories: Category[]; recurrings: Recurring[]; onNavigate?: (p: Page) => void; onAdd?: (s: Subscription) => void }> = ({ txs, settings, categories, recurrings, onNavigate, onAdd }) => {
   const round = useRound(settings);
   const list = useMemo(() => findSubscriptions(txs, settings, categories, recurrings), [txs, settings, categories, recurrings]);
   const total = list.reduce((s, x) => s + x.amount, 0);
@@ -520,6 +520,11 @@ export const SubsTool: React.FC<{ txs: Transaction[]; settings: Settings; catego
               <div className="text-[14px] font-bold tabular-nums text-slate-900 whitespace-nowrap">{round(x.amount)}</div>
               <div className="text-[11px] text-slate-500">par mois</div>
             </div>
+            {onAdd && !x.known && (
+              <button onClick={() => onAdd(x)} aria-label={`Ajouter ${x.name} dans À venir`} className="shrink-0 h-8 px-3 rounded-full bg-accent hover:bg-accent-hover text-[13px] font-bold cursor-pointer active:scale-95 transition">
+                Ajouter
+              </button>
+            )}
           </div>
         ))}
       </div>

@@ -302,7 +302,7 @@ const Overview: React.FC<{ health: Health; delta: number | null; onClose: () => 
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[12px] font-medium text-slate-400">Conseil de la semaine</span>
-          <span className="block text-[15px] font-semibold text-slate-900 leading-snug mt-0.5 line-clamp-3 [text-wrap:pretty]">{nb(health.tips[weekly].text)}</span>
+          <span className="block text-[16px] font-semibold text-slate-900 leading-snug mt-0.5 line-clamp-2 [text-wrap:balance]">{nb(health.tips[weekly].title)}</span>
         </span>
         <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
       </button>

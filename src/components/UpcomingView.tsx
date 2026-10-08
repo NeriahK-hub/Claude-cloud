@@ -11,7 +11,7 @@ import { Group, NavRow, PickRow, SwitchRow } from './FormRows';
 import { AppIcon, IconBadge } from './AppIcon';
 import { askConfirm } from '../lib/confirm';
 import { SubsTool } from './MoneyReviews';
-import { findSubscriptions } from '../lib/review';
+import { findSubscriptions, type Subscription } from '../lib/review';
 // Petites aides communes avec la carte de l'accueil (DueCard.tsx, chargée au démarrage)
 import { dayText, money, pendingRecurrings, whenText } from './DueCard';
 
@@ -121,12 +121,33 @@ export const UpcomingView: React.FC<{
   const desktop = useIsDesktop();
   const [editing, setEditing] = useState<Recurring | 'new' | 'bill' | null>(null);
   const [showSubs, setShowSubs] = useState(false);
+  const [fromSub, setFromSub] = useState<Subscription | null>(null); // abonnement repéré à ajouter (formulaire pré-rempli)
   const today = ymd(new Date());
   const pending = pendingRecurrings(recurrings, today);
   const catOf = (id?: string) => categories.find((c) => c.id === id);
   // Dépenses qui reviennent chaque mois sans être notées ici : on te les montre pour que tu décides
   const subs = useMemo(() => findSubscriptions(transactions, settings, categories, recurrings), [transactions, settings, categories, recurrings]);
   const newSubs = subs.filter((x) => !x.known).length;
+  // Prochaine date : jamais dans le passé (on avance de mois en mois)
+  const nextOf = (x: Subscription) => {
+    const d = new Date(x.next);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    while (d < now) d.setMonth(d.getMonth() + 1);
+    return ymd(d);
+  };
+  const draftOf = (x: Subscription): Omit<Recurring, 'id' | 'createdAt' | 'active'> => ({
+    title: x.name,
+    amount: Math.round(x.lastAmount * 100) / 100,
+    currency: x.currency,
+    walletId: x.walletId,
+    direction: 'out',
+    categoryId: x.categoryId,
+    frequency: 'month',
+    nextDate: nextOf(x),
+    anchorDay: Number(nextOf(x).slice(8, 10)),
+    mode: 'ask',
+  });
 
   // D'ici la fin du mois : ce qu'il reste à payer et à recevoir (dans la devise principale)
   const month = useMemo(() => {
@@ -286,17 +307,36 @@ export const UpcomingView: React.FC<{
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <SubsTool txs={transactions} settings={settings} categories={categories} recurrings={recurrings} />
-            {newSubs > 0 && (
+            <SubsTool txs={transactions} settings={settings} categories={categories} recurrings={recurrings} onAdd={(x) => { setShowSubs(false); setFromSub(x); }} />
+            {newSubs > 1 && (
               <button
-                onClick={() => { setShowSubs(false); setEditing('new'); }}
-                className="mt-4 w-full h-12 rounded-2xl bg-accent hover:bg-accent-hover text-[15px] font-bold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition"
+                onClick={() => {
+                  subs.filter((x) => !x.known).forEach((x) => onAdd(draftOf(x)));
+                  setShowSubs(false);
+                }}
+                className="mt-4 w-full h-12 rounded-2xl bg-slate-100 text-[15px] font-bold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition"
               >
-                <Plus className="w-4 h-4" /> Ajouter dans « À venir »
+                <Plus className="w-4 h-4" /> Tout ajouter ({newSubs})
               </button>
             )}
           </div>
         </div>
+      )}
+
+      {fromSub && (
+        <RecurringSheet
+          initial={null}
+          prefill={draftOf(fromSub)}
+          bill={false}
+          wallets={wallets.filter((w) => !w.archived && (w.kind ?? 'basic') !== 'goal')}
+          categories={categories}
+          defaultCurrency={settings.mainCurrency}
+          onClose={() => setFromSub(null)}
+          onSave={(data) => {
+            onAdd(data);
+            setFromSub(null);
+          }}
+        />
       )}
 
       {editing && (
@@ -335,6 +375,7 @@ type Kind = 'out' | 'in' | 'bill';
 // ---------- Formulaire : opération qui revient ou facture ----------
 const RecurringSheet: React.FC<{
   initial: Recurring | null;
+  prefill?: Omit<Recurring, 'id' | 'createdAt' | 'active'>; // nouvelle opération déjà remplie (abonnement repéré)
   bill: boolean;
   wallets: Wallet[];
   categories: Category[];
@@ -343,17 +384,18 @@ const RecurringSheet: React.FC<{
   onSave: (r: Omit<Recurring, 'id' | 'createdAt' | 'active'>) => void;
   onToggle?: () => void;
   onDelete?: () => void;
-}> = ({ initial, bill, wallets, categories, defaultCurrency, onClose, onSave, onToggle, onDelete }) => {
+}> = ({ initial, prefill, bill, wallets, categories, defaultCurrency, onClose, onSave, onToggle, onDelete }) => {
+  const seed = initial ?? prefill;
   const [kind, setKind] = useState<Kind>(initial ? (initial.bill ? 'bill' : initial.direction) : bill ? 'bill' : 'out');
-  const [title, setTitle] = useState(initial?.title ?? '');
+  const [title, setTitle] = useState(seed?.title ?? '');
   const [variable, setVariable] = useState(initial ? initial.amount === undefined : false);
-  const [amount, setAmount] = useState(initial?.amount ? String(initial.amount) : '');
-  const [walletId, setWalletId] = useState(initial?.walletId ?? wallets[0]?.id ?? '');
-  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? '');
-  const [frequency, setFrequency] = useState<Recurring['frequency']>(initial?.frequency ?? 'month');
-  const [everyDays, setEveryDays] = useState(String(initial?.everyDays ?? 14));
-  const [nextDate, setNextDate] = useState(initial?.nextDate ?? ymd(new Date()));
-  const [mode, setMode] = useState<Recurring['mode']>(initial?.mode ?? 'ask');
+  const [amount, setAmount] = useState(seed?.amount ? String(seed.amount) : '');
+  const [walletId, setWalletId] = useState(seed?.walletId ?? wallets[0]?.id ?? '');
+  const [categoryId, setCategoryId] = useState(seed?.categoryId ?? '');
+  const [frequency, setFrequency] = useState<Recurring['frequency']>(seed?.frequency ?? 'month');
+  const [everyDays, setEveryDays] = useState(String(seed?.everyDays ?? 14));
+  const [nextDate, setNextDate] = useState(seed?.nextDate ?? ymd(new Date()));
+  const [mode, setMode] = useState<Recurring['mode']>(seed?.mode ?? 'ask');
   const [remindDays, setRemindDays] = useState(initial?.remindDays ?? 3);
   const [picking, setPicking] = useState<'wallet' | 'category' | 'frequency' | null>(null); // liste ouverte dans la fenêtre
 

@@ -190,6 +190,11 @@ export interface Subscription {
   next: Date;
   yearly: number;
   known: boolean; // déjà dans « À venir »
+  // De quoi pré-remplir une opération qui revient (dernier paiement, dans sa devise d'origine)
+  walletId: string;
+  currency: string;
+  lastAmount: number;
+  categoryId?: string;
 }
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -237,6 +242,10 @@ export function findSubscriptions(txs: Transaction[], settings: Settings, catego
       next: new Date(last.getTime() + Math.round(median) * DAY),
       yearly: avg * 12,
       known: knownNames.has(k),
+      walletId: sorted[sorted.length - 1].walletId,
+      currency: sorted[sorted.length - 1].currency,
+      lastAmount: Math.abs(sorted[sorted.length - 1].amount),
+      categoryId: sorted[sorted.length - 1].categoryId,
     });
   }
   // Le même abonnement noté dans deux portefeuilles : une seule ligne (celle qui a le plus d'historique)
