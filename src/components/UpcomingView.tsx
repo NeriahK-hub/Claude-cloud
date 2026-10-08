@@ -184,6 +184,7 @@ export const UpcomingView: React.FC<{
           <span className="block text-[14px] font-semibold text-slate-900 truncate">{r.title}</span>
           <span className="block text-[12px] text-slate-500 truncate">
             {r.cancelBy ? <span className="text-amber-600 font-semibold">À résilier</span> : how(r)}
+            {r.note && <span> · {r.note}</span>}
           </span>
         </span>
         <span className={`text-right text-[14px] font-bold tabular-nums shrink-0 ${r.direction === 'in' ? 'text-emerald-600' : 'text-slate-900'}`}>
@@ -428,6 +429,7 @@ const RecurringSheet: React.FC<{
   // « À résilier » : un rappel pour annuler un abonnement avant la prochaine échéance
   const [cancel, setCancel] = useState(!!seed?.cancelBy);
   const [cancelBy, setCancelBy] = useState(seed?.cancelBy || '');
+  const [note, setNote] = useState(seed?.note ?? '');
   const [picking, setPicking] = useState<'wallet' | 'category' | 'frequency' | null>(null); // liste ouverte dans la fenêtre
 
   const wallet = wallets.find((w) => w.id === walletId);
@@ -738,6 +740,19 @@ const RecurringSheet: React.FC<{
             </Group>
           )}
 
+          <Group>
+            <label className="flex items-center gap-3 px-4 min-h-[50px] cursor-text focus-within:bg-slate-200/50 transition-colors">
+              <span className="text-[15px] text-slate-900 shrink-0">Note</span>
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={120}
+                placeholder="Facultatif"
+                className="flex-1 min-w-0 bg-transparent text-right text-[15px] text-slate-900 placeholder:text-slate-400 outline-none field-plain"
+              />
+            </label>
+          </Group>
+
           {initial && (
             <Group>
               {onToggle && (
@@ -773,6 +788,7 @@ const RecurringSheet: React.FC<{
                 // (1 est gardé si la fréquence avait été réglée avant : le compte doit recevoir le retour à « chaque mois »)
                 every: frequency !== 'days' ? (Number(count) > 1 ? Math.min(60, Math.round(Number(count))) : initial?.every ? 1 : undefined) : undefined,
                 cancelBy: kind !== 'bill' && direction === 'out' && cancel && cancelBy ? cancelBy : initial?.cancelBy ? '' : undefined,
+                note: note.trim() ? note.trim() : initial?.note ? '' : undefined,
                 nextDate,
                 // Chaque mois / année : on retient le jour choisi (un 31 reste un 31 après février)
                 anchorDay: frequency === 'month' || frequency === 'year' ? Number(nextDate.slice(8, 10)) : undefined,

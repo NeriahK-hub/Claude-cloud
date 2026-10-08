@@ -434,6 +434,7 @@ export const recurringRow = (r: Recurring): Row => ({
   // 20261020 ne sont pas passées, les anciennes lignes ne changent pas
   ...(r.frequency !== 'days' && r.every !== undefined ? { every_n: r.every } : {}),
   ...(r.cancelBy !== undefined ? { cancel_by: r.cancelBy || null } : {}),
+  ...(r.note !== undefined ? { note: r.note || null } : {}), // migration 20261023
   next_date: r.nextDate,
   anchor_day: r.anchorDay ?? null,
   mode: r.mode,
@@ -455,6 +456,7 @@ export const recurringFromRow = (r: Row, me: string): Recurring => ({
   everyDays: r.every_days != null ? Number(r.every_days) : undefined,
   every: r.every_n != null && Number(r.every_n) > 1 ? Number(r.every_n) : undefined,
   cancelBy: r.cancel_by ? String(r.cancel_by).slice(0, 10) : undefined,
+  note: r.note ? String(r.note) : undefined,
   nextDate: String(r.next_date).slice(0, 10),
   anchorDay: r.anchor_day != null ? Number(r.anchor_day) : undefined,
   mode: r.mode === 'auto' ? 'auto' : 'ask',
