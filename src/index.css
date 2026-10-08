@@ -122,6 +122,8 @@ button {
 .chart-inc { --series: #059669; --ref: #475569; }
 html.dark .chart-exp { --series: #f43f5e; --ref: #8b95a5; }
 html.dark .chart-inc { --series: #059669; --ref: #8b95a5; }
+.chart-bal { --series: #6366f1; --ref: #64748b; } /* évolution du solde */
+html.dark .chart-bal { --series: #818cf8; --ref: #8b95a5; }
 .chart-series { stroke: var(--series); }
 .chart-ref { stroke: var(--ref); }
 .chart-area { fill: var(--series); fill-opacity: 0.1; }
@@ -345,6 +347,55 @@ select:focus-visible {
 .stagger > :nth-child(3) { animation-delay: 80ms; }
 .stagger > :nth-child(4) { animation-delay: 120ms; }
 .stagger > :nth-child(n + 5) { animation-delay: 160ms; }
+
+/* Curseur (simulateur « Et si je dépensais moins ? ») : une piste fine qui se remplit, une pastille blanche */
+input[type='range'].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 32px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range'].slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent-deep) var(--fill, 0%), var(--color-slate-200) var(--fill, 0%));
+}
+input[type='range'].slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent-deep) var(--fill, 0%), var(--color-slate-200) var(--fill, 0%));
+}
+input[type='range'].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent-deep);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+input[type='range'].slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent-deep);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+
+/* Squelette de chargement : des formes grises qui brillent doucement à la place de l'écran qui arrive */
+.skeleton {
+  background: linear-gradient(90deg, var(--color-slate-100) 25%, var(--color-slate-200) 40%, var(--color-slate-100) 55%);
+  background-size: 300% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
 
 /* Taille du texte (Paramètres › Apparence) : toute l'interface grossit d'un cran */
 html[data-text='large'] #root { zoom: 1.1; }

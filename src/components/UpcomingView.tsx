@@ -183,8 +183,7 @@ export const UpcomingView: React.FC<{
         <span className="flex-1 min-w-0">
           <span className="block text-[14px] font-semibold text-slate-900 truncate">{r.title}</span>
           <span className="block text-[12px] text-slate-500 truncate">
-            {how(r)}
-            {r.cancelBy && <span className="text-amber-600 font-semibold"> · À résilier</span>}
+            {r.cancelBy ? <span className="text-amber-600 font-semibold">À résilier</span> : how(r)}
           </span>
         </span>
         <span className={`text-right text-[14px] font-bold tabular-nums shrink-0 ${r.direction === 'in' ? 'text-emerald-600' : 'text-slate-900'}`}>

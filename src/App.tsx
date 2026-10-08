@@ -1177,13 +1177,24 @@ export default function App() {
         navigate('upcoming');
         return;
       }
+      // Raccourcis de l'icône (appui long sur Android) : « ?action=expense » ouvre l'ajout, « ?page=budgets » cet écran
+      const action = q.get('action');
+      if (action === 'expense' || action === 'income' || action === 'debt') {
+        openAdd(action);
+        return;
+      }
+      const page = q.get('page');
+      if (page && ['home', 'transactions', 'wallets', 'profile', 'upcoming', 'budgets', 'history', 'debts', 'statistic', 'goals'].includes(page)) {
+        navigate(page as Page);
+        return;
+      }
       const goal = q.get('goal');
       if (!goal) return;
       const amount = Number(q.get('deposit'));
       requestDeposit(goal, amount > 0 ? amount : undefined);
       navigate('goals');
     };
-    if (/[?&](goal|upcoming)=/.test(window.location.search)) {
+    if (/[?&](goal|upcoming|action|page)=/.test(window.location.search)) {
       open(window.location.href);
       window.history.replaceState(null, '', window.location.pathname);
     }

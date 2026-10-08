@@ -5,7 +5,7 @@ import { Wallet } from '../types';
 import { IconBadge, WalletChipIcon } from './AppIcon';
 import { DateField, localDay } from './DatePicker';
 import { SelCheck } from './SelCheck';
-import { NoteHistoryItem, suggestNotes, UsualAmount } from '../lib/noteSuggestions';
+import { NoteHistoryItem, topNotes, UsualAmount } from '../lib/noteSuggestions';
 import { formatMoney } from '../lib/money';
 import { haptic } from '../lib/haptics';
 
@@ -60,19 +60,23 @@ export const BatchAddSheet: React.FC<{
   const parse = (a: string) => parseFloat(a.replace(/\s/g, '').replace(',', '.')) || 0;
 
   const patch = (key: number, changes: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...changes } : r)));
+  const blank = (r: Row) => !r.note && !r.amount && !r.categoryId;
   const addRow = (init: Partial<Row> = {}) => {
     const key = seq.current++;
     setRows((rs) => {
-      // une ligne vide en fin de liste est remplie plutôt que doublée
-      const last = rs[rs.length - 1];
-      if (last && !last.note && !last.amount && !last.categoryId && Object.keys(init).length) return [...rs.slice(0, -1), { ...last, ...init }, { key, note: '', amount: '', categoryId: '' }];
+      // Une habitude remplit la première ligne vide (et on en garde toujours une vide à la suite)
+      const i = Object.keys(init).length ? rs.findIndex(blank) : -1;
+      if (i >= 0) {
+        const next = rs.map((r, j) => (j === i ? { ...r, ...init } : r));
+        return next.some(blank) ? next : [...next, { key, note: '', amount: '', categoryId: '' }];
+      }
       return [...rs, { key, note: '', amount: '', categoryId: '', ...init }];
     });
     return key;
   };
 
   // Habitudes : les notes les plus utilisées, à ajouter d'un toucher
-  const ideas = useMemo(() => suggestNotes(noteHistory, '', expense.map((c) => c.id), '', 8), [noteHistory, expense]);
+  const ideas = useMemo(() => topNotes(noteHistory, expense.map((c) => c.id), 8), [noteHistory, expense]);
   const addIdea = (x: NoteHistoryItem) => {
     haptic();
     const catId = Object.entries(x.cats).filter(([id]) => catOf(id)).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';

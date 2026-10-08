@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { LayoutDashboard, Users, Megaphone, Shapes, ToggleRight, LogOut, ShieldAlert, RectangleHorizontal, ArrowRightLeft, MessageSquareHeart, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, Megaphone, Shapes, ToggleRight, LogOut, ShieldAlert, RectangleHorizontal, ArrowRightLeft, MessageSquareHeart, BarChart3, LifeBuoy } from 'lucide-react';
 import { api, configured, errorText, sb } from './api';
 import { Button, ErrorLine, inputCls, Loading } from './ui';
 import { Dashboard } from './pages/Dashboard';
@@ -12,8 +12,9 @@ import { AdsPage } from './pages/Ads';
 import { RatesPage } from './pages/Rates';
 import { FeedbackPage } from './pages/Feedback';
 import { UsagePage } from './pages/Usage';
+import { HelpPage } from './pages/Help';
 
-type Tab = 'dashboard' | 'usage' | 'users' | 'feedback' | 'announcements' | 'rates' | 'ads' | 'icons' | 'features';
+type Tab = 'dashboard' | 'usage' | 'users' | 'feedback' | 'announcements' | 'help' | 'rates' | 'ads' | 'icons' | 'features';
 
 const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'dashboard', label: 'Tableau de bord', Icon: LayoutDashboard },
@@ -21,6 +22,7 @@ const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'users', label: 'Comptes', Icon: Users },
   { id: 'feedback', label: 'Avis', Icon: MessageSquareHeart },
   { id: 'announcements', label: 'Annonces', Icon: Megaphone },
+  { id: 'help', label: 'Aide', Icon: LifeBuoy },
   { id: 'rates', label: 'Taux du jour', Icon: ArrowRightLeft },
   { id: 'ads', label: 'Publicités', Icon: RectangleHorizontal },
   { id: 'icons', label: 'Icônes', Icon: Shapes },
@@ -111,6 +113,7 @@ export const AdminApp: React.FC = () => {
         <h1 className="text-[28px] font-bold tracking-tight mb-5">{TABS.find((t) => t.id === tab)?.label}</h1>
         {tab === 'dashboard' && <Dashboard />}
         {tab === 'usage' && <UsagePage />}
+        {tab === 'help' && <HelpPage />}
         {tab === 'users' && <UsersPage me={session.user.id} />}
         {tab === 'feedback' && <FeedbackPage />}
         {tab === 'announcements' && <AnnouncementsPage />}

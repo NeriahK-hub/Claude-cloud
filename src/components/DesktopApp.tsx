@@ -21,9 +21,10 @@ import { TransactionItem } from './TransactionItem';
 import { MonthReportCard } from './MonthReportCard';
 import { AdBanner } from './AdBanner';
 import { inThisMonth } from '../lib/periods';
-import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView, PlacesView, UpcomingView } from './pages';
+import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView, PlacesView, UpcomingView, HelpView } from './pages';
 import { DueCard } from './DueCard';
 import { RateCard } from './RateCard';
+import { PageSkeleton } from './Skeleton';
 import { SubsHomeCard } from './SubsHomeCard';
 import { useHomeLayout } from '../lib/homeLayout';
 import { SimpleMonth } from './SimpleHome';
@@ -109,7 +110,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
 
       {/* Contenu */}
       <main className="flex-1 min-w-0 px-8 py-6">
-        <Suspense fallback={null}>
+        <Suspense fallback={page === 'home' ? null : <PageSkeleton />}>
         {page === 'home' && festive && <FestiveLayer kind={festive} />}
         {/* Bulles d'aide des premières fois (une seule fois chacune) */}
         {page === 'home' && <CoachTour key={simpleMode ? 'simple' : 'full'} steps={simpleMode ? SIMPLE_TIPS : HOME_TIPS} />}
@@ -408,6 +409,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             )}
             {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} onOpenTutorial={p.onOpenTutorial} />}
         {page === 'places' && <PlacesView onBack={() => onNavigate('profile')} />}
+        {page === 'help' && <HelpView onBack={() => onNavigate('profile')} />}
           </div>
         )}
         </Suspense>

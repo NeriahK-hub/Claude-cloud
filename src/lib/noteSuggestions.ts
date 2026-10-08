@@ -69,6 +69,16 @@ export function suggestNotes(
     .map((r) => r.x);
 }
 
+// Les notes les plus habituelles, toutes catégories de l'onglet confondues (écrites au moins 2 fois)
+export function topNotes(history: NoteHistoryItem[], categoryIds: string[], limit = 8): NoteHistoryItem[] {
+  const inTab = new Set(categoryIds);
+  const now = Date.now();
+  return history
+    .filter((x) => x.count >= 2 && Object.keys(x.cats).some((c) => inTab.has(c)))
+    .sort((a, b) => score(b, now) - score(a, now))
+    .slice(0, limit);
+}
+
 // Montants déjà utilisés pour chaque catégorie (les plus récents d'abord, sans doublon) :
 // proposés d'un toucher quand on choisit la catégorie.
 export interface UsualAmount {

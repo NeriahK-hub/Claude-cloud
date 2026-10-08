@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { cloudConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from './config';
 import { onOtherTabChange } from './crossTab';
+import type { HelpArticle } from '../data/help';
 
 // Réglages décidés depuis l'espace admin (site séparé) : fonctionnalités activées ou non,
 // annonces pour tout le monde, icônes proposées à tous.
@@ -39,11 +40,12 @@ export interface RemoteConfig {
   announcements: Announcement[];
   icons: GlobalIcon[];
   ads: Ad[];
+  help: HelpArticle[]; // articles d'aide ajoutés depuis l'espace admin
 }
 
 export const GLOBAL_PREFIX = 'global:';
 const KEY = 'ap.remote';
-const EMPTY: RemoteConfig = { features: {}, announcements: [], icons: [], ads: [] };
+const EMPTY: RemoteConfig = { features: {}, announcements: [], icons: [], ads: [], help: [] };
 
 let config: RemoteConfig = read();
 const listeners = new Set<() => void>();
@@ -80,7 +82,16 @@ function parse(raw: Record<string, unknown>): RemoteConfig {
   const ads = (Array.isArray(raw.ads) ? raw.ads : [])
     .filter((a) => a && typeof a.id === 'string' && https(a.image_url))
     .map((a) => ({ id: a.id, title: String(a.title ?? ''), imageUrl: a.image_url, linkUrl: https(a.link_url) ? a.link_url : null, sponsored: a.sponsored !== false }));
-  return { features, announcements, icons, ads };
+  const help = (Array.isArray(raw.help) ? raw.help : [])
+    .filter((h) => h && typeof h.id === 'string' && typeof h.title === 'string' && typeof h.body === 'string')
+    .map((h) => ({
+      id: `admin-${h.id}`,
+      title: String(h.title),
+      body: String(h.body),
+      category: typeof h.category === 'string' && h.category ? h.category : 'Autres',
+      platform: h.platform === 'iphone' || h.platform === 'android' ? h.platform : undefined,
+    })) as HelpArticle[];
+  return { features, announcements, icons, ads, help };
 }
 
 // Vue / clic sur une bannière (compté par la base, sans savoir qui). Une vue par pub et par jour sur cet appareil.

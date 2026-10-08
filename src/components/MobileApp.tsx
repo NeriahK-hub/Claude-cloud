@@ -14,11 +14,12 @@ import { WalletsView, HomeWalletCard } from './WalletsView';
 import { isShared } from './Members';
 import { useDisplayPrefs } from '../lib/display';
 import { MonthReportCard } from './MonthReportCard';
+import { PageSkeleton } from './Skeleton';
 import { SubsHomeCard } from './SubsHomeCard';
 import { HomeCardId, useHomeLayout } from '../lib/homeLayout';
 import { AdBanner } from './AdBanner';
 import { NetworkCloud } from './NetworkCloud';
-import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView, PlacesView, UpcomingView } from './pages';
+import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView, PlacesView, UpcomingView, HelpView } from './pages';
 import { DueCard } from './DueCard';
 import { RateCard } from './RateCard';
 import { SimpleActions, SimpleModeFooter, SimpleMonth } from './SimpleHome';
@@ -138,7 +139,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
     <div className="min-h-dvh w-full max-w-md mx-auto bg-slate-50 pt-[env(safe-area-inset-top)]">
       <div className="status-bar" aria-hidden />
       <div className={isTab ? 'pb-28' : 'pb-6'}>
-        <Suspense fallback={null}>
+        <Suspense fallback={page === 'home' ? null : <PageSkeleton />}>
         {page === 'home' && festive && <FestiveLayer kind={festive} />}
         {/* Bulles d'aide des premières fois (une seule fois chacune) */}
         {page === 'home' && <CoachTour key={simpleMode ? 'simple' : 'full'} steps={simpleMode ? SIMPLE_TIPS : HOME_TIPS} />}
@@ -361,6 +362,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         )}
         {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} onOpenTutorial={p.onOpenTutorial} />}
         {page === 'places' && <PlacesView onBack={() => onNavigate('profile')} />}
+        {page === 'help' && <HelpView onBack={() => onNavigate('profile')} />}
         </Suspense>
       </div>
 

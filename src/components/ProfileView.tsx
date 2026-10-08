@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone, HandCoins, PieChart, Share, MapPin, GraduationCap, CalendarClock, MessageSquareHeart, MessageCircleQuestion, Download } from 'lucide-react';
+import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone, HandCoins, PieChart, Share, MapPin, GraduationCap, CalendarClock, MessageSquareHeart, MessageCircleQuestion, Download, LifeBuoy } from 'lucide-react';
 import { useInstallWay } from '../lib/install';
 import { InstallGuide } from './InstallGuide';
 import { resetCoach } from './CoachTour';
@@ -142,6 +142,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud, onO
           </button>
         )}
         {showInstall && <InstallGuide onClose={() => setShowInstall(false)} />}
+        <button onClick={() => onNavigate('help')} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
+          <span className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+            <LifeBuoy className="w-4 h-4 text-emerald-600" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-slate-900">Aide et astuces</span>
+            <span className="block text-xs text-slate-500 truncate">Cherche une réponse, astuces pour ton téléphone</span>
+          </span>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </button>
         <button onClick={onOpenTutorial} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition cursor-pointer text-left">
           <span className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
             <GraduationCap className="w-4 h-4 text-slate-700" />

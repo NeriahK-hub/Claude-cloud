@@ -55,7 +55,7 @@ export const BalanceCurveTool: React.FC<{ wallets: Wallet[]; allTransactions: Tr
   };
 
   return (
-    <div>
+    <div className="chart-bal">
       <p className="text-[13px] font-medium text-slate-500 capitalize">{cur.long}</p>
       <div className="text-[28px] font-extrabold tabular-nums tracking-tight text-slate-900 leading-tight">{show(cur.value)}</div>
       {diff !== null && (
@@ -171,8 +171,8 @@ export const WhatIfTool: React.FC<{ allTransactions: Transaction[]; categories: 
           value={pct}
           onChange={(e) => setPct(Number(e.target.value))}
           aria-label="Pourcentage de dépenses en moins"
-          className="w-full mt-2"
-          style={{ accentColor: 'var(--accent-deep)' }}
+          className="slider mt-1"
+          style={{ ['--fill' as string]: `${((pct - 5) / 45) * 100}%` }}
         />
         <div className="flex justify-between text-[11px] text-slate-400 mt-0.5">
           <span>5 %</span>

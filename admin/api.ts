@@ -74,6 +74,16 @@ export interface Announcement {
   push?: boolean; // envoyée aussi en notification push (colonne ajoutée par 20261009000000_push.sql)
 }
 
+export interface HelpRow {
+  id: string;
+  title: string;
+  body: string;
+  category: string;
+  platform: 'iphone' | 'android' | null;
+  active: boolean;
+  created_at: string;
+}
+
 export interface GlobalIconRow {
   id: string;
   name: string;
@@ -128,6 +138,11 @@ export const api = {
   addAnnouncement: async (a: Pick<Announcement, 'title' | 'message' | 'kind' | 'expires_at' | 'push'>) => void check(await sb.from('announcements').insert(a)),
   setAnnouncementActive: async (id: string, active: boolean) => void check(await sb.from('announcements').update({ active }).eq('id', id)),
   deleteAnnouncement: async (id: string) => void check(await sb.from('announcements').delete().eq('id', id)),
+
+  helpArticles: async () => (check(await sb.from('help_articles').select('*').order('created_at', { ascending: false })) ?? []) as HelpRow[],
+  addHelp: async (a: Pick<HelpRow, 'title' | 'body' | 'category' | 'platform'>) => void check(await sb.from('help_articles').insert(a)),
+  setHelpActive: async (id: string, active: boolean) => void check(await sb.from('help_articles').update({ active }).eq('id', id)),
+  deleteHelp: async (id: string) => void check(await sb.from('help_articles').delete().eq('id', id)),
 
   icons: async () => (check(await sb.from('global_icons').select('*').order('sort_order').order('created_at')) ?? []) as GlobalIconRow[],
   addIcon: async (name: string, data_url: string, keep_colors: boolean, folder: string) => void check(await sb.from('global_icons').insert({ name, data_url, keep_colors, folder })),

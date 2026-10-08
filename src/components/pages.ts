@@ -13,3 +13,4 @@ export const PlacesView = lazy(() => import('./PlacesView').then((m) => ({ defau
 export const GoalCelebration = lazy(() => import('./GoalCelebration').then((m) => ({ default: m.GoalCelebration })));
 export const UpcomingView = lazy(() => import('./UpcomingView').then((m) => ({ default: m.UpcomingView })));
 export const DebtsView = lazy(() => import('./DebtsView').then((m) => ({ default: m.DebtsView })));
+export const HelpView = lazy(() => import('./HelpView').then((m) => ({ default: m.HelpView })));

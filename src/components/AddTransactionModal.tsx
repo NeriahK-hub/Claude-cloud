@@ -824,9 +824,9 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                       onClick={() => setBatch(true)}
                       aria-label="Noter plusieurs dépenses"
                       title="Plusieurs dépenses"
-                      className="shrink-0 h-9 px-3 rounded-2xl bg-slate-100 hover:bg-slate-200/70 text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer"
+                      className="shrink-0 h-9 w-9 rounded-2xl bg-slate-100 hover:bg-slate-200/70 text-slate-700 flex items-center justify-center cursor-pointer"
                     >
-                      <ListPlus className="w-3.5 h-3.5" /> Plusieurs
+                      <ListPlus className="w-4 h-4" />
                     </button>
                   )}
                 </div>
