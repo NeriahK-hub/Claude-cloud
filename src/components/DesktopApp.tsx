@@ -136,8 +136,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-accent text-[11px] font-bold flex items-center justify-center border-2 border-white">
-                  {unreadCount}
+                <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1.5 rounded-full bg-accent text-slate-950 text-[11px] leading-none font-extrabold tabular-nums flex items-center justify-center border-2 border-white">
+                  {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
             </button>
