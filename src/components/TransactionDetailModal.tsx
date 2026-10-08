@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { X, Share2, Copy, Check, Pencil, Trash2, CopyPlus, ChevronLeft } from 'lucide-react';
 import { Settings, Transaction, Wallet } from '../types';
 import { Category, categoriesFor } from '../data/categories';
-import { IconBadge } from './AppIcon';
+import { IconBadge, WalletChipIcon } from './AppIcon';
 import { convertBetween, formatMoney } from '../lib/money';
 import { DateField, localDay } from './DatePicker';
 import { isShared, memberOf, MemberAvatar, MemberChips, ME_ID } from './Members';
 import { useDisplayPrefs } from '../lib/display';
-import { Group, SelectRow, SwitchRow } from './FormRows';
+import { Group, NavRow, SwitchRow } from './FormRows';
+import { SelCheck } from './SelCheck';
 
 interface TransactionDetailModalProps {
   transaction: Transaction | null;
@@ -250,6 +251,7 @@ const EditForm: React.FC<{
   const [memberId, setMemberId] = useState(tx.memberId ?? ME_ID);
   const [person, setPerson] = useState(tx.withPerson ?? '');
   const [exclude, setExclude] = useState(!!tx.excludeFromReport);
+  const [picking, setPicking] = useState<'category' | 'wallet' | null>(null); // choix en grand, avec les icônes
   const { excludeOption } = useDisplayPrefs();
   const isDebt = categories.find((c) => c.id === (categoryId || tx.categoryId))?.type === 'debt';
   const editWallet = wallets.find((w) => w.id === walletId);
@@ -259,12 +261,15 @@ const EditForm: React.FC<{
   const otherCurrency = !!editWallet && editWallet.currency !== tx.currency;
   const converted = otherCurrency && value > 0 ? convertBetween(value, tx.currency, editWallet!.currency, settings) : null;
   const rateMissing = otherCurrency && value > 0 && converted === null;
-  const valid = value > 0 && title.trim() !== '' && !!day && !rateMissing;
+  const isTransferTx = tx.type === 'transfer';
+  const isAdjust = tx.type === 'adjustment';
+  const valid = value > 0 && !!day && !rateMissing;
 
   const save = () => {
     const changes: Partial<Transaction> = {
       amount: isOut ? -value : value,
-      title: title.trim(),
+      // Note vide : on garde le nom de la catégorie (comme à l'ajout)
+      title: title.trim() || categories.find((c) => c.id === categoryId)?.name || tx.category,
       walletId,
       createdAt: withDay(tx.createdAt, day),
       memberId: isShared(editWallet) && memberId !== ME_ID ? memberId : undefined,
@@ -289,51 +294,121 @@ const EditForm: React.FC<{
       changes.avatarType = cat.image ? 'image' : 'icon';
       changes.avatarValue = cat.image ?? cat.icon;
       changes.color = cat.color;
-      if (tx.title === tx.category && title.trim() === tx.title) changes.title = cat.name;
+      if ((tx.title === tx.category && title.trim() === tx.title) || !title.trim()) changes.title = cat.name;
     }
     onSave(changes);
   };
 
   const rowInput = 'flex-1 min-w-0 bg-transparent text-right text-[15px] text-slate-900 outline-none field-plain';
   const selectedCat = categories.find((c) => c.id === categoryId);
+  const kindLabel = isDebt && selectedCat ? selectedCat.name : typeLabel(tx);
+
+  // ---- Choix de la catégorie ou du portefeuille : en grand, avec les icônes ----
+  if (picking) {
+    const tile = (key: string, active: boolean, onClick: () => void, badge: React.ReactNode, name: string, sub?: string) => (
+      <button
+        key={key}
+        type="button"
+        onClick={onClick}
+        className={`relative min-w-0 min-h-[88px] flex flex-col items-center justify-center gap-1 px-1 py-2.5 rounded-2xl text-center transition duration-200 active:scale-[0.95] cursor-pointer ${active ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200/70'}`}
+      >
+        {active && <SelCheck />}
+        {badge}
+        <span className="w-full text-[12px] font-bold text-slate-900 leading-tight line-clamp-2 hyphens-auto break-words" lang="fr">
+          {name}
+        </span>
+        {sub && <span className="text-[11px] text-slate-500">{sub}</span>}
+      </button>
+    );
+    const head = (title: string) => (
+      <div className="flex items-center gap-2 mb-4">
+        <button type="button" onClick={() => setPicking(null)} aria-label="Retour" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <h3 className="text-[17px] font-bold text-slate-900">{title}</h3>
+      </div>
+    );
+    if (picking === 'wallet')
+      return (
+        <div className="animate-pick-in">
+          {head('Portefeuille')}
+          <div className="grid grid-cols-3 gap-2">
+            {walletChoices.map((w) =>
+              tile(w.id, w.id === walletId, () => { setWalletId(w.id); setPicking(null); }, <IconBadge icon={w.icon} image={w.image} color={w.color} size="md" />, w.name, w.currency)
+            )}
+          </div>
+        </div>
+      );
+    // Catégories : celles qui ont des sous-catégories ont leur titre, les autres sont ensemble
+    const tops = choices.filter((c) => !c.parentId);
+    const kids = (id: string) => choices.filter((c) => c.parentId === id);
+    const withKids = tops.filter((t) => kids(t.id).length > 0);
+    const alone = tops.filter((t) => kids(t.id).length === 0);
+    const catTile = (c: Category) =>
+      tile(c.id, c.id === categoryId, () => { setCategoryId(c.id); setPicking(null); }, <IconBadge icon={c.icon} image={c.image} color={c.color} size="md" />, c.name);
+    return (
+      <div className="animate-pick-in">
+        {head('Catégorie')}
+        {alone.length > 0 && <div className="grid grid-cols-3 gap-2 mb-5">{alone.map(catTile)}</div>}
+        {withKids.map((t) => (
+          <section key={t.id} className="mb-5">
+            <h4 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 px-1">{t.name}</h4>
+            <div className="grid grid-cols-3 gap-2">{[t, ...kids(t.id)].map(catTile)}</div>
+          </section>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div>
+      {/* Ce qu'on modifie : le genre d'opération, bien visible */}
+      <div className="flex justify-center">
+        <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full bg-slate-100 text-[12px] font-bold text-slate-600">
+          {kindLabel} · {isOut ? 'sortie' : 'entrée'}
+        </span>
+      </div>
+
       {/* Le montant en grand, au centre : c'est le plus important */}
-      <div className="text-center pt-1 pb-5">
-        <div className="text-[12px] font-semibold text-slate-500">{isOut ? 'Sortie' : 'Entrée'}</div>
+      <div className="text-center pt-2 pb-5">
         <input
           inputMode="decimal"
           aria-label="Montant"
+          readOnly={isTransferTx}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className={`w-full bg-transparent text-center text-[40px] leading-tight font-extrabold tabular-nums outline-none field-plain ${isOut ? 'text-red-500' : 'text-emerald-600'}`}
+          className={`w-full bg-transparent text-center text-[40px] leading-tight font-extrabold tabular-nums outline-none field-plain ${isOut ? 'text-red-500' : 'text-emerald-600'} ${isTransferTx ? 'opacity-70' : ''}`}
         />
         <div className="text-[13px] font-medium text-slate-400">{tx.currency}</div>
       </div>
 
+      {/* Garde-fous pour les opérations spéciales */}
+      {isTransferTx && (
+        <p className="rounded-2xl bg-amber-500/10 text-amber-700 text-[13px] leading-snug px-4 py-3 mb-4">
+          Transfert entre portefeuilles : le montant est verrouillé pour que les deux côtés restent justes. Tu peux changer la note et la date. Pour le montant, supprime-le et refais-le.
+        </p>
+      )}
+      {isAdjust && (
+        <p className="rounded-2xl bg-amber-500/10 text-amber-700 text-[13px] leading-snug px-4 py-3 mb-4">
+          Ajustement du solde : changer le montant change directement le solde de ce portefeuille.
+        </p>
+      )}
+
       <Group>
         <label className="flex items-center gap-3 px-4 min-h-[48px] cursor-text transition-colors focus-within:bg-slate-200/50">
-          <span className="text-[15px] text-slate-900 shrink-0">Titre</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className={rowInput} />
+          <span className="text-[15px] text-slate-900 shrink-0">Note</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={selectedCat?.name ?? tx.category} className={rowInput} />
         </label>
         {simple && (
-          <SelectRow
+          <NavRow
             label="Catégorie"
-            value={categoryId}
             display={selectedCat ? nameOf(selectedCat) : tx.category}
-            onChange={setCategoryId}
-            options={[...(!tx.categoryId ? [{ value: '', label: tx.category }] : []), ...choices.map((c) => ({ value: c.id, label: nameOf(c) }))]}
+            icon={selectedCat && <IconBadge icon={selectedCat.icon} image={selectedCat.image} color={selectedCat.color} size="xs" />}
+            onClick={() => setPicking('category')}
           />
         )}
         {simple && walletChoices.length > 1 && (
-          <SelectRow
-            label="Portefeuille"
-            value={walletId}
-            display={editWallet ? `${editWallet.name} (${editWallet.currency})` : ''}
-            onChange={setWalletId}
-            options={walletChoices.map((w) => ({ value: w.id, label: `${w.name} (${w.currency})` }))}
-          />
+          <NavRow label="Portefeuille" display={editWallet ? `${editWallet.name} (${editWallet.currency})` : ''} icon={<WalletChipIcon wallet={editWallet ?? null} />} onClick={() => setPicking('wallet')} />
         )}
         {isDebt && (
           <label className="flex items-center gap-3 px-4 min-h-[48px] cursor-text transition-colors focus-within:bg-slate-200/50">
