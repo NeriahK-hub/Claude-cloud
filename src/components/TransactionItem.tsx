@@ -20,6 +20,15 @@ function shortDay(iso: string): string {
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
 }
 
+const KIND_LABEL: Record<string, string> = { receive: 'Revenu', send: 'Dépense', payment: 'Paiement', transfer: 'Transfert', adjustment: 'Correction' };
+const plain = (t: string) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+// Le titre et la catégorie disent la même chose (l'un contient l'autre)
+const sameWords = (title: string, category: string) => {
+  const a = plain(title);
+  const b = plain(category);
+  return !!a && !!b && (a === b || a.includes(b) || b.includes(a));
+};
+
 export const TransactionItem: React.FC<TransactionItemProps> = ({
   transaction,
   onClick,
@@ -28,8 +37,11 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
   const isPositive = transaction.amount > 0;
   const formattedAmount = `${isPositive ? '+' : '−'}${formatMoney(Math.abs(transaction.amount), transaction.currency)}`;
 
-  // Sous le montant : la catégorie
-  const typeLabel = transaction.category;
+  // Sous le montant : la catégorie, toujours affichée. Si elle répète le titre (« Apple Music » / « Apple Music »),
+  // on met une autre raison à la place : la personne concernée, sinon le genre d'opération.
+  const typeLabel = sameWords(transaction.title, transaction.category)
+    ? transaction.withPerson?.trim() || KIND_LABEL[transaction.type] || (isPositive ? 'Revenu' : 'Dépense')
+    : transaction.category;
 
   return (
     <div
