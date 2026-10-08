@@ -179,6 +179,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         {page === 'budgets' && (
           <BudgetsView
             budgets={p.budgets}
+            recurrings={p.recurrings}
             transactions={allTransactions}
             categories={categories}
             settings={settings}

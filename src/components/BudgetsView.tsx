@@ -2,7 +2,10 @@ import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { takeJump } from '../lib/jumpTo';
 import { BudgetDraft, clearBudgetDraft, peekBudgetDraft } from '../lib/budgetDraft';
 import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, Layers, Pencil, Trash2, PieChart, Delete, CalendarDays, HelpCircle } from 'lucide-react';
-import { Budget, Settings, Transaction } from '../types';
+import { Budget, Recurring, Settings, Transaction } from '../types';
+import { occurrencesBetween, ymd, parseDay } from '../lib/recurring';
+import { convertBetween } from '../lib/money';
+import { matchesCategory } from '../lib/budgets';
 import { Category } from '../data/categories';
 import { IconBadge } from './AppIcon';
 import { TransactionItem } from './TransactionItem';
@@ -21,6 +24,7 @@ interface BudgetsViewProps {
   budgets: Budget[];
   transactions: Transaction[];
   categories: Category[];
+  recurrings?: Recurring[]; // ce qui est déjà prévu dans À venir
   settings: Settings;
   onAdd: (b: Omit<Budget, 'id' | 'createdAt'>) => void;
   onUpdate: (id: string, changes: Partial<Budget>) => void;
@@ -36,6 +40,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   budgets,
   transactions,
   categories,
+  recurrings = [],
   settings,
   onAdd,
   onUpdate,
@@ -234,6 +239,9 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
           budget={viewing.b}
           cat={viewing.cat}
           status={viewing.st}
+          recurrings={recurrings}
+          categories={categories}
+          settings={settings}
           month={viewing.b.period === 'custom' ? rangeText(viewing.st) : `${PERIODS.find((p) => p.id === periodOf(viewing.b))!.now} · ${rangeText(viewing.st)}`}
           onClose={() => setViewingId(null)}
           onEdit={() => {
@@ -408,14 +416,28 @@ const BudgetDetail: React.FC<{
   budget: Budget;
   cat?: Category;
   status: BudgetStatus;
+  recurrings: Recurring[];
+  categories: Category[];
+  settings: Settings;
   month: string;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onSelectTransaction: (tx: Transaction) => void;
-}> = ({ budget: b, cat, status: st, month, onClose, onEdit, onDelete, onSelectTransaction }) => {
+}> = ({ budget: b, cat, status: st, recurrings, categories, settings, month, onClose, onEdit, onDelete, onSelectTransaction }) => {
   const [confirm, setConfirm] = useState(false);
   const money = (v: number) => formatMoney(v, b.currency);
+  // Déjà prévu dans À venir, d'ici la fin de la période (dépenses de cette catégorie, quelle que soit la devise)
+  const planned = useMemo(() => {
+    const today = ymd(new Date());
+    const last = ymd(new Date(st.end.getTime() - 86400000));
+    if (today > last) return [];
+    return recurrings
+      .filter((r) => r.active && r.direction === 'out' && matchesCategory(b.categoryId, r.categoryId, categories))
+      .flatMap((r) => occurrencesBetween(r, today, last).map((day) => ({ r, day })))
+      .sort((a, c) => a.day.localeCompare(c.day));
+  }, [recurrings, categories, b.categoryId, st.end]);
+  const plannedTotal = planned.reduce((sum, { r }) => sum + (r.amount ? convertBetween(r.amount, r.currency, b.currency, settings) ?? 0 : 0), 0);
   return (
     <Sheet title={cat?.name ?? 'Toutes les dépenses'} onClose={onClose}>
       <div className="flex items-center gap-3 mb-2">
@@ -454,6 +476,26 @@ const BudgetDetail: React.FC<{
           <button onClick={() => setConfirm(true)} className="flex-1 py-2.5 rounded-2xl bg-slate-100 hover:bg-red-50 text-red-600 text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer">
             <Trash2 className="w-4 h-4" /> Supprimer
           </button>
+        </div>
+      )}
+      {planned.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs font-bold text-slate-500 mb-1">
+            Déjà prévu d'ici la fin{plannedTotal > 0 ? ` · ${money(plannedTotal)}` : ''}
+          </div>
+          {planned.map(({ r, day }) => (
+            <div key={`${r.id}-${day}`} className="flex items-center gap-3 py-2">
+              <span className="w-11 shrink-0 text-center text-[11px] font-semibold uppercase text-slate-400 leading-tight">
+                <span className="block text-[16px] font-bold text-slate-900 normal-case">{parseDay(day).getDate()}</span>
+                {parseDay(day).toLocaleDateString('fr-FR', { month: 'short' })}
+              </span>
+              <span className="flex-1 min-w-0 text-[14px] font-semibold text-slate-900 truncate">{r.title}</span>
+              <span className="text-[14px] font-bold tabular-nums text-slate-500 shrink-0">
+                {r.amount ? `−${formatMoney(r.amount, r.currency)}` : 'à saisir'}
+              </span>
+            </div>
+          ))}
+          <p className="text-[12px] text-slate-400">Pas encore compté dans les dépenses ci-dessus.</p>
         </div>
       )}
       <div className="text-xs font-bold text-slate-500 mb-1">

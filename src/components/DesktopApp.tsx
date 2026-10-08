@@ -356,6 +356,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             {page === 'budgets' && (
               <BudgetsView
                 budgets={p.budgets}
+                recurrings={p.recurrings}
                 transactions={allTransactions}
                 categories={categories}
                 settings={settings}
