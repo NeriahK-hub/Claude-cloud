@@ -202,7 +202,7 @@ export const SIMPLE_TIPS: CoachStep[] = [
   { id: 'home-menu', target: 'menu', title: 'Tout le reste est ici', text: 'Factures, dettes, paramètres… et « Voir toute l’app » en bas de l’accueil.' },
 ];
 export const REPORT_TIPS: CoachStep[] = [
-  { id: 'report-insights', target: 'insights', title: 'Comprends ton argent', text: 'Bilan de la semaine et de l’année, ton jour le plus cher, tes petites dépenses et tes abonnements.' },
+  { id: 'report-insights', target: 'insights', title: 'Comprends ton argent', text: 'Bilan de la semaine et de l’année, tes habitudes : ce que tu achètes souvent, ton jour le plus cher et tes petites dépenses.' },
 ];
 export const WALLET_TIPS: CoachStep[] = [
   { id: 'wallets-new', target: 'new-wallet', title: 'Un portefeuille par endroit', text: 'Ajoute ton cash, ton compte M-Pesa, ta banque… Wallo fait le total pour toi.' },

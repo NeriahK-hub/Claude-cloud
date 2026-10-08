@@ -75,6 +75,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         {page === 'upcoming' && (
           <UpcomingView
             recurrings={p.recurrings}
+            transactions={allTransactions}
             wallets={wallets}
             categories={categories}
             settings={settings}
@@ -245,7 +246,6 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
             onSelectTransaction={onSelectTransaction}
             onOpenAccountPicker={onOpenAccountPicker}
             budgets={p.budgets}
-                recurrings={p.recurrings}
             onNavigate={onNavigate}
             onBack={() => onNavigate('transactions')}
             initialPeriod={p.reportPeriod ?? undefined}

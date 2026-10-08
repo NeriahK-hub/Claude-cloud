@@ -324,6 +324,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             {page === 'upcoming' && (
               <UpcomingView
                 recurrings={p.recurrings}
+                transactions={allTransactions}
                 wallets={wallets}
                 categories={categories}
                 settings={settings}
@@ -383,7 +384,6 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 onSelectTransaction={onSelectTransaction}
                 onOpenAccountPicker={onOpenAccountPicker}
                 budgets={p.budgets}
-                recurrings={p.recurrings}
                 onNavigate={onNavigate}
               />
             )}

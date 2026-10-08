@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronLeft, Plus, X, Repeat, Receipt, ArrowDownLeft, ArrowUpRight, Check, Trash2, ChevronRight, Pause, Play, Pencil } from 'lucide-react';
-import { Recurring, Settings, Wallet } from '../types';
+import { Recurring, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { convertBetween, formatMoney } from '../lib/money';
 import { getPrefs } from '../lib/display';
@@ -10,6 +10,8 @@ import { DateField } from './DatePicker';
 import { Group, NavRow, PickRow, SwitchRow } from './FormRows';
 import { AppIcon, IconBadge } from './AppIcon';
 import { askConfirm } from '../lib/confirm';
+import { SubsTool } from './MoneyReviews';
+import { findSubscriptions } from '../lib/review';
 // Petites aides communes avec la carte de l'accueil (DueCard.tsx, chargée au démarrage)
 import { dayText, money, pendingRecurrings, whenText } from './DueCard';
 
@@ -97,6 +99,7 @@ const DueRow: React.FC<{
 // ---------- Page « À venir » ----------
 export const UpcomingView: React.FC<{
   recurrings: Recurring[];
+  transactions: Transaction[]; // pour repérer les abonnements pas encore notés
   wallets: Wallet[];
   categories: Category[];
   settings: Settings;
@@ -106,7 +109,7 @@ export const UpcomingView: React.FC<{
   onConfirm: (r: Recurring, amount?: number) => void;
   onSkip: (r: Recurring) => void;
   onBack: () => void;
-}> = ({ recurrings, wallets, categories, settings, onAdd, onUpdate, onDelete, onConfirm, onSkip, onBack }) => {
+}> = ({ recurrings, transactions, wallets, categories, settings, onAdd, onUpdate, onDelete, onConfirm, onSkip, onBack }) => {
   // Le même montant dans l'autre devise (« ≈ 17,40 $US ») : devise principale -> 2e devise des Paramètres,
   // autre devise -> devise principale. null si pas d'autre devise ou pas de taux.
   const other = (v: number, from: string): string | null => {
@@ -117,9 +120,13 @@ export const UpcomingView: React.FC<{
   };
   const desktop = useIsDesktop();
   const [editing, setEditing] = useState<Recurring | 'new' | 'bill' | null>(null);
+  const [showSubs, setShowSubs] = useState(false);
   const today = ymd(new Date());
   const pending = pendingRecurrings(recurrings, today);
   const catOf = (id?: string) => categories.find((c) => c.id === id);
+  // Dépenses qui reviennent chaque mois sans être notées ici : on te les montre pour que tu décides
+  const subs = useMemo(() => findSubscriptions(transactions, settings, categories, recurrings), [transactions, settings, categories, recurrings]);
+  const newSubs = subs.filter((x) => !x.known).length;
 
   // D'ici la fin du mois : ce qu'il reste à payer et à recevoir (dans la devise principale)
   const month = useMemo(() => {
@@ -245,6 +252,49 @@ export const UpcomingView: React.FC<{
             </div>
           )}
         </>
+      )}
+
+      {subs.length > 0 && (
+        <button onClick={() => setShowSubs(true)} className="w-full flex items-center gap-3 px-4 py-3.5 mb-5 bg-white rounded-3xl border border-slate-100 text-left cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors">
+          <span className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-teal-500/10 text-teal-600">
+            <Repeat className="w-5 h-5" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-semibold text-slate-900">Abonnements repérés</span>
+            <span className="block text-[12px] text-slate-500 truncate">
+              {subs.length} dépense{subs.length > 1 ? 's' : ''} qui revien{subs.length > 1 ? 'nent' : 't'} chaque mois{newSubs > 0 ? ` · ${newSubs} pas encore ici` : ''}
+            </span>
+          </span>
+          <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+        </button>
+      )}
+
+      {showSubs && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={() => setShowSubs(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Abonnements repérés"
+            className="w-full sm:max-w-[460px] max-h-[92dvh] overflow-y-auto bg-white rounded-t-[32px] sm:rounded-[32px] px-5 pt-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sheet-head flex items-center justify-between mb-3">
+              <h2 className="text-[20px] font-bold tracking-tight text-slate-900">Abonnements repérés</h2>
+              <button onClick={() => setShowSubs(false)} aria-label="Fermer" className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <SubsTool txs={transactions} settings={settings} categories={categories} recurrings={recurrings} />
+            {newSubs > 0 && (
+              <button
+                onClick={() => { setShowSubs(false); setEditing('new'); }}
+                className="mt-4 w-full h-12 rounded-2xl bg-accent hover:bg-accent-hover text-[15px] font-bold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition"
+              >
+                <Plus className="w-4 h-4" /> Ajouter dans « À venir »
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {editing && (

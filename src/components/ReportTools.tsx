@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, ArrowLeftRight, Search, FileText, ChevronRight, ChevronLeft, X, Check, TrendingUp, TrendingDown, Loader2, Lightbulb, Flame, Coins, Equal, ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, PiggyBank, CalendarRange, Sparkles, Clock, Repeat } from 'lucide-react';
-import { Budget, Recurring, Settings, Transaction, Wallet } from '../types';
-import { SmallTool, SubsTool, WeekTool, WhenTool, YearTool } from './MoneyReviews';
+import { CalendarDays, ArrowLeftRight, Search, FileText, ChevronRight, ChevronLeft, X, Check, TrendingUp, TrendingDown, Loader2, Lightbulb, Flame, Coins, Equal, ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, PiggyBank, CalendarRange, Sparkles, Clock } from 'lucide-react';
+import { Budget, Settings, Transaction, Wallet } from '../types';
+import { SmallTool, WeekTool, WhenTool, YearTool } from './MoneyReviews';
 import { track } from '../lib/usage';
 import { Category } from '../data/categories';
 import { formatMoney, toMain } from '../lib/money';
@@ -15,10 +15,12 @@ import { TransactionItem } from './TransactionItem';
 import { Amount, splitMoney } from './MoneyText';
 import type { Page } from './BottomNav';
 
-// Outils du Rapport : bilans, « Mes habitudes » (ce qui revient, quand, petites dépenses),
+// Outils du Rapport : « Mes bilans » (semaine, année, habitudes au même endroit),
 // calendrier des dépenses, comparer deux mois, rapport PDF.
+// (Les abonnements repérés sont dans « À venir ».)
 
-type Tool = 'calendar' | 'compare' | 'habits' | 'pdf' | 'week' | 'year' | 'subs';
+type Tool = 'calendar' | 'compare' | 'pdf' | 'review';
+type ReviewTab = 'week' | 'year' | 'habits';
 type HabitTab = 'what' | 'when' | 'small';
 
 export interface ReportPdfData {
@@ -43,16 +45,12 @@ export const ReportTools: React.FC<{
   pdf: ReportPdfData;
   onSelectTransaction: (tx: Transaction) => void;
   onNavigate?: (page: Page) => void;
-  recurrings?: Recurring[]; // pour reconnaître les abonnements déjà dans « À venir »
 }> = (props) => {
   const [tool, setTool] = useState<Tool | null>(null);
   type Row = { id: Tool; title: string; sub: string; Icon: typeof CalendarDays; color: string };
-  // Comprendre son argent : bilans et analyses
+  // Comprendre son argent : un seul écran pour les bilans et les habitudes
   const understand: Row[] = [
-    { id: 'week', title: 'Bilan de la semaine', sub: 'Ta semaine en chiffres, ton jour le plus cher', Icon: CalendarRange, color: '#10B981' },
-    { id: 'year', title: 'Bilan de l\u2019année', sub: 'Ton année en résumé, à partager', Icon: Sparkles, color: '#EC4899' },
-    { id: 'habits', title: 'Mes habitudes', sub: 'Ce qui revient, quand, et les petites dépenses', Icon: Search, color: '#F59E0B' },
-    { id: 'subs', title: 'Abonnements repérés', sub: 'Ce qui revient chaque mois', Icon: Repeat, color: '#14B8A6' },
+    { id: 'review', title: 'Mes bilans et habitudes', sub: 'Ta semaine, ton année, ce que tu achètes souvent', Icon: Sparkles, color: '#EC4899' },
   ];
   const rows: Row[] = [
     { id: 'calendar', title: 'Calendrier des dépenses', sub: 'Jour par jour, les jours qui coûtent cher', Icon: CalendarDays, color: '#0EA5E9' },
@@ -85,20 +83,9 @@ export const ReportTools: React.FC<{
       {list('Outils', rows)}
       {tool && (
         <ToolSheet onClose={() => setTool(null)} title={all.find((r) => r.id === tool)!.title}>
-          {tool === 'week' && <WeekTool txs={props.txs} settings={props.settings} categories={props.categories} />}
-          {tool === 'year' && <YearTool txs={props.txs} settings={props.settings} categories={props.categories} />}
-          {tool === 'subs' && (
-            <SubsTool
-              txs={props.txs}
-              settings={props.settings}
-              categories={props.categories}
-              recurrings={props.recurrings ?? []}
-              onNavigate={props.onNavigate ? (p) => { setTool(null); props.onNavigate!(p); } : undefined}
-            />
-          )}
+          {tool === 'review' && <ReviewHub {...props} onClose={() => setTool(null)} />}
           {tool === 'calendar' && <CalendarTool {...props} />}
           {tool === 'compare' && <CompareTool {...props} />}
-          {tool === 'habits' && <HabitsHub {...props} onClose={() => setTool(null)} />}
           {tool === 'pdf' && <PdfTool {...props} />}
         </ToolSheet>
       )}
@@ -106,17 +93,55 @@ export const ReportTools: React.FC<{
   );
 };
 
-// « Mes habitudes » : trois façons de voir où part l'argent, au même endroit
-const HABIT_TABS: { id: HabitTab; label: string; Icon: typeof Search }[] = [
-  { id: 'what', label: 'Souvent', Icon: Search },
-  { id: 'when', label: 'Quand', Icon: Clock },
-  { id: 'small', label: 'Petites', Icon: Coins },
+// « Mes bilans et habitudes » : la semaine, l'année et les habitudes de dépense, au même endroit
+const REVIEW_TABS: { id: ReviewTab; label: string; Icon: typeof Search }[] = [
+  { id: 'week', label: 'Semaine', Icon: CalendarRange },
+  { id: 'year', label: 'Année', Icon: Sparkles },
+  { id: 'habits', label: 'Habitudes', Icon: Search },
+];
+const ReviewHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClose: () => void }> = (props) => {
+  const [tab, setTab] = useState<ReviewTab>('week');
+  return (
+    <>
+      <div role="tablist" className="flex gap-1 p-1 rounded-full bg-slate-100 mb-4">
+        {REVIEW_TABS.map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => {
+              track(`tool.${id}`);
+              setTab(id);
+            }}
+            className={`flex-1 min-w-0 h-9 rounded-full flex items-center justify-center gap-1.5 text-[13px] font-semibold cursor-pointer transition ${
+              tab === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+            }`}
+          >
+            <Icon className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{label}</span>
+          </button>
+        ))}
+      </div>
+      <div key={tab} className="animate-fade-in">
+        {tab === 'week' && <WeekTool txs={props.txs} settings={props.settings} categories={props.categories} />}
+        {tab === 'year' && <YearTool txs={props.txs} settings={props.settings} categories={props.categories} />}
+        {tab === 'habits' && <HabitsHub {...props} />}
+      </div>
+    </>
+  );
+};
+
+// « Habitudes » : trois façons de voir où part l'argent, chacune avec une phrase qui dit à quoi elle sert
+const HABIT_TABS: { id: HabitTab; label: string; hint: string; Icon: typeof Search }[] = [
+  { id: 'what', label: 'Fréquents', hint: 'Ce que tu achètes souvent, et combien ça coûte sur un an.', Icon: Search },
+  { id: 'when', label: 'Jour / heure', hint: 'Quels jours et à quel moment de la journée tu dépenses le plus.', Icon: Clock },
+  { id: 'small', label: 'Petits achats', hint: 'Les petits achats de tous les jours, qui s’additionnent sans qu’on le voie.', Icon: Coins },
 ];
 const HabitsHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClose: () => void }> = (props) => {
   const [tab, setTab] = useState<HabitTab>('what');
   return (
     <>
-      <div role="tablist" className="flex gap-1 p-1 rounded-full bg-slate-100 mb-4">
+      <div role="tablist" className="flex gap-1 p-1 rounded-full bg-slate-100 mb-2">
         {HABIT_TABS.map(({ id, label, Icon }) => (
           <button
             key={id}
@@ -135,6 +160,7 @@ const HabitsHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClose: 
           </button>
         ))}
       </div>
+      <p className="text-[13px] text-slate-500 mb-4 px-1 leading-snug">{HABIT_TABS.find((t) => t.id === tab)!.hint}</p>
       <div key={tab} className="animate-fade-in">
         {tab === 'what' && <HabitsTool {...props} />}
         {tab === 'when' && <WhenTool txs={props.txs} settings={props.settings} />}
