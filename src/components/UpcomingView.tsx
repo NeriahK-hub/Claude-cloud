@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronLeft, Plus, X, Repeat, Receipt, ArrowDownLeft, ArrowUpRight, Check, Trash2, ChevronRight, Pause, Play, Pencil } from 'lucide-react';
+import { ChevronLeft, List, CalendarDays, Plus, X, Repeat, Receipt, ArrowDownLeft, ArrowUpRight, Check, Trash2, ChevronRight, Pause, Play, Pencil } from 'lucide-react';
 import { Recurring, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { convertBetween, formatMoney } from '../lib/money';
@@ -11,6 +11,7 @@ import { Group, NavRow, PickRow, SwitchRow } from './FormRows';
 import { AppIcon, IconBadge } from './AppIcon';
 import { askConfirm } from '../lib/confirm';
 import { SubsTool } from './MoneyReviews';
+import { UpcomingCalendar } from './UpcomingCalendar';
 import { findSubscriptions, type Subscription } from '../lib/review';
 // Petites aides communes avec la carte de l'accueil (DueCard.tsx, chargée au démarrage)
 import { dayText, money, pendingRecurrings, whenText } from './DueCard';
@@ -121,6 +122,7 @@ export const UpcomingView: React.FC<{
   const desktop = useIsDesktop();
   const [editing, setEditing] = useState<Recurring | 'new' | 'bill' | null>(null);
   const [showSubs, setShowSubs] = useState(false);
+  const [view, setView] = useState<'list' | 'calendar'>('list'); // liste ou calendrier
   const [fromSub, setFromSub] = useState<Subscription | null>(null); // abonnement repéré à ajouter (formulaire pré-rempli)
   const today = ymd(new Date());
   const pending = pendingRecurrings(recurrings, today);
@@ -180,7 +182,10 @@ export const UpcomingView: React.FC<{
         <IconBadge icon={cat?.icon ?? (r.bill ? 'Receipt' : 'Repeat')} image={cat?.image} color={cat?.color ?? '#64748B'} size="sm" />
         <span className="flex-1 min-w-0">
           <span className="block text-[14px] font-semibold text-slate-900 truncate">{r.title}</span>
-          <span className="block text-[12px] text-slate-500 truncate">{how(r)}</span>
+          <span className="block text-[12px] text-slate-500 truncate">
+            {how(r)}
+            {r.cancelBy && <span className="text-amber-600 font-semibold"> · À résilier</span>}
+          </span>
         </span>
         <span className={`text-right text-[14px] font-bold tabular-nums shrink-0 ${r.direction === 'in' ? 'text-emerald-600' : 'text-slate-900'}`}>
           {r.amount ? `${r.direction === 'in' ? '+' : '−'}${money(r.amount, r.currency)}` : <span className="text-[12px] font-semibold text-slate-400">à saisir</span>}
@@ -247,6 +252,27 @@ export const UpcomingView: React.FC<{
             )}
           </p>
 
+          {/* Liste ou calendrier */}
+          <div role="tablist" className="flex gap-1 p-1 rounded-full bg-slate-200/60 mb-5">
+            {([
+              ['list', 'Liste', List],
+              ['calendar', 'Calendrier', CalendarDays],
+            ] as const).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={view === id}
+                onClick={() => setView(id)}
+                className={`flex-1 h-9 rounded-full flex items-center justify-center gap-1.5 text-[13px] font-semibold cursor-pointer transition ${view === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+              >
+                <Icon className="w-3.5 h-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+
+          {view === 'calendar' && <UpcomingCalendar recurrings={recurrings} categories={categories} settings={settings} onEdit={setEditing} />}
+          {view === 'list' && (
+            <>
           {pending.length > 0 && (
             <div className="mb-5">
               <div className={section}>À faire maintenant</div>
@@ -271,6 +297,8 @@ export const UpcomingView: React.FC<{
               <div className={section}>En pause</div>
               <div className="bg-white rounded-3xl border border-slate-100 px-4 divide-y divide-slate-100">{paused.map(row)}</div>
             </div>
+          )}
+            </>
           )}
         </>
       )}
@@ -398,6 +426,9 @@ const RecurringSheet: React.FC<{
   const [nextDate, setNextDate] = useState(seed?.nextDate ?? ymd(new Date()));
   const [mode, setMode] = useState<Recurring['mode']>(seed?.mode ?? 'ask');
   const [remindDays, setRemindDays] = useState(initial?.remindDays ?? 3);
+  // « À résilier » : un rappel pour annuler un abonnement avant la prochaine échéance
+  const [cancel, setCancel] = useState(!!seed?.cancelBy);
+  const [cancelBy, setCancelBy] = useState(seed?.cancelBy || '');
   const [picking, setPicking] = useState<'wallet' | 'category' | 'frequency' | null>(null); // liste ouverte dans la fenêtre
 
   const wallet = wallets.find((w) => w.id === walletId);
@@ -682,6 +713,32 @@ const RecurringSheet: React.FC<{
             </Group>
           )}
 
+          {/* Résiliation : seulement pour une dépense qui revient (abonnement) */}
+          {kind === 'out' && (
+            <Group title="Résiliation" hint={cancel ? 'Une alerte te le rappelle ce jour-là, pour annuler avant la prochaine échéance.' : undefined}>
+              <SwitchRow
+                label="À résilier"
+                checked={cancel}
+                onChange={(v) => {
+                  setCancel(v);
+                  // rappel proposé : 3 jours avant la prochaine fois (au plus tôt aujourd'hui)
+                  if (v && !cancelBy) {
+                    const d = parseDay(nextDate);
+                    d.setDate(d.getDate() - 3);
+                    const t = ymd(new Date());
+                    setCancelBy(ymd(d) < t ? t : ymd(d));
+                  }
+                }}
+              />
+              {cancel && (
+                <div className="px-3 py-2">
+                  <div className="text-[13px] text-slate-500 px-1 mb-1">Me le rappeler le</div>
+                  <DateField value={cancelBy} onChange={setCancelBy} shortcuts="future" min={ymd(new Date())} label="Date du rappel" />
+                </div>
+              )}
+            </Group>
+          )}
+
           {initial && (
             <Group>
               {onToggle && (
@@ -714,7 +771,9 @@ const RecurringSheet: React.FC<{
                 categoryId: categoryId || undefined,
                 frequency,
                 everyDays: frequency === 'days' ? Math.max(1, Number(count)) : undefined,
-                every: frequency !== 'days' && Number(count) > 1 ? Math.min(60, Math.round(Number(count))) : undefined,
+                // (1 est gardé si la fréquence avait été réglée avant : le compte doit recevoir le retour à « chaque mois »)
+                every: frequency !== 'days' ? (Number(count) > 1 ? Math.min(60, Math.round(Number(count))) : initial?.every ? 1 : undefined) : undefined,
+                cancelBy: kind !== 'bill' && direction === 'out' && cancel && cancelBy ? cancelBy : initial?.cancelBy ? '' : undefined,
                 nextDate,
                 // Chaque mois / année : on retient le jour choisi (un 31 reste un 31 après février)
                 anchorDay: frequency === 'month' || frequency === 'year' ? Number(nextDate.slice(8, 10)) : undefined,

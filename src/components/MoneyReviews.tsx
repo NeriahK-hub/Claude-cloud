@@ -515,6 +515,12 @@ export const SubsTool: React.FC<{ txs: Transaction[]; settings: Settings; catego
                 Prochaine fois vers le {x.next.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
                 {x.known && <span className="text-emerald-600 font-semibold"> · déjà dans À venir</span>}
               </div>
+              {x.change && (
+                <div className={`text-[12px] font-semibold mt-0.5 flex items-center gap-1 ${x.change.to > x.change.from ? 'text-red-500' : 'text-emerald-600'}`}>
+                  {x.change.to > x.change.from ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {x.change.to > x.change.from ? 'Le prix a augmenté' : 'Le prix a baissé'} : {round(x.change.from)} → {round(x.change.to)}
+                </div>
+              )}
             </div>
             <div className="text-right shrink-0">
               <div className="text-[14px] font-bold tabular-nums text-slate-900 whitespace-nowrap">{round(x.amount)}</div>

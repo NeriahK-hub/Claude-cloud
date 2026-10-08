@@ -36,6 +36,7 @@ import { DesktopApp } from './components/DesktopApp';
 import { AddTransactionModal, AddMode, SplitBill } from './components/AddTransactionModal';
 import { buildAmountHistory, buildNoteHistory } from './lib/noteSuggestions';
 import { localDay as localDayOf } from './components/DatePicker';
+import { findSubscriptions } from './lib/review';
 import { canConfirm as canConfirmRistourne } from './lib/ristourne';
 import { shouldShowSplash, Splash } from './components/Splash';
 import { shouldShowNews, shouldShowTutorial, Tutorial } from './components/Tutorial';
@@ -935,6 +936,7 @@ export default function App() {
       navigate('goals');
     } else if (n.id.startsWith('rec-')) navigate('upcoming');
     else if (n.id.startsWith('budget-')) navigate('budgets');
+    else if (n.id.startsWith('sub-')) navigate('upcoming');
     else if (n.id.startsWith('debt-')) navigate('debts');
     else if (n.id.startsWith('rate-')) navigate('home');
     else if (n.id === 'welcome') openAdd('expense');
@@ -1009,6 +1011,51 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [budgets, transactions, categories]);
+
+  // Abonnement dont le prix change : une alerte (une seule fois par paiement)
+  useEffect(() => {
+    const now = new Date();
+    const fresh: NotificationItem[] = [];
+    for (const sub of findSubscriptions(transactions, settings, categories, recurrings)) {
+      if (!sub.change || sub.change.to <= sub.change.from) continue; // on n'alerte que pour une hausse
+      const id = `sub-rise-${sub.key}-${sub.change.at.slice(0, 10)}`;
+      if (notifications.some((n) => n.id === id)) continue;
+      // seulement les paiements récents (pas un vieil historique importé)
+      if (now.getTime() - new Date(sub.change.at).getTime() > 20 * 86400000) continue;
+      fresh.push({
+        id,
+        type: 'budget',
+        read: false,
+        time: now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        title: `${sub.name} coûte plus cher`,
+        message: `Ton abonnement est passé de ${formatMoney(Math.round(sub.change.from), settings.mainCurrency)} à ${formatMoney(Math.round(sub.change.to), settings.mainCurrency)} par mois.`,
+      });
+    }
+    if (fresh.length) setNotifications((prev) => [...fresh, ...prev].slice(0, 50));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, recurrings]);
+
+  // Abonnement « à résilier » : le jour du rappel (et après, tant que ce n'est pas fait), une alerte
+  useEffect(() => {
+    const now = new Date();
+    const today = ymd(now);
+    const fresh: NotificationItem[] = [];
+    for (const r of recurrings) {
+      if (!r.active || !r.cancelBy || r.cancelBy > today) continue;
+      const id = `sub-cancel-${r.id}-${r.cancelBy}`;
+      if (notifications.some((n) => n.id === id)) continue;
+      fresh.push({
+        id,
+        type: 'budget',
+        read: false,
+        time: now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        title: `Pense à résilier ${r.title}`,
+        message: `Prochaine échéance le ${new Date(r.nextDate + 'T00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}. Annule avant, ou retire le rappel dans « À venir ».`,
+      });
+    }
+    if (fresh.length) setNotifications((prev) => [...fresh, ...prev].slice(0, 50));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recurrings]);
 
   // Objectifs : 25 / 50 / 75 / 100 % franchis -> alerte (et notification du téléphone) + célébration.
   // Chaque palier n'est fêté qu'une fois (src/lib/goalMilestones.ts).

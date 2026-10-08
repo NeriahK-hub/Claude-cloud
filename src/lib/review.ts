@@ -190,6 +190,7 @@ export interface Subscription {
   next: Date;
   yearly: number;
   known: boolean; // déjà dans « À venir »
+  change?: { from: number; to: number; at: string }; // le dernier paiement n'a pas le même prix que les précédents (devise principale)
   // De quoi pré-remplir une opération qui revient (dernier paiement, dans sa devise d'origine)
   walletId: string;
   currency: string;
@@ -222,8 +223,17 @@ export function findSubscriptions(txs: Transaction[], settings: Settings, catego
     const months = new Set(sorted.map((t) => t.createdAt.slice(0, 7)));
     if (months.size < 3) continue;
     const amounts = sorted.map((t) => -toMain(t.amount, t.currency, settings));
-    const avg = amounts.reduce((s, v) => s + v, 0) / amounts.length;
-    if (amounts.some((v) => Math.abs(v - avg) > avg * 0.15)) continue; // montant qui varie trop
+    const avgOf = (xs: number[]) => xs.reduce((s, v) => s + v, 0) / xs.length;
+    const stable = (xs: number[]) => xs.every((v) => Math.abs(v - avgOf(xs)) <= avgOf(xs) * 0.15);
+    // Montant stable ; ou stable jusqu'à l'avant-dernier paiement, puis un autre prix (hausse ou baisse)
+    const before = amounts.slice(0, -1);
+    const priceChanged = !stable(amounts) && before.length >= 3 && stable(before) && Math.abs(amounts[amounts.length - 1] - avgOf(before)) > avgOf(before) * 0.05;
+    if (!stable(amounts) && !priceChanged) continue; // montant qui varie trop
+    const avg = priceChanged ? amounts[amounts.length - 1] : avgOf(amounts);
+    // Le dernier paiement n'a pas le prix des précédents (au moins 3 paiements stables avant)
+    const prevAvg = avgOf(before.length ? before : amounts);
+    const lastAmount = amounts[amounts.length - 1];
+    const change = before.length >= 3 && stable(before) && Math.abs(lastAmount - prevAvg) > prevAvg * 0.05 ? { from: prevAvg, to: lastAmount, at: sorted[sorted.length - 1].createdAt } : undefined;
     const gaps = sorted.slice(1).map((t, i) => (new Date(t.createdAt).getTime() - new Date(sorted[i].createdAt).getTime()) / DAY);
     const median = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)];
     if (median < 24 || median > 38) continue; // pas « une fois par mois »
@@ -242,6 +252,7 @@ export function findSubscriptions(txs: Transaction[], settings: Settings, catego
       next: new Date(last.getTime() + Math.round(median) * DAY),
       yearly: avg * 12,
       known: knownNames.has(k),
+      change,
       walletId: sorted[sorted.length - 1].walletId,
       currency: sorted[sorted.length - 1].currency,
       lastAmount: Math.abs(sorted[sorted.length - 1].amount),
