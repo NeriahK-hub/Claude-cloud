@@ -1,7 +1,7 @@
 import React, { Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { takeJump } from '../lib/jumpTo';
 import { DuplicatePlan, findDuplicateWallets } from '../lib/dedupe';
-import { Plus, Target, Pencil, ChevronRight, CalendarPlus, Flag, Flame, Quote, BellRing, Coins, Sofa, Trophy, Lightbulb, PartyPopper, TrendingUp, CircleCheck, Clock, CalendarClock, CalendarX, Pause, Sprout, ArrowRight, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowUpDown, GripVertical, ChevronUp, ChevronDown, History, Users, CopyX, Lock, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { Plus, Target, Pencil, ChevronRight, CalendarPlus, Flag, Flame, Quote, BellRing, Coins, Sofa, Trophy, Lightbulb, PartyPopper, TrendingUp, CircleCheck, Clock, CalendarClock, CalendarX, Pause, Sprout, ArrowRight, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowUpDown, GripVertical, ChevronUp, ChevronDown, History, Users, CopyX, Lock, Sparkles, Eye, EyeOff, Search, Check } from 'lucide-react';
 import { SortableList } from './SortableList';
 import { SecretMoney } from './MatrixSwap';
 import { Settings, Transaction, Wallet, WalletKind } from '../types';
@@ -2481,6 +2481,9 @@ const WalletPicker: React.FC<{
   balanceOf: (w: Wallet) => number;
 }> = ({ label, wallets, value, open, onToggle, onChange, balanceOf }) => {
   const w = wallets.find((x) => x.id === value);
+  const [q, setQ] = useState('');
+  const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const list = q.trim() ? wallets.filter((x) => norm(`${x.name} ${x.currency}`).includes(norm(q.trim()))) : wallets;
   return (
     <div>
       <button
@@ -2498,22 +2501,49 @@ const WalletPicker: React.FC<{
         <ChevronDown className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="mt-1.5 max-h-64 overflow-y-auto rounded-2xl border border-slate-100 divide-y divide-slate-100 animate-fade-in">
-          {wallets.map((x) => (
-            <button
-              key={x.id}
-              type="button"
-              onClick={() => {
-                haptic();
-                onChange(x.id);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left cursor-pointer ${x.id === value ? 'is-selected' : 'hover:bg-slate-50'}`}
-            >
-              <IconBadge icon={x.icon} image={x.image} color={x.color} size="sm" />
-              <span className="flex-1 min-w-0 text-sm font-semibold text-slate-900 truncate">{x.name}</span>
-              <span className="shrink-0 text-xs tabular-nums text-slate-500"><SecretMoney text={formatMoney(balanceOf(x), x.currency)} /></span>
-            </button>
-          ))}
+        <div className="mt-2 rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden animate-fade-in">
+          {/* Beaucoup de portefeuilles : une recherche en haut */}
+          {wallets.length > 5 && (
+            <label className="flex items-center gap-2 px-3.5 h-11 border-b border-slate-100">
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Chercher"
+                aria-label="Chercher un portefeuille"
+                className="flex-1 min-w-0 bg-transparent text-[15px] text-slate-900 placeholder:text-slate-400 outline-none field-plain"
+              />
+            </label>
+          )}
+          <div className="relative">
+            <div className="max-h-[17.5rem] overflow-y-auto divide-y divide-slate-100 pb-2">
+              {list.map((x) => {
+                const bal = balanceOf(x);
+                const on = x.id === value;
+                return (
+                  <button
+                    key={x.id}
+                    type="button"
+                    onClick={() => {
+                      haptic();
+                      onChange(x.id);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left cursor-pointer transition-colors ${on ? 'bg-slate-100' : 'hover:bg-slate-50 active:bg-slate-100'}`}
+                  >
+                    <IconBadge icon={x.icon} image={x.image} color={x.color} size="sm" />
+                    <span className={`flex-1 min-w-0 text-[15px] truncate text-slate-900 ${on ? 'font-bold' : 'font-semibold'}`}>{x.name}</span>
+                    <span className={`shrink-0 text-[13px] font-semibold tabular-nums ${bal < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                      <SecretMoney text={formatMoney(bal, x.currency)} />
+                    </span>
+                    <span className="w-4 shrink-0">{on && <Check className="w-4 h-4 text-emerald-600 stroke-[2.8]" />}</span>
+                  </button>
+                );
+              })}
+              {list.length === 0 && <p className="px-4 py-5 text-center text-[14px] text-slate-400">Aucun portefeuille trouvé.</p>}
+            </div>
+            {/* Un léger fondu en bas : la liste continue */}
+            {list.length > 5 && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-white to-transparent" />}
+          </div>
         </div>
       )}
     </div>
