@@ -18,9 +18,14 @@ export interface DisplayPrefs {
   simpleMode: boolean; // interface simple : accueil réduit à l'essentiel, gros boutons (Paramètres › Apparence)
   iconsOnly: boolean; // icônes seules : moins de mots sur les boutons, icônes plus grandes (pour qui lit peu)
   festiveOff: boolean; // décorations des fêtes coupées sur cet appareil (quand l'admin les a allumées)
+  textSize: 'normal' | 'large' | 'xlarge'; // taille du texte et des boutons (Paramètres › Apparence)
+  reduceMotion: boolean; // moins d'animations (Paramètres › Apparence)
+  hideAmounts: boolean; // l'œil masque aussi les montants des opérations, pas seulement le solde
+  homeOrder: string[]; // accueil : ordre des cartes (Paramètres › Accueil)
+  homeHidden: string[]; // accueil : cartes cachées
 }
 
-export const DEFAULT_PREFS: DisplayPrefs = { number: 'fr', decimals: 'always', date: 'dmy', weekStart: 1, monthStart: 1, yearStart: 0, excludeOption: false, hideBalance: false, homeWalletCard: false, simpleMode: false, iconsOnly: false, festiveOff: false };
+export const DEFAULT_PREFS: DisplayPrefs = { number: 'fr', decimals: 'always', date: 'dmy', weekStart: 1, monthStart: 1, yearStart: 0, excludeOption: false, hideBalance: false, homeWalletCard: false, simpleMode: false, iconsOnly: false, festiveOff: false, textSize: 'normal', reduceMotion: false, hideAmounts: false, homeOrder: [], homeHidden: ['subs'] };
 
 export const NUMBER_LOCALES: Record<DisplayPrefs['number'], string> = { fr: 'fr-FR', en: 'en-US', de: 'de-DE', ch: 'de-CH' };
 
@@ -38,8 +43,20 @@ function read(): DisplayPrefs {
 
 onOtherTabChange(KEY, () => {
   prefs = read();
+  applyDom();
   listeners.forEach((l) => l());
 });
+
+// Taille du texte et animations : appliquées sur la page (voir index.css)
+function applyDom() {
+  if (typeof document === 'undefined') return;
+  const el = document.documentElement;
+  if (prefs.textSize === 'normal') delete el.dataset.text;
+  else el.dataset.text = prefs.textSize;
+  if (prefs.reduceMotion) el.dataset.calm = '1';
+  else delete el.dataset.calm;
+}
+applyDom();
 
 export const getPrefs = () => prefs;
 
@@ -50,8 +67,9 @@ export function setPrefs(changes: Partial<DisplayPrefs>) {
   } catch {
     // réglage gardé pour cette session
   }
-  // Solde masqué : propre à cet appareil, pas envoyé au compte
-  if (Object.keys(changes).some((k) => k !== 'hideBalance')) markPrefsChanged();
+  applyDom();
+  // Solde masqué et taille du texte : propres à cet appareil, pas envoyés au compte
+  if (Object.keys(changes).some((k) => k !== 'hideBalance' && k !== 'textSize')) markPrefsChanged();
   listeners.forEach((l) => l());
 }
 

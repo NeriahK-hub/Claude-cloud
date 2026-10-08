@@ -2,6 +2,7 @@ import React from 'react';
 import { Transaction } from '../types';
 import { IconBadge } from './AppIcon';
 import { formatMoney } from '../lib/money';
+import { SecretAmount } from './MatrixSwap';
 
 interface TransactionItemProps {
   transaction: Transaction;
@@ -72,7 +73,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
             isPositive ? 'text-emerald-600' : 'text-red-500'
           }`}
         >
-          {formattedAmount}
+          <SecretAmount text={formattedAmount} />
         </span>
         <span className="text-xs text-slate-400 font-medium block mt-0.5 max-w-[120px] truncate">
           {typeLabel}

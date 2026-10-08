@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useDisplayPrefs } from '../lib/display';
+import { getPrefs, useDisplayPrefs } from '../lib/display';
 
 // Solde masqué / affiché avec un petit effet « Matrix » : des caractères verts défilent,
 // puis le texte se fixe de gauche à droite. Seulement quand on touche l'œil (pas quand le
@@ -22,7 +22,7 @@ export const MatrixSwap: React.FC<{ hidden: boolean; text: string }> = ({ hidden
       first.current = false;
       return;
     }
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    if (getPrefs().reduceMotion || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     const goal = targetRef.current;
     const len = Math.max(goal.length, HIDDEN_AMOUNT.length);
     const start = performance.now();
@@ -61,4 +61,10 @@ export const MatrixSwap: React.FC<{ hidden: boolean; text: string }> = ({ hidden
 export const SecretMoney: React.FC<{ text: string }> = ({ text }) => {
   const { hideBalance } = useDisplayPrefs();
   return <MatrixSwap hidden={hideBalance} text={text} />;
+};
+
+// Montant d'une opération : masqué par l'œil seulement si « Masquer aussi les montants des opérations » est coché
+export const SecretAmount: React.FC<{ text: string }> = ({ text }) => {
+  const { hideBalance, hideAmounts } = useDisplayPrefs();
+  return <MatrixSwap hidden={hideBalance && hideAmounts} text={text} />;
 };

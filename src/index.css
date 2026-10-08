@@ -346,6 +346,17 @@ select:focus-visible {
 .stagger > :nth-child(4) { animation-delay: 120ms; }
 .stagger > :nth-child(n + 5) { animation-delay: 160ms; }
 
+/* Taille du texte (Paramètres › Apparence) : toute l'interface grossit d'un cran */
+html[data-text='large'] #root { zoom: 1.1; }
+html[data-text='xlarge'] #root { zoom: 1.2; }
+
+/* Réglage « Moins d'animations » de l'app : même effet que celui du téléphone */
+html[data-calm] *, html[data-calm] *::before, html[data-calm] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0ms !important;
+  transition-duration: 0.01ms !important;
+}
+
 /* Réglage « Réduire les animations » du téléphone : on coupe tout */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

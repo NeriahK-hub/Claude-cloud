@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronDown, ChevronRight, Sun, Moon, SmartphoneIcon, Check, Palette, Type, Bell, Lock, Coins, ArrowLeftRight, Database, Shapes } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Sun, Moon, SmartphoneIcon, Check, Palette, Type, Bell, Lock, Coins, ArrowLeftRight, Database, Shapes, LayoutGrid } from 'lucide-react';
 import { useNotifyState } from '../lib/notify';
 import { useLockConfig } from '../lib/lock';
 import { useCustomIcons } from '../lib/customIcons';
@@ -22,7 +22,9 @@ import { hapticsEnabled, setHapticsEnabled } from '../lib/haptics';
 import { ACCENTS, accentVars, setAccent, useAccent } from '../lib/accent';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { InterfacePicker } from './InterfacePicker';
-import { useDisplayPrefs } from '../lib/display';
+import { setPrefs, useDisplayPrefs } from '../lib/display';
+import { HomeSettings } from './HomeSettings';
+import { HOME_CARDS } from '../lib/homeLayout';
 
 interface SettingsViewProps {
   settings: Settings;
@@ -46,7 +48,7 @@ const Block: React.FC<{ title?: string; hint?: string; children: React.ReactNode
   </div>
 );
 
-type PanelId = 'appearance' | 'display' | 'notifications' | 'lock' | 'currencies' | 'rates' | 'data' | 'icons';
+type PanelId = 'appearance' | 'home' | 'notifications' | 'lock' | 'currencies' | 'rates' | 'data' | 'icons';
 
 // Bouton qui déplie la liste de devises (évite deux longues listes à l'écran)
 const Collapsible: React.FC<{ label: string; children: (close: () => void) => React.ReactNode }> = ({ label, children }) => {
@@ -83,7 +85,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
   const [haptics, setHaptics] = useState(hapticsEnabled);
   const accent = useAccent();
   // Mode simple : les réglages techniques sont rangés sous « Réglages avancés »
-  const { simpleMode } = useDisplayPrefs();
+  const prefs = useDisplayPrefs();
+  const { simpleMode } = prefs;
   const [advanced, setAdvanced] = useState(false);
   const showAll = !simpleMode || advanced;
   const [panel, setPanel] = useState<PanelId | null>(null); // écran de réglage ouvert (null = la liste)
@@ -196,31 +199,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
             })}
           </div>
         </Block>
-        <Block>
-          <label className="flex items-center justify-between gap-3 cursor-pointer">
-            <span>
-              <span className="block text-sm font-semibold text-slate-800">Retour haptique</span>
-              <span className="block text-xs text-slate-400">Petite vibration au toucher (iPhone avec iOS 18 ou plus récent, Android).</span>
-            </span>
-            <input
-              type="checkbox"
-              role="switch"
-              checked={haptics}
-              onChange={(e) => {
-                setHaptics(e.target.checked);
-                setHapticsEnabled(e.target.checked);
-              }}
-              className="toggle shrink-0"
-            />
-          </label>
+        <Block title="Confort">
+          <div className="mb-3">
+            <div className="text-sm font-semibold text-slate-800 mb-2">Taille du texte</div>
+            <div role="radiogroup" aria-label="Taille du texte" className="flex gap-1 p-1 rounded-full bg-slate-100">
+              {([
+                ['normal', 'Normal', 'text-[13px]'],
+                ['large', 'Grand', 'text-[15px]'],
+                ['xlarge', 'Très grand', 'text-[17px]'],
+              ] as const).map(([id, label, size]) => (
+                <button
+                  key={id}
+                  role="radio"
+                  aria-checked={prefs.textSize === id}
+                  onClick={() => setPrefs({ textSize: id })}
+                  className={`flex-1 min-w-0 h-10 rounded-full font-semibold cursor-pointer transition ${size} ${prefs.textSize === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                >
+                  <span className="truncate">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="divide-y divide-slate-100 -mx-1">
+            {([
+              ['Moins d\u2019animations', 'Les écrans s’ouvrent sans mouvement.', prefs.reduceMotion, (v: boolean) => setPrefs({ reduceMotion: v })],
+              ['Masquer aussi les montants des opérations', 'Quand l’œil est fermé, la liste des opérations est masquée elle aussi.', prefs.hideAmounts, (v: boolean) => setPrefs({ hideAmounts: v })],
+              ['Retour haptique', 'Petite vibration au toucher (iPhone avec iOS 18 ou plus récent, Android).', haptics, (v: boolean) => { setHaptics(v); setHapticsEnabled(v); }],
+            ] as const).map(([title, hint, checked, set]) => (
+              <label key={title} className="flex items-center justify-between gap-3 px-1 py-3 cursor-pointer">
+                <span>
+                  <span className="block text-sm font-semibold text-slate-800">{title}</span>
+                  <span className="block text-xs text-slate-400">{hint}</span>
+                </span>
+                <input type="checkbox" role="switch" checked={checked} onChange={(e) => set(e.target.checked)} className="toggle shrink-0" />
+              </label>
+            ))}
+          </div>
+        </Block>
+        <Block title="Formats" hint="Comment s’écrivent les montants, les dates et les mois.">
+          <DisplaySettings currency={settings.mainCurrency} />
         </Block>
       </>
     ),
-    display: (
-      <Block>
-        <DisplaySettings currency={settings.mainCurrency} />
-      </Block>
-    ),
+    home: <HomeSettings />,
     notifications: (
       <Block hint="Budget dépassé, tour de ristourne, remboursement à confirmer, invitation… Avec un compte connecté, elles arrivent même quand Wallo est fermé.">
         <NotificationsSettings />
@@ -339,7 +360,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
         : 'Taux à ajouter';
   const rows: { id: PanelId; title: string; value: string; Icon: typeof Sun; color: string; advanced?: boolean; alert?: boolean }[] = [
     { id: 'appearance', title: 'Apparence', value: `${themeName} · ${accent.name}`, Icon: Palette, color: '#A855F7' },
-    { id: 'display', title: 'Affichage', value: `${formatMoney(1234.56, settings.mainCurrency)} · ${formatDate(new Date())}`, Icon: Type, color: '#3B82F6', advanced: true },
+    { id: 'home', title: 'Accueil', value: `${HOME_CARDS.length - prefs.homeHidden.length} carte${HOME_CARDS.length - prefs.homeHidden.length > 1 ? 's' : ''} affichée${HOME_CARDS.length - prefs.homeHidden.length > 1 ? 's' : ''}`, Icon: LayoutGrid, color: '#3B82F6' },
     { id: 'notifications', title: 'Notifications', value: notify === 'on' ? 'Activées' : notify === 'denied' ? 'Bloquées' : notify === 'off' ? 'Coupées' : 'À activer', Icon: Bell, color: '#EF4444' },
     { id: 'lock', title: 'Verrouillage', value: lock ? 'Code activé' : 'Désactivé', Icon: Lock, color: '#10B981' },
     { id: 'currencies', title: 'Devises', value: settings.secondCurrency ? `${settings.mainCurrency} · ${settings.secondCurrency}` : settings.mainCurrency, Icon: Coins, color: '#F59E0B', advanced: true },
@@ -349,7 +370,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
   ];
   const visible = rows.filter((r) => showAll || !r.advanced);
   const groups: { title: string; ids: PanelId[] }[] = [
-    { title: 'Général', ids: ['appearance', 'display', 'notifications', 'lock'] },
+    { title: 'Général', ids: ['appearance', 'home', 'notifications', 'lock'] },
     { title: 'Argent', ids: ['currencies', 'rates'] },
     { title: 'Données', ids: ['data', 'icons'] },
   ];

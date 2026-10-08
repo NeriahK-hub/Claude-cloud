@@ -24,6 +24,8 @@ import { inThisMonth } from '../lib/periods';
 import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView, PlacesView, UpcomingView } from './pages';
 import { DueCard } from './DueCard';
 import { RateCard } from './RateCard';
+import { SubsHomeCard } from './SubsHomeCard';
+import { useHomeLayout } from '../lib/homeLayout';
 import { SimpleMonth } from './SimpleHome';
 
 // Interface ORDINATEUR : menu à gauche, contenu en grille à droite
@@ -52,6 +54,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
   } = p;
   const main = settings.mainCurrency;
   const { hideBalance, homeWalletCard: showWalletCard, simpleMode } = useDisplayPrefs();
+  const layout = useHomeLayout(); // accueil au choix (Paramètres › Accueil) : sur ordinateur, on cache ce qui est décoché
   const festive = useFestive(); // design des fêtes (espace admin)
   useEffect(() => {
     if (festive) document.documentElement.dataset.festive = festive;
@@ -176,25 +179,36 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
               )}
 
               {festive && <FestiveCard kind={festive} onNavigate={onNavigate} />}
-              <div className="empty:hidden">
-                <ReviewCards transactions={p.transactions} settings={settings} categories={categories} />
-              </div>
-              <div className="empty:hidden">
-                <RateCard settings={settings} wallets={wallets} onChangeSettings={p.onChangeSettings} />
-              </div>
-              <div className="empty:hidden">
-                <DueCard recurrings={p.recurrings} categories={categories} onConfirm={p.onConfirmRecurring} onSkip={p.onSkipRecurring} onOpen={() => onNavigate('upcoming')} />
-              </div>
+              {layout.show('review') && (
+                <div className="empty:hidden">
+                  <ReviewCards transactions={p.transactions} settings={settings} categories={categories} />
+                </div>
+              )}
+              {layout.show('rates') && (
+                <div className="empty:hidden">
+                  <RateCard settings={settings} wallets={wallets} onChangeSettings={p.onChangeSettings} />
+                </div>
+              )}
+              {layout.show('due') && (
+                <div className="empty:hidden">
+                  <DueCard recurrings={p.recurrings} categories={categories} onConfirm={p.onConfirmRecurring} onSkip={p.onSkipRecurring} onOpen={() => onNavigate('upcoming')} />
+                </div>
+              )}
+              {layout.show('subs') && (
+                <div className="empty:hidden">
+                  <SubsHomeCard transactions={allTransactions} settings={settings} categories={categories} recurrings={p.recurrings} onOpen={() => onNavigate('upcoming')} />
+                </div>
+              )}
               <AdBanner />
               {/* Mode simple : un résumé du mois à la place des cartes santé, badges et rapport */}
               {simpleMode ? (
-                <SimpleMonth transactions={p.transactions} settings={settings} hidden={hideBalance} />
+                layout.show('month') && <SimpleMonth transactions={p.transactions} settings={settings} hidden={hideBalance} />
               ) : (
                 <>
-                  <HealthCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} onSelectTransaction={onSelectTransaction} />
-                  <BadgesCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} />
+                  {layout.show('health') && <HealthCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} onSelectTransaction={onSelectTransaction} />}
+                  {layout.show('badges') && <BadgesCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} />}
 
-                  <MonthReportCard
+                  {layout.show('month') && <MonthReportCard
                     allTransactions={allTransactions}
                     wallets={wallets}
                     activeWallet={p.activeWallet}
@@ -202,10 +216,11 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                     onOpenReports={() => onNavigate('statistic')}
                     onOpenGoals={() => onNavigate('goals')}
                 recurrings={p.recurrings}
-                  />
+                  />}
                 </>
               )}
 
+              {layout.show('list') && (
               <div className="bg-white rounded-3xl p-6 border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-base font-bold">Dernières transactions</h2>
@@ -222,6 +237,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                   ))}
                 </div>
               </div>
+              )}
             </div>
 
             {/* Colonne droite (1/3) */}

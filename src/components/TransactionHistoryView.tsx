@@ -3,6 +3,7 @@ import { ArrowLeft, Search, X, Loader2, Layers, ChevronDown, ChevronRight, BarCh
 import { Settings, Transaction, Wallet } from '../types';
 import { IconBadge, WalletChipIcon } from './AppIcon';
 import { TransactionItem } from './TransactionItem';
+import { SecretAmount, SecretMoney } from './MatrixSwap';
 import { PeriodBar } from './PeriodBar';
 import { countsInReport, dayLabel, fitAmount, formatMoney, toMain } from '../lib/money';
 import { inPeriod, Period, periodRange } from '../lib/periods';
@@ -128,22 +129,22 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
             )}
           </div>
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 mt-0.5">
-            <span className="text-[24px] font-extrabold tabular-nums tracking-tight text-slate-900 whitespace-nowrap">{formatMoney(balances.closing, main)}</span>
+            <span className="text-[24px] font-extrabold tabular-nums tracking-tight text-slate-900 whitespace-nowrap"><SecretMoney text={formatMoney(balances.closing, main)} /></span>
             <span className={`text-[15px] font-bold tabular-nums whitespace-nowrap ${balances.closing - balances.opening >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-              {signed(balances.closing - balances.opening)}
+              <SecretMoney text={signed(balances.closing - balances.opening)} />
             </span>
           </div>
-          <div className="text-[12px] text-slate-400 mt-0.5 tabular-nums">Ouverture : {formatMoney(balances.opening, main)}</div>
+          <div className="text-[12px] text-slate-400 mt-0.5 tabular-nums">Ouverture : <SecretMoney text={formatMoney(balances.opening, main)} /></div>
         </div>
         {/* Entrées et sorties dans la même carte */}
         <div className="grid grid-cols-2 border-t border-slate-100 divide-x divide-slate-100">
           <div className="min-w-0 px-4 py-2.5">
             <div className="text-[12px] font-semibold text-slate-500">Entrées</div>
-            <div className="text-[15px] font-bold tabular-nums whitespace-nowrap text-emerald-600">+{formatMoney(totalIn, main)}</div>
+            <div className="text-[15px] font-bold tabular-nums whitespace-nowrap text-emerald-600"><SecretAmount text={`+${formatMoney(totalIn, main)}`} /></div>
           </div>
           <div className="min-w-0 px-4 py-2.5">
             <div className="text-[12px] font-semibold text-slate-500">Sorties</div>
-            <div className="text-[15px] font-bold tabular-nums whitespace-nowrap text-red-500">−{formatMoney(totalOut, main)}</div>
+            <div className="text-[15px] font-bold tabular-nums whitespace-nowrap text-red-500"><SecretAmount text={`−${formatMoney(totalOut, main)}`} /></div>
           </div>
         </div>
       </div>
@@ -152,11 +153,11 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
       <div className="flex gap-2 mt-3">
         <div className="flex-1 min-w-0 px-3 py-2 rounded-2xl bg-white border border-slate-100">
           <div className="text-[12px] font-semibold text-slate-500">Entrées</div>
-          <div className={`${fitAmount(`+${formatMoney(totalIn, main)}`)} font-bold tabular-nums whitespace-nowrap text-emerald-600`}>+{formatMoney(totalIn, main)}</div>
+          <div className={`${fitAmount(`+${formatMoney(totalIn, main)}`)} font-bold tabular-nums whitespace-nowrap text-emerald-600`}><SecretAmount text={`+${formatMoney(totalIn, main)}`} /></div>
         </div>
         <div className="flex-1 min-w-0 px-3 py-2 rounded-2xl bg-white border border-slate-100">
           <div className="text-[12px] font-semibold text-slate-500">Sorties</div>
-          <div className={`${fitAmount(`−${formatMoney(totalOut, main)}`)} font-bold tabular-nums whitespace-nowrap text-red-500`}>−{formatMoney(totalOut, main)}</div>
+          <div className={`${fitAmount(`−${formatMoney(totalOut, main)}`)} font-bold tabular-nums whitespace-nowrap text-red-500`}><SecretAmount text={`−${formatMoney(totalOut, main)}`} /></div>
         </div>
       </div>
   );
@@ -184,7 +185,7 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
           {/* Date Group Heading */}
           <div className="flex items-baseline justify-between gap-2 mb-2 px-1">
             <span className="text-[12px] font-bold text-slate-400 tracking-wider uppercase">{dateGroup}</span>
-            <span className={`text-xs font-bold tabular-nums ${dayTotal(items) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{signed(dayTotal(items))}</span>
+            <span className={`text-xs font-bold tabular-nums ${dayTotal(items) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}><SecretAmount text={signed(dayTotal(items))} /></span>
           </div>
 
           {/* Transactions in this date group */}

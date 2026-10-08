@@ -10,14 +10,14 @@ import { prefsChangedAt, setPrefsChangedAt, withoutStamp } from '../prefsStamp';
 
 export interface CloudPrefs {
   at: number; // date du changement (ms)
-  display: Omit<DisplayPrefs, 'hideBalance'>;
+  display: Omit<DisplayPrefs, 'hideBalance' | 'textSize'>; // solde masqué et taille du texte : propres à l'appareil
   theme: ThemePref;
   accent: string;
   haptics: boolean;
 }
 
 export function collectPrefs(): CloudPrefs {
-  const { hideBalance: _, ...display } = getPrefs();
+  const { hideBalance: _h, textSize: _t, ...display } = getPrefs();
   return { at: prefsChangedAt() || Date.now(), display, theme: getThemePref(), accent: getAccentId(), haptics: hapticsEnabled() };
 }
 
