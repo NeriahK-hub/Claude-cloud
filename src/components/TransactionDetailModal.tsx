@@ -424,7 +424,7 @@ const EditForm: React.FC<{
       )}
       {rateMissing && (
         <p className="text-[12px] text-amber-600 -mt-3 mb-5 px-4">
-          Taux {tx.currency} → {editWallet!.currency} manquant : ajoute-le dans Paramètres › Taux de change.
+          Taux {tx.currency} → {editWallet!.currency} manquant : ajoute-le dans Paramètres › Devises et taux.
         </p>
       )}
 

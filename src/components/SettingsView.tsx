@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronDown, ChevronRight, Sun, Moon, SmartphoneIcon, Check, Palette, Type, Bell, Lock, Coins, ArrowLeftRight, Database, Shapes, LayoutGrid, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Sun, Moon, SmartphoneIcon, Check, Palette, Bell, Lock, Coins, Database } from 'lucide-react';
 import { useNotifyState } from '../lib/notify';
 import { useLockConfig } from '../lib/lock';
 import { useCustomIcons } from '../lib/customIcons';
@@ -51,7 +51,7 @@ const Block: React.FC<{ title?: string; hint?: string; children: React.ReactNode
   </div>
 );
 
-type PanelId = 'appearance' | 'home' | 'trash' | 'notifications' | 'lock' | 'currencies' | 'rates' | 'data' | 'icons';
+type PanelId = 'appearance' | 'notifications' | 'lock' | 'currencies' | 'data';
 
 // Bouton qui déplie la liste de devises (évite deux longues listes à l'écran)
 const Collapsible: React.FC<{ label: string; children: (close: () => void) => React.ReactNode }> = ({ label, children }) => {
@@ -135,7 +135,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
   };
 
   // ---------- Contenu de chaque écran de réglage (réutilisé tel quel) ----------
-  const panels: Record<PanelId, React.ReactNode> = {
+  const panels: Record<string, React.ReactNode> = {
     appearance: (
       <>
         <Block title="Interface">
@@ -240,13 +240,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
             ))}
           </div>
         </Block>
+        <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 px-4 mb-1.5">Accueil</h3>
+        <div className="mb-4">
+          <HomeSettings />
+        </div>
         <Block title="Formats" hint="Comment s’écrivent les montants, les dates et les mois.">
           <DisplaySettings currency={settings.mainCurrency} />
         </Block>
       </>
     ),
-    home: <HomeSettings />,
-    trash: <TrashSettings onRestore={onRestoreTrash} />,
+    _trash: <TrashSettings onRestore={onRestoreTrash} />,
     notifications: (
       <Block hint="Budget dépassé, tour de ristourne, remboursement à confirmer, invitation… Avec un compte connecté, elles arrivent même quand Wallo est fermé.">
         <NotificationsSettings />
@@ -291,7 +294,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
         </Block>
       </>
     ),
-    rates: (
+    _rates: (
       <Block hint={`Combien vaut 1 unité de chaque devise en ${settings.mainCurrency}.`}>
         {needed.length > 0 && (
           <label className="flex items-center justify-between gap-3 mb-4 cursor-pointer">
@@ -343,12 +346,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
         <DataSection wallets={wallets} transactions={transactions} categories={categories} budgets={budgets} ristournes={ristournes} settings={settings} onImport={onImport} onRestore={onRestore} />
       </Block>
     ),
-    icons: (
+    _icons: (
       <Block hint="Ajoute tes propres icônes (SVG, PNG ou JPG) pour tes catégories et portefeuilles.">
         <CustomIconsSection />
       </Block>
     ),
   };
+
+  // Réglages regroupés : « Devises et taux », « Mes données » (sauvegarde, corbeille, icônes)
+  const sectionTitle = (t: string) => <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 px-4 mb-1.5 mt-2">{t}</h3>;
+  panels.currencies = (
+    <>
+      {panels.currencies}
+      {sectionTitle('Taux de change')}
+      {panels._rates}
+    </>
+  );
+  panels.data = (
+    <>
+      {sectionTitle('Importer et sauvegarder')}
+      {panels.data}
+      {sectionTitle('Corbeille')}
+      {panels._trash}
+      <div className="mt-4">{sectionTitle('Mes icônes')}</div>
+      {panels._icons}
+    </>
+  );
 
   // ---------- Les lignes de la page principale, avec leur valeur actuelle ----------
   const themeName = THEMES.find((t) => t.id === theme)?.label ?? '';
@@ -364,21 +387,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
           : `1 ${settings.mainCurrency} = ${Math.round(1 / settings.rates[firstRate]).toLocaleString('fr-FR')} ${firstRate}`
         : 'Taux à ajouter';
   const rows: { id: PanelId; title: string; value: string; Icon: typeof Sun; color: string; advanced?: boolean; alert?: boolean }[] = [
-    { id: 'appearance', title: 'Apparence', value: `${themeName} · ${accent.name}`, Icon: Palette, color: '#A855F7' },
-    { id: 'home', title: 'Accueil', value: `${HOME_CARDS.length - prefs.homeHidden.length} carte${HOME_CARDS.length - prefs.homeHidden.length > 1 ? 's' : ''} affichée${HOME_CARDS.length - prefs.homeHidden.length > 1 ? 's' : ''}`, Icon: LayoutGrid, color: '#3B82F6' },
+    { id: 'appearance', title: 'Apparence', value: `${themeName} · ${accent.name} · ${HOME_CARDS.length - prefs.homeHidden.length} cartes à l’accueil`, Icon: Palette, color: '#A855F7' },
     { id: 'notifications', title: 'Notifications', value: notify === 'on' ? 'Activées' : notify === 'denied' ? 'Bloquées' : notify === 'off' ? 'Coupées' : 'À activer', Icon: Bell, color: '#EF4444' },
     { id: 'lock', title: 'Verrouillage', value: lock ? 'Code activé' : 'Désactivé', Icon: Lock, color: '#10B981' },
-    { id: 'currencies', title: 'Devises', value: settings.secondCurrency ? `${settings.mainCurrency} · ${settings.secondCurrency}` : settings.mainCurrency, Icon: Coins, color: '#F59E0B', advanced: true },
-    { id: 'rates', title: 'Taux de change', value: rateText, Icon: ArrowLeftRight, color: '#14B8A6', alert: needed.some((c) => !settings.rates[c]) },
-    { id: 'data', title: 'Mes données', value: 'Importer, exporter, sauvegarder', Icon: Database, color: '#0EA5E9', advanced: true },
-    { id: 'trash', title: 'Corbeille', value: trashCount ? `${trashCount} élément${trashCount > 1 ? 's' : ''} à rétablir` : 'Vide', Icon: Trash2, color: '#64748B', advanced: true },
-    { id: 'icons', title: 'Mes icônes', value: customIcons.length ? `${customIcons.length} icône${customIcons.length > 1 ? 's' : ''}` : 'Ajouter les tiennes', Icon: Shapes, color: '#EC4899', advanced: true },
+    // Devises et taux : l'alerte reste visible (même en interface simple) tant qu'un taux manque
+    { id: 'currencies', title: 'Devises et taux', value: `${settings.secondCurrency ? `${settings.mainCurrency} · ${settings.secondCurrency}` : settings.mainCurrency} · ${rateText}`, Icon: Coins, color: '#F59E0B', alert: needed.some((c) => !settings.rates[c]) },
+    { id: 'data', title: 'Mes données', value: trashCount ? `Sauvegarde, icônes · ${trashCount} dans la corbeille` : customIcons.length ? `Sauvegarde, corbeille · ${customIcons.length} icône${customIcons.length > 1 ? 's' : ''}` : 'Importer, exporter, corbeille, icônes', Icon: Database, color: '#0EA5E9', advanced: true },
   ];
   const visible = rows.filter((r) => showAll || !r.advanced);
   const groups: { title: string; ids: PanelId[] }[] = [
-    { title: 'Général', ids: ['appearance', 'home', 'notifications', 'lock'] },
-    { title: 'Argent', ids: ['currencies', 'rates'] },
-    { title: 'Données', ids: ['data', 'trash', 'icons'] },
+    { title: 'Général', ids: ['appearance', 'notifications', 'lock'] },
+    { title: 'Argent et données', ids: ['currencies', 'data'] },
   ];
   const current = rows.find((r) => r.id === (desktop ? (panel ?? 'appearance') : panel));
 

@@ -98,7 +98,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({ choices, icon, image, co
           </div>
         </div>
       ))}
-      {!custom.length && <p className="text-[12px] text-slate-400 mt-2">Tes propres logos (Orange, Airtel, ta banque…) : Paramètres › Mes icônes.</p>}
+      {!custom.length && <p className="text-[12px] text-slate-400 mt-2">Tes propres logos (Orange, Airtel, ta banque…) : Paramètres › Mes données › Mes icônes.</p>}
     </div>
   );
 };

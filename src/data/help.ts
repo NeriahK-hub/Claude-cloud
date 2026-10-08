@@ -31,13 +31,13 @@ Le montant, la date et la devise se changent en touchant leur bouton, juste sous
     id: 'home-choose',
     category: 'Démarrer',
     title: 'Choisir ce qui s’affiche à l’accueil',
-    body: `Va dans Paramètres › Accueil.
+    body: `Va dans Paramètres › Apparence, section Accueil.
 
 - Active ou coupe chaque carte (santé, bilans, abonnements…).
 - Touche les flèches pour la monter ou la descendre.
 - « Remettre comme avant » rétablit l’accueil d’origine.
 
-La carte Abonnements est cachée au départ : active-la ici si tu veux voir ce que tes abonnements coûtent chaque mois.`,
+La carte Abonnements est cachée au départ : active-la dans cette section si tu veux voir ce que tes abonnements coûtent chaque mois.`,
   },
   {
     id: 'simple',
@@ -94,7 +94,7 @@ Une ligne avec un montant mais sans catégorie est surlignée en orange avant l�
     title: 'Retrouver ce que j’ai supprimé',
     body: `Juste après une suppression, touche Annuler dans le message qui s’affiche (il reste quelques secondes).
 
-Plus tard : Paramètres › Corbeille. Les opérations, transferts, budgets et opérations qui reviennent y restent 30 jours, puis disparaissent tout seuls.
+Plus tard : Paramètres › Mes données › Corbeille. Les opérations, transferts, budgets et opérations qui reviennent y restent 30 jours, puis disparaissent tout seuls.
 
 Les portefeuilles supprimés ne vont pas dans la corbeille : archive-les plutôt.`,
   },

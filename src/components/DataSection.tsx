@@ -130,7 +130,7 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
           )}
           {plan.missingRates.length > 0 && (
             <Note warn>
-              Taux de change manquant pour {plan.missingRates.join(', ')} : ajoute-le dans Paramètres › Taux de change, sinon le total compte ces montants 1 pour 1.
+              Taux de change manquant pour {plan.missingRates.join(', ')} : ajoute-le dans Paramètres › Devises et taux, sinon le total compte ces montants 1 pour 1.
             </Note>
           )}
           <Note>Les soldes sont calculés à partir des transactions du fichier. S'il ne commence pas au tout début, ajuste ensuite le solde de chaque portefeuille.</Note>
