@@ -226,7 +226,7 @@ export function findSubscriptions(txs: Transaction[], settings: Settings, catego
     if (now.getTime() - last.getTime() > 60 * DAY) continue; // arrêté
     const c = topOf(sorted[sorted.length - 1], categories);
     out.push({
-      key: gk,
+      key: k,
       name: sorted[sorted.length - 1].title.trim() || c.name,
       amount: avg,
       color: c.color,
@@ -239,5 +239,11 @@ export function findSubscriptions(txs: Transaction[], settings: Settings, catego
       known: knownNames.has(k),
     });
   }
-  return out.sort((a, b) => b.yearly - a.yearly);
+  // Le même abonnement noté dans deux portefeuilles : une seule ligne (celle qui a le plus d'historique)
+  const best = new Map<string, Subscription>();
+  for (const x of out) {
+    const cur = best.get(x.key);
+    if (!cur || x.count > cur.count || (x.count === cur.count && x.last > cur.last)) best.set(x.key, x);
+  }
+  return [...best.values()].sort((a, b) => b.yearly - a.yearly);
 }
