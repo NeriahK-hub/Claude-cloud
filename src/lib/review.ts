@@ -202,13 +202,16 @@ export function findSubscriptions(txs: Transaction[], settings: Settings, catego
     // Il faut un vrai nom (« Canal+ », « Loyer ») : pas juste le nom de la catégorie
     const k = norm(t.title);
     if (!k || k === norm(t.category)) continue;
-    const g = groups.get(k) ?? [];
+    // Un groupe par portefeuille : le même nom noté dans un autre portefeuille ne doit pas casser le rythme
+    const gk = `${t.walletId}|${k}`;
+    const g = groups.get(gk) ?? [];
     g.push(t);
-    groups.set(k, g);
+    groups.set(gk, g);
   }
   const knownNames = new Set(recurrings.map((r) => norm(r.title)));
   const out: Subscription[] = [];
-  for (const [k, list] of groups) {
+  for (const [gk, list] of groups) {
+    const k = gk.slice(gk.indexOf('|') + 1);
     if (list.length < 3) continue;
     const sorted = [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const months = new Set(sorted.map((t) => t.createdAt.slice(0, 7)));
@@ -223,7 +226,7 @@ export function findSubscriptions(txs: Transaction[], settings: Settings, catego
     if (now.getTime() - last.getTime() > 60 * DAY) continue; // arrêté
     const c = topOf(sorted[sorted.length - 1], categories);
     out.push({
-      key: k,
+      key: gk,
       name: sorted[sorted.length - 1].title.trim() || c.name,
       amount: avg,
       color: c.color,

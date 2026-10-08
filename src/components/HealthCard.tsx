@@ -292,19 +292,19 @@ const Overview: React.FC<{ health: Health; delta: number | null; onClose: () => 
         )}
       </div>
 
-      {/* Conseil de la semaine : le toucher ouvre son détail */}
+      {/* Conseil de la semaine : une ligne sobre, le toucher ouvre son détail */}
       <button
         onClick={() => onOpen({ kind: 'tip', index: weekly })}
-        className="w-full text-left rounded-2xl bg-amber-500/10 p-4 mb-5 flex gap-3 cursor-pointer active:scale-[0.99] transition"
+        className="w-full text-left rounded-3xl bg-slate-100 px-4 py-3.5 mb-5 flex items-center gap-3.5 cursor-pointer active:bg-slate-200/70 transition-colors"
       >
-        <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-bold text-slate-900">Conseil de la semaine</div>
-          <p className="text-[14px] text-slate-700 leading-snug mt-0.5 [text-wrap:pretty]">{health.tips[weekly].text}</p>
-          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber-600 mt-1.5">
-            En savoir plus <ChevronRight className="w-3.5 h-3.5" />
-          </span>
-        </div>
+        <span className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+          <Lightbulb className="w-5 h-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[12px] font-medium text-slate-400">Conseil de la semaine</span>
+          <span className="block text-[15px] font-semibold text-slate-900 leading-snug mt-0.5 line-clamp-3 [text-wrap:pretty]">{nb(health.tips[weekly].text)}</span>
+        </span>
+        <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
       </button>
 
       <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 px-4">Ta note en détail</h3>
