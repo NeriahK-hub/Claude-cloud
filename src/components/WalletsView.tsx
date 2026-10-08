@@ -2609,60 +2609,90 @@ const TransferSheet: React.FC<{
         balanceOf={balanceOf}
       />
 
-      <label className="block mt-3 text-xs font-semibold text-slate-500">Montant envoyé {from && `(${from.currency})`}</label>
-      {/* Curseur direct dans le montant seulement avec souris/clavier : sur téléphone, le clavier ferait
-          défiler la fenêtre jusqu'ici et cacherait « Depuis » (on doit arriver en haut) */}
-      <input autoFocus={FINE_POINTER} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className={amountCls} />
+      {/* Le montant en grand : c'est la seule chose à taper */}
+      <div className="mt-5 mb-4 flex items-baseline justify-center gap-2">
+        {/* Curseur direct dans le montant seulement avec souris/clavier : sur téléphone, le clavier ferait
+            défiler la fenêtre jusqu'ici et cacherait « Depuis » (on doit arriver en haut) */}
+        <input
+          autoFocus={FINE_POINTER}
+          inputMode="decimal"
+          aria-label={`Montant envoyé${from ? ` en ${from.currency}` : ''}`}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="0"
+          style={{ width: `${Math.max(1, amount.length) + 0.5}ch` }}
+          className="max-w-[70%] bg-transparent text-center text-[44px] leading-none font-extrabold tracking-tight tabular-nums text-slate-900 placeholder:text-slate-300 outline-none field-plain"
+        />
+        {from && <span className="text-[15px] font-bold text-slate-400">{from.currency}</span>}
+      </div>
 
-      {from && to && !sameCurrency && (
-        <>
-          <label className="block mt-3 text-xs font-semibold text-slate-500">Montant reçu ({to.currency})</label>
+      {/* Le reste, en lignes courtes */}
+      <div className="rounded-2xl bg-slate-100 divide-y divide-slate-200/70 overflow-hidden">
+        {from && to && !sameCurrency && (
+          <label className="flex items-center gap-3 px-4 min-h-[50px] cursor-text focus-within:bg-slate-200/50 transition-colors">
+            <span className="text-[15px] text-slate-900 shrink-0">Reçu</span>
+            <input
+              inputMode="decimal"
+              aria-label={`Montant reçu en ${to.currency}`}
+              value={received}
+              onChange={(e) => setReceived(e.target.value)}
+              placeholder={auto !== null ? String(Math.round(auto * 100) / 100) : '—'}
+              className="flex-1 min-w-0 bg-transparent text-right text-[15px] font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 outline-none field-plain"
+            />
+            <span className="text-[13px] font-semibold text-slate-400 w-9 shrink-0">{to.currency}</span>
+          </label>
+        )}
+        <label className="flex items-center gap-3 px-4 min-h-[50px] cursor-text focus-within:bg-slate-200/50 transition-colors">
+          <span className="text-[15px] text-slate-900 shrink-0">Frais</span>
           <input
             inputMode="decimal"
-            value={received}
-            onChange={(e) => setReceived(e.target.value)}
-            placeholder={auto !== null ? String(Math.round(auto * 100) / 100) : 'Taux manquant : saisis le montant reçu'}
-            className={amountCls}
+            aria-label="Frais de transaction"
+            value={feeText}
+            onChange={(e) => setFeeText(e.target.value)}
+            placeholder="0"
+            className="flex-1 min-w-0 bg-transparent text-right text-[15px] font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 outline-none field-plain"
           />
-          <p className="text-xs text-slate-400 mt-1">Rempli automatiquement avec ton taux. Corrige-le si le taux réel est différent.</p>
-        </>
-      )}
-
-      <label className="block mt-3 text-xs font-semibold text-slate-500">Frais de transaction {from && `(${from.currency})`} — facultatif</label>
-      <input
-        inputMode="decimal"
-        value={feeText}
-        onChange={(e) => setFeeText(e.target.value)}
-        placeholder="0 (ex. frais Mobile Money)"
-        className="w-full mt-1 px-4 py-2.5 rounded-2xl bg-slate-100 text-sm font-semibold outline-none focus:ring-2 focus:ring-accent tabular-nums"
-      />
-      {from && value > 0 && fee > 0 && feeOk && (
-        <p className="text-xs text-slate-500 mt-1">
-          Total retiré de {from.name} : <b>{formatMoney(value + fee, from.currency)}</b> ({formatMoney(value, from.currency)} + {formatMoney(fee, from.currency)} de
-          frais, comptés comme une dépense).
+          <span className="text-[13px] font-semibold text-slate-400 w-9 shrink-0">{from?.currency}</span>
+        </label>
+        <label className="flex items-center gap-3 px-4 min-h-[50px] cursor-text focus-within:bg-slate-200/50 transition-colors">
+          <span className="text-[15px] text-slate-900 shrink-0">Note</span>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            aria-label="Note"
+            placeholder="Facultatif"
+            className="flex-1 min-w-0 bg-transparent text-right text-[15px] text-slate-900 placeholder:text-slate-400 outline-none field-plain"
+          />
+        </label>
+      </div>
+      {/* Taux : une courte ligne seulement quand elle sert */}
+      {from && to && !sameCurrency && value > 0 && (
+        <p className={`text-[12px] mt-1.5 px-4 ${auto === null && !received ? 'text-amber-600' : 'text-slate-400'}`}>
+          {auto === null && !received ? 'Taux manquant : tape le montant reçu.' : received ? (
+            <button type="button" onClick={() => setReceived('')} className="font-semibold text-slate-500 underline underline-offset-2 cursor-pointer">
+              Revenir au taux automatique
+            </button>
+          ) : (
+            'Au taux de tes Paramètres'
+          )}
         </p>
       )}
 
-      <input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Note (facultatif)"
-        className="w-full mt-3 px-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent"
-      />
+      <DateField value={day} onChange={(d) => setDay(d || localDay(new Date()))} shortcuts="past" label="Date du transfert" className="mt-3" />
 
-      <label className="block mt-3 text-xs font-semibold text-slate-500">Date du transfert</label>
-      <DateField value={day} onChange={(d) => setDay(d || localDay(new Date()))} shortcuts="past" label="Date du transfert" className="mt-1" />
-
-      {from && value + (feeOk ? fee : 0) > balanceOf(from) && from.kind !== 'credit' && (
-        <p className="text-xs text-amber-600 mt-2">Attention : c'est plus que le solde de {from.name}.</p>
+      {from && fee > 0 && feeOk && value > 0 && (
+        <p className="text-[13px] text-slate-500 mt-3 px-1">
+          Total retiré : <b className="text-slate-700">{formatMoney(value + fee, from.currency)}</b>
+        </p>
       )}
+      {from && value + (feeOk ? fee : 0) > balanceOf(from) && from.kind !== 'credit' && <p className="text-[13px] text-amber-600 mt-2 px-1">Plus que le solde disponible.</p>}
 
       <button
         disabled={!valid}
         onClick={() => onConfirm(fromId, toId, value, Math.round(toValue * 100) / 100, note.trim(), fee, dayToIso(day))}
-        className="w-full mt-4 py-3.5 rounded-2xl bg-accent disabled:bg-slate-100 disabled:text-slate-400 text-slate-900 font-bold text-sm cursor-pointer disabled:cursor-default"
+        className="w-full mt-4 h-12 rounded-2xl bg-accent hover:bg-accent-hover disabled:bg-slate-100 disabled:text-slate-400 text-slate-900 font-bold text-[15px] cursor-pointer disabled:cursor-default active:scale-[0.98] transition"
       >
-        {valid && from && to ? `Transférer ${formatMoney(value, from.currency)} vers ${to.name}` : 'Choisis les portefeuilles et le montant'}
+        {valid && from ? `Transférer ${formatMoney(value, from.currency)}` : from && to ? 'Saisis un montant' : 'Choisis les portefeuilles'}
       </button>
     </Sheet>
   );
