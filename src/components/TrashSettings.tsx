@@ -41,37 +41,43 @@ export const TrashSettings: React.FC<{ onRestore: (id: string) => void }> = ({ o
         {items.map((x) => {
           const { Icon, color, what } = look(x);
           return (
-            <div key={x.id} className="flex items-center gap-3 pl-3.5 pr-3 py-3">
-              <span className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0" style={{ background: `${color}1f`, color }}>
-                <Icon className="w-5 h-5" />
-              </span>
-              <span className="flex-1 min-w-0">
-                <span className="block text-[15px] font-semibold text-slate-900 truncate">{x.label}</span>
-                <span className="block text-[12px] text-slate-500 truncate">
-                  {what}
-                  {detail(x) && ` · ${detail(x)}`} · {ago(x.at)}
+            <div key={x.id} className="px-3.5 py-3">
+              <div className="flex items-center gap-3">
+                <span className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0" style={{ background: `${color}1f`, color }}>
+                  <Icon className="w-5 h-5" />
                 </span>
-                <span className="block text-[11px] text-slate-400">Encore {daysLeft(x)} jour{daysLeft(x) > 1 ? 's' : ''}</span>
-              </span>
-              <button
-                onClick={() => {
-                  haptic();
-                  onRestore(x.id);
-                }}
-                className="shrink-0 h-9 px-3.5 rounded-full bg-accent hover:bg-accent-hover text-[13px] font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition"
-              >
-                <Undo2 className="w-3.5 h-3.5" /> Rétablir
-              </button>
-              <button
-                onClick={async () => {
-                  const ok = await askConfirm({ title: 'Supprimer pour de bon ?', message: 'Tu ne pourras plus le rétablir.', confirmLabel: 'Supprimer', danger: true });
-                  if (ok) trashRemove(x.id);
-                }}
-                aria-label="Supprimer définitivement"
-                className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-slate-400 cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[15px] font-semibold text-slate-900 truncate">{x.label}</span>
+                  <span className="block text-[12px] text-slate-500 truncate">
+                    {what}
+                    {detail(x) && ` · ${detail(x)}`} · {ago(x.at)}
+                  </span>
+                </span>
+                <button
+                  onClick={async () => {
+                    const ok = await askConfirm({ title: 'Supprimer pour de bon ?', message: 'Tu ne pourras plus le rétablir.', confirmLabel: 'Supprimer', danger: true });
+                    if (ok) trashRemove(x.id);
+                  }}
+                  aria-label="Supprimer définitivement"
+                  className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-slate-400 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="mt-2.5 flex items-center justify-between gap-3 pl-[52px]">
+                <span className="text-[12px] text-slate-400">
+                  Encore {daysLeft(x)} jour{daysLeft(x) > 1 ? 's' : ''}
+                </span>
+                <button
+                  onClick={() => {
+                    haptic();
+                    onRestore(x.id);
+                  }}
+                  className="shrink-0 h-9 px-4 rounded-full bg-accent hover:bg-accent-hover text-[13px] font-bold flex items-center gap-1.5 cursor-pointer active:scale-95 transition"
+                >
+                  <Undo2 className="w-3.5 h-3.5" /> Rétablir
+                </button>
+              </div>
             </div>
           );
         })}

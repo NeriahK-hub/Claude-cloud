@@ -1184,7 +1184,7 @@ export default function App() {
         return;
       }
       const page = q.get('page');
-      if (page && ['home', 'transactions', 'wallets', 'profile', 'upcoming', 'budgets', 'history', 'debts', 'statistic', 'goals'].includes(page)) {
+      if (page && ['home', 'transactions', 'wallets', 'profile', 'upcoming', 'budgets', 'history', 'debts', 'statistic', 'goals', 'settings', 'categories', 'help', 'places', 'ristourne'].includes(page)) {
         navigate(page as Page);
         return;
       }
