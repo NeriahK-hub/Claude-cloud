@@ -404,7 +404,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
               />
             )}
             {page === 'settings' && (
-              <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
+              <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onRestoreTrash={p.onRestoreTrash} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
             )}
             {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} onOpenTutorial={p.onOpenTutorial} />}
         {page === 'places' && <PlacesView onBack={() => onNavigate('profile')} />}

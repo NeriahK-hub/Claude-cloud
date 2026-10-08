@@ -26,6 +26,7 @@ import type { DebtPreset } from './components/DebtsView';
 import { budgetPace, budgetStatus, periodOf } from './lib/budgets';
 import { unusualExpenses } from './lib/unusual';
 import { uuid } from './lib/ids';
+import { getTrash, trashAdd, trashClear, trashRemove } from './lib/trash';
 import type { DuplicatePlan } from './lib/dedupe';
 import type { Period } from './lib/periods';
 
@@ -118,6 +119,8 @@ export default function App() {
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const selectedTransaction = transactions.find((t) => t.id === selectedTxId) ?? null;
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; run: () => void } | null>(null);
+  const toastTimer = useRef(0);
   // Rejoindre un portefeuille partagé : code d'un lien /r/CODE ouvert, '' = code à taper, null = fermé
   const [joinCode, setJoinCode] = useState<string | null>(() => takeInviteFromUrl());
   const closeJoin = () => {
@@ -155,10 +158,16 @@ export default function App() {
     : totalBalance;
 
   // Message de confirmation (+ petit double « tic » : l'action a bien été faite)
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, action?: { label: string; run: () => void }) => {
     haptic('success');
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setToastAction(action ?? null);
+    // Un message avec « Annuler » reste plus longtemps, le temps de le toucher
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => {
+      setToastMessage(null);
+      setToastAction(null);
+    }, action ? 7000 : 3500);
   };
 
   // Page d'une fonctionnalité désactivée depuis l'espace admin : on n'y va pas
@@ -481,9 +490,11 @@ export default function App() {
   // Dettes et prêts : supprimer toutes les opérations d'une dette / d'un prêt saisi par erreur
   const handleDeleteDebts = (ids: string[], message: string) => {
     const gone = new Set(ids);
+    const removed = transactions.filter((t) => gone.has(t.id));
+    const trashId = removed.length ? trashAdd({ kind: 'transactions', txs: removed, label: removed.length > 1 ? `${removed.length} opérations de dette` : removed[0].title }) : null;
     setTransactions((prev) => prev.filter((t) => !gone.has(t.id)));
     unlinkDebtTxs(gone);
-    showToast(message);
+    showToast(message, trashId ? { label: 'Annuler', run: () => restoreTrash(trashId) } : undefined);
   };
 
   // Opération supprimée alors qu'elle est reliée à une dette partagée : mon mouvement encore
@@ -500,12 +511,32 @@ export default function App() {
     );
   };
 
+  // Rétablir ce qui est dans la corbeille (nouveaux identifiants : le compte en ligne a déjà reçu la suppression)
+  const restoreTrash = (id: string) => {
+    const item = getTrash().find((x) => x.id === id);
+    if (!item) return;
+    const walletOk = (wid: string) => wallets.some((w) => w.id === wid);
+    if (item.kind === 'transactions') {
+      if (!item.txs.every((t) => walletOk(t.walletId))) return showToast('Le portefeuille n\u2019existe plus : impossible de rétablir');
+      setTransactions((prev) => [...item.txs.map((t) => ({ ...t, id: uuid() })), ...prev]);
+    } else if (item.kind === 'budget') {
+      setBudgets((prev) => [{ ...item.budget, id: uuid() }, ...prev]);
+    } else {
+      if (!walletOk(item.recurring.walletId)) return showToast('Le portefeuille n\u2019existe plus : impossible de rétablir');
+      setRecurrings((prev) => [{ ...item.recurring, id: uuid() }, ...prev]);
+    }
+    trashRemove(id);
+    showToast('Rétabli');
+  };
+
   const handleDeleteTransaction = (tx: Transaction) => {
-    const ids = new Set(groupOf(tx).map((t) => t.id));
+    const group = groupOf(tx);
+    const ids = new Set(group.map((t) => t.id));
+    const trashId = trashAdd({ kind: 'transactions', txs: group, label: group.length > 1 ? `Transfert · ${tx.title}` : tx.title });
     setTransactions((prev) => prev.filter((t) => !ids.has(t.id)));
     unlinkDebtTxs(ids);
     setSelectedTxId(null);
-    showToast(ids.size > 1 ? 'Transfert supprimé' : 'Transaction supprimée');
+    showToast(ids.size > 1 ? 'Transfert supprimé' : 'Transaction supprimée', { label: 'Annuler', run: () => restoreTrash(trashId) });
   };
 
   const handleDuplicateTransaction = (tx: Transaction) => {
@@ -827,8 +858,10 @@ export default function App() {
   };
   const handleUpdateRecurring = (id: string, changes: Partial<Recurring>) => setRecurrings((prev) => prev.map((r) => (r.id === id ? { ...r, ...changes } : r)));
   const handleDeleteRecurring = (id: string) => {
-    setRecurrings((prev) => prev.filter((r) => r.id !== id));
-    showToast('Supprimée');
+    const r = recurrings.find((x) => x.id === id);
+    const trashId = r ? trashAdd({ kind: 'recurring', recurring: r, label: r.title }) : null;
+    setRecurrings((prev) => prev.filter((x) => x.id !== id));
+    showToast('Supprimée', trashId ? { label: 'Annuler', run: () => restoreTrash(trashId) } : undefined);
   };
   // L'opération d'une échéance (identifiant fixe : jamais en double, même créée sur deux téléphones)
   const recordOccurrence = (r: Recurring, day: string, amount: number) => {
@@ -954,8 +987,11 @@ export default function App() {
     showToast('Budget modifié');
   };
   const handleDeleteBudget = (id: string) => {
-    setBudgets((prev) => prev.filter((b) => b.id !== id));
-    showToast('Budget supprimé');
+    const b = budgets.find((x) => x.id === id);
+    const cat = b && categories.find((c) => c.id === b.categoryId);
+    const trashId = b ? trashAdd({ kind: 'budget', budget: b, label: `Budget · ${cat?.name ?? 'Toutes les dépenses'}` }) : null;
+    setBudgets((prev) => prev.filter((x) => x.id !== id));
+    showToast('Budget supprimé', trashId ? { label: 'Annuler', run: () => restoreTrash(trashId) } : undefined);
   };
 
   // Annonces publiées depuis l'espace admin : ajoutées une fois aux notifications
@@ -1304,6 +1340,7 @@ export default function App() {
       setPage('home');
       setWallets(DEFAULT_WALLETS);
       setTransactions([]);
+      trashClear(); // la corbeille appartient à ce compte
       setCategories(DEFAULT_CATEGORIES);
       setBudgets([]);
       setRecurrings([]);
@@ -1390,6 +1427,7 @@ export default function App() {
     onAddBudget: handleAddBudget,
     onUpdateBudget: handleUpdateBudget,
     onDeleteBudget: handleDeleteBudget,
+    onRestoreTrash: restoreTrash,
     cloud,
     onOpenJoin: () => setJoinCode(''),
     onOpenJoinRistourne: () => setRistourneCode(''),
@@ -1456,6 +1494,17 @@ export default function App() {
               <Check className="w-[18px] h-[18px]" strokeWidth={3.5} />
             </span>
             <span>{toastMessage}</span>
+            {toastAction && (
+              <button
+                onClick={() => {
+                  toastAction.run();
+                  setToastAction(null);
+                }}
+                className="pointer-events-auto ml-1 h-8 px-3 rounded-full bg-slate-100 text-[13px] font-bold text-slate-900 cursor-pointer active:scale-95 transition"
+              >
+                {toastAction.label}
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -50,6 +50,7 @@ export interface SharedProps {
   onAddBudget: (b: Omit<Budget, 'id' | 'createdAt'>) => void;
   onUpdateBudget: (id: string, changes: Partial<Budget>) => void;
   onDeleteBudget: (id: string) => void;
+  onRestoreTrash: (id: string) => void; // Paramètres › Corbeille : rétablir ce qui a été supprimé
   cloud: Cloud;
   onOpenJoin: () => void; // « Rejoindre un portefeuille » avec un lien ou un code
   onOpenJoinRistourne: () => void; // « Rejoindre une ristourne » avec un code à taper

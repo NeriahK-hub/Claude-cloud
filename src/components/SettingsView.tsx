@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronDown, ChevronRight, Sun, Moon, SmartphoneIcon, Check, Palette, Type, Bell, Lock, Coins, ArrowLeftRight, Database, Shapes, LayoutGrid } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Sun, Moon, SmartphoneIcon, Check, Palette, Type, Bell, Lock, Coins, ArrowLeftRight, Database, Shapes, LayoutGrid, Trash2 } from 'lucide-react';
 import { useNotifyState } from '../lib/notify';
 import { useLockConfig } from '../lib/lock';
 import { useCustomIcons } from '../lib/customIcons';
@@ -24,6 +24,8 @@ import { useIsDesktop } from '../hooks/useIsDesktop';
 import { InterfacePicker } from './InterfacePicker';
 import { setPrefs, useDisplayPrefs } from '../lib/display';
 import { HomeSettings } from './HomeSettings';
+import { TrashSettings } from './TrashSettings';
+import { useTrash } from '../lib/trash';
 import { HOME_CARDS } from '../lib/homeLayout';
 
 interface SettingsViewProps {
@@ -35,6 +37,7 @@ interface SettingsViewProps {
   ristournes: Ristourne[];
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
+  onRestoreTrash: (id: string) => void;
   onChange: (s: Settings) => void;
   onBack: () => void;
 }
@@ -48,7 +51,7 @@ const Block: React.FC<{ title?: string; hint?: string; children: React.ReactNode
   </div>
 );
 
-type PanelId = 'appearance' | 'home' | 'notifications' | 'lock' | 'currencies' | 'rates' | 'data' | 'icons';
+type PanelId = 'appearance' | 'home' | 'trash' | 'notifications' | 'lock' | 'currencies' | 'rates' | 'data' | 'icons';
 
 // Bouton qui déplie la liste de devises (évite deux longues listes à l'écran)
 const Collapsible: React.FC<{ label: string; children: (close: () => void) => React.ReactNode }> = ({ label, children }) => {
@@ -79,7 +82,8 @@ const THEMES: { id: ThemePref; label: string; Icon: typeof Sun }[] = [
   { id: 'dark', label: 'Sombre', Icon: Moon },
 ];
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, budgets, ristournes, onImport, onRestore, onChange, onBack }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, budgets, ristournes, onImport, onRestore, onRestoreTrash, onChange, onBack }) => {
+  const trashCount = useTrash().length;
   const desktop = useIsDesktop(); // ordinateur : pas de retour ni de titre en double, contenu sur plusieurs colonnes
   const [theme, setTheme] = useState(getThemePref);
   const [haptics, setHaptics] = useState(hapticsEnabled);
@@ -242,6 +246,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
       </>
     ),
     home: <HomeSettings />,
+    trash: <TrashSettings onRestore={onRestoreTrash} />,
     notifications: (
       <Block hint="Budget dépassé, tour de ristourne, remboursement à confirmer, invitation… Avec un compte connecté, elles arrivent même quand Wallo est fermé.">
         <NotificationsSettings />
@@ -366,13 +371,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
     { id: 'currencies', title: 'Devises', value: settings.secondCurrency ? `${settings.mainCurrency} · ${settings.secondCurrency}` : settings.mainCurrency, Icon: Coins, color: '#F59E0B', advanced: true },
     { id: 'rates', title: 'Taux de change', value: rateText, Icon: ArrowLeftRight, color: '#14B8A6', alert: needed.some((c) => !settings.rates[c]) },
     { id: 'data', title: 'Mes données', value: 'Importer, exporter, sauvegarder', Icon: Database, color: '#0EA5E9', advanced: true },
+    { id: 'trash', title: 'Corbeille', value: trashCount ? `${trashCount} élément${trashCount > 1 ? 's' : ''} à rétablir` : 'Vide', Icon: Trash2, color: '#64748B', advanced: true },
     { id: 'icons', title: 'Mes icônes', value: customIcons.length ? `${customIcons.length} icône${customIcons.length > 1 ? 's' : ''}` : 'Ajouter les tiennes', Icon: Shapes, color: '#EC4899', advanced: true },
   ];
   const visible = rows.filter((r) => showAll || !r.advanced);
   const groups: { title: string; ids: PanelId[] }[] = [
     { title: 'Général', ids: ['appearance', 'home', 'notifications', 'lock'] },
     { title: 'Argent', ids: ['currencies', 'rates'] },
-    { title: 'Données', ids: ['data', 'icons'] },
+    { title: 'Données', ids: ['data', 'trash', 'icons'] },
   ];
   const current = rows.find((r) => r.id === (desktop ? (panel ?? 'appearance') : panel));
 
