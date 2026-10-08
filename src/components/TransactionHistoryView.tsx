@@ -113,28 +113,22 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
 
   // Morceaux communs aux mises en page téléphone et ordinateur
   const balanceBox = balances && (
-      <div className="mt-3 px-4 py-3 rounded-2xl bg-white border border-slate-100 text-sm">
-        <div className="flex justify-between">
-          <span className="text-slate-500">Solde à l'ouverture</span>
-          <span className="font-semibold tabular-nums text-slate-900">{formatMoney(balances.opening, main)}</span>
+      <div className="mt-3 px-4 py-3.5 rounded-2xl bg-white border border-slate-100">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[13px] font-semibold text-slate-500">Solde de fin</span>
+          {onOpenReport && (
+            <button onClick={() => onOpenReport(period)} className="flex items-center gap-0.5 text-[13px] font-bold text-emerald-600 cursor-pointer">
+              Rapport <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
-        <div className="flex justify-between mt-1.5">
-          <span className="text-slate-500">Solde de fin</span>
-          <span className="font-semibold tabular-nums text-slate-900">{formatMoney(balances.closing, main)}</span>
-        </div>
-        <div className="ml-auto w-1/2 border-t border-slate-200 mt-2.5 pt-2.5 text-right">
-          <span className={`font-extrabold tabular-nums ${balances.closing - balances.opening >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 mt-0.5">
+          <span className="text-[24px] font-extrabold tabular-nums tracking-tight text-slate-900 whitespace-nowrap">{formatMoney(balances.closing, main)}</span>
+          <span className={`text-[15px] font-bold tabular-nums whitespace-nowrap ${balances.closing - balances.opening >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
             {signed(balances.closing - balances.opening)}
           </span>
         </div>
-        {onOpenReport && (
-          <button
-            onClick={() => onOpenReport(period)}
-            className="w-full mt-2 pt-2.5 border-t border-slate-100 flex items-center justify-center gap-1 text-sm font-bold text-emerald-600 cursor-pointer"
-          >
-            Afficher le rapport pour cette période <ChevronRight className="w-4 h-4" />
-          </button>
-        )}
+        <div className="text-[12px] text-slate-400 mt-0.5 tabular-nums">Ouverture : {formatMoney(balances.opening, main)}</div>
       </div>
     );
   const totalsRow = (
