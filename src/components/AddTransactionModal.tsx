@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Delete, Settings2, ChevronDown, ChevronLeft, ArrowUpRight, ArrowDownLeft, X, EyeOff, CalendarDays, Users, HandCoins } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Delete, Settings2, ChevronDown, ChevronLeft, ArrowUpRight, ArrowDownLeft, X, EyeOff, CalendarDays, Users, HandCoins, History, ListPlus } from 'lucide-react';
 import { SplitPanel, SplitResult } from './SplitPanel';
+import { BatchAddSheet, BatchItem } from './BatchAddSheet';
 import { Category, categoriesFor } from '../data/categories';
 import { isShared, MemberChips, ME_ID } from './Members';
 import { useDisplayPrefs } from '../lib/display';
@@ -11,7 +12,7 @@ import { convertBetween, formatMoney } from '../lib/money';
 import { haptic } from '../lib/haptics';
 import { SelCheck } from './SelCheck';
 import { DateField, DatePicker, localDay } from './DatePicker';
-import { NoteHistoryItem, suggestNotes } from '../lib/noteSuggestions';
+import { NoteHistoryItem, suggestNotes, UsualAmount } from '../lib/noteSuggestions';
 import { useFeature } from '../lib/remoteConfig';
 import { interestAmount } from '../lib/debtShares';
 
@@ -38,13 +39,79 @@ interface AddTransactionModalProps {
   onSave: (amount: number, category: Category, note: string, walletId: string, currency: string, memberId?: string, withPerson?: string, excludeFromReport?: boolean, createdAt?: string, interest?: number, dueDate?: string) => void;
   onManageCategories: () => void;
   onSplit?: (bill: SplitBill) => void; // « Partager l'addition »
+  onSaveMany?: (items: BatchItem[], walletId: string, day: string) => void; // « Plusieurs dépenses »
   // Ouverture pré-remplie (ex. « Il me rembourse » depuis Dettes et prêts)
   preset?: { categoryId?: string; withPerson?: string; amount?: number; currency?: string } | null;
   people?: string[]; // noms déjà utilisés (suggestions pour « Avec qui ? »)
   noteHistory?: NoteHistoryItem[]; // notes déjà écrites (suggestions pendant la saisie)
+  usualAmounts?: Record<string, UsualAmount[]>; // montants déjà utilisés par catégorie (proposés d'un toucher)
 }
 
+// Brouillon : si on ferme sans enregistrer, on retrouve ce qu'on avait tapé (24 h)
+const DRAFT_KEY = 'ap.draft';
+interface Draft {
+  mode: AddMode;
+  amount: string;
+  note: string;
+  selectedId: string;
+  walletId: string;
+  currency: string;
+  day: string;
+  person: string;
+  at: number;
+}
+const readDraft = (): Draft | null => {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null') as Draft | null;
+    return d && Date.now() - d.at < 86400000 ? d : null;
+  } catch {
+    return null;
+  }
+};
+const writeDraft = (d: Draft | null) => {
+  try {
+    if (d) localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    else localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // pas grave : le brouillon est un confort
+  }
+};
+
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
+// Clavier avec calculatrice : une 4e colonne d'opérations (÷ × − +), comme une vraie calculatrice
+const CALC_KEYS = ['1', '2', '3', '/', '4', '5', '6', '*', '7', '8', '9', '-', '.', '0', 'del', '+'];
+const OPS = ['+', '-', '*', '/'];
+const OP_LABEL: Record<string, string> = { '+': '+', '-': '−', '*': '×', '/': '÷' };
+
+// « 5000+2500×2 » -> 10 000 (× et ÷ d'abord, puis + et −) ; une opération qui traîne à la fin est ignorée
+export function evalAmount(expr: string): number {
+  const text = OPS.includes(expr.slice(-1)) ? expr.slice(0, -1) : expr;
+  const nums = text.split(/[+\-*/]/).map((n) => parseFloat(n) || 0);
+  const ops = text.replace(/[^+\-*/]/g, '').split('');
+  // × et ÷
+  const n2: number[] = [nums[0] ?? 0];
+  const o2: string[] = [];
+  ops.forEach((op, i) => {
+    const x = nums[i + 1];
+    if (op === '*') n2[n2.length - 1] *= x;
+    else if (op === '/') n2[n2.length - 1] = x === 0 ? 0 : n2[n2.length - 1] / x;
+    else {
+      o2.push(op);
+      n2.push(x);
+    }
+  });
+  // + et −
+  const r = n2.reduce((acc, x, i) => (i === 0 ? x : o2[i - 1] === '+' ? acc + x : acc - x), 0);
+  return Math.round(r * 100) / 100;
+}
+
+// Montant tapé -> texte lisible : « 5 000 + 2 500,5 »
+const fmtAmount = (a: string) =>
+  a.replace(/\d+(\.\d*)?|[+\-*/]/g, (m) => {
+    if (OPS.includes(m)) return ` ${OP_LABEL[m]} `;
+    const [int, dec] = m.split('.');
+    return `${Number(int || 0).toLocaleString('fr-FR')}${dec !== undefined ? `,${dec}` : ''}`;
+  });
 
 // Explication en langage simple des catégories Dette / Prêt par défaut
 const DEBT_HINTS: Record<string, string> = {
@@ -87,6 +154,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   preset,
   people = [],
   noteHistory = [],
+  usualAmounts = {},
+  onSaveMany,
 }) => {
   const [amount, setAmount] = useState('');
   const [parentId, setParentId] = useState(''); // catégorie principale choisie
@@ -106,6 +175,9 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   // Mode simple : seulement « J'ai dépensé » / « J'ai reçu » (sauf si on arrive déjà sur Dette / Prêt)
   const tabs: AddMode[] = debtsOn && (!simpleMode || mode === 'debt') ? ['expense', 'income', 'debt'] : ['expense', 'income'];
   const [panel, setPanel] = useState<Panel>(null);
+  const [batch, setBatch] = useState(false); // fenêtre « Plusieurs dépenses »
+  const [draft, setDraft] = useState<Draft | null>(null); // brouillon proposé à l'ouverture
+  const pendingDraft = useRef<Draft | null>(null);
   const [subOf, setSubOf] = useState<string | null>(null); // panneau catégorie : sous-catégories de…
 
   const available = mode ? categoriesFor(mode, categories) : [];
@@ -151,6 +223,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       setMemberId(ME_ID);
       setWalletId(defaultWalletId);
       setCurrency(preset?.currency ?? wallets.find((w) => w.id === defaultWalletId)?.currency ?? '');
+      setDraft(preset ? null : readDraft());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -169,6 +242,39 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
+  // « Reprendre » le brouillon : on remet ce qui avait été tapé (après le changement d'onglet, si besoin)
+  const applyDraft = (d: Draft) => {
+    const c = categoriesFor(d.mode, categories).find((x) => x.id === d.selectedId);
+    setAmount(d.amount);
+    setNote(d.note);
+    setPerson(d.person);
+    setDay(d.day);
+    if (wallets.some((w) => w.id === d.walletId)) setWalletId(d.walletId);
+    if (d.currency) setCurrency(d.currency);
+    if (c) {
+      setSelectedId(c.id);
+      setParentId(c.parentId ?? c.id);
+      setPanel(null);
+    }
+  };
+  useEffect(() => {
+    const d = pendingDraft.current;
+    if (!d || d.mode !== mode) return;
+    pendingDraft.current = null;
+    applyDraft(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+  const resumeDraft = (d: Draft) => {
+    haptic();
+    setDraft(null);
+    writeDraft(null);
+    if (d.mode === mode) applyDraft(d);
+    else {
+      pendingDraft.current = d;
+      onChangeMode(d.mode);
+    }
+  };
+
   const pressKey = (k: string) => {
     haptic();
     return pressAmount(k);
@@ -176,13 +282,20 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const pressAmount = (k: string) =>
     setAmount((a) => {
       if (k === 'del') return a.slice(0, -1);
-      if (k === '.' && a.includes('.')) return a;
-      if (a.includes('.') && a.split('.')[1].length >= 2) return a;
-      if (k === '.' && a === '') return '0.';
-      return a === '0' && k !== '.' ? k : a + k;
+      if (OPS.includes(k)) {
+        if (!a) return a; // pas d'opération sans premier nombre
+        return OPS.includes(a.slice(-1)) ? a.slice(0, -1) + k : a.length >= 24 ? a : a + k;
+      }
+      if (a.length >= 24) return a;
+      const seg = a.split(/[+\-*/]/).pop() ?? '';
+      if (k === '.') return seg.includes('.') ? a : seg === '' ? a + '0.' : a + '.';
+      if (seg.includes('.') && seg.split('.')[1].length >= 2) return a;
+      return seg === '0' ? a.slice(0, -1) + k : a + k;
     });
 
-  const value = parseFloat(amount) || 0;
+  const hasOp = /[+\-*/]/.test(amount);
+  const usualList = mode !== 'debt' && selected ? usualAmounts[selected.id] ?? [] : [];
+  const value = evalAmount(amount);
   const wallet = wallets.find((w) => w.id === walletId) ?? wallets[0];
   const cur = currency || wallet?.currency || '';
   const converted = wallet ? convertBetween(value, cur, wallet.currency, settings) : null;
@@ -191,6 +304,12 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   // Intérêts : seulement quand on prête ou qu'on emprunte (pas pour un remboursement)
   const withInterest = mode === 'debt' && (selected?.id === 'loan-given' || selected?.id === 'debt-taken');
   const interest = withInterest ? interestAmount(interestText, interestPct, value) : 0;
+
+  // Fermer sans enregistrer : on garde un brouillon si quelque chose était tapé
+  const dismiss = () => {
+    if (mode && (value > 0 || note.trim())) writeDraft({ mode, amount, note, selectedId, walletId, currency, day, person, at: Date.now() });
+    onClose();
+  };
 
   const save = () => {
     if (!canSave || !selected || !wallet) return;
@@ -207,6 +326,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       interest > 0 ? interest : undefined,
       withInterest && dueDay ? dueDay : undefined
     );
+    writeDraft(null);
     onClose();
   };
 
@@ -214,10 +334,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') return panel ? setPanel(null) : onClose();
+      if (e.key === 'Escape') return panel ? setPanel(null) : dismiss();
       if ((e.target as HTMLElement).tagName === 'INPUT' || panel) return;
       if (/^[0-9]$/.test(e.key)) pressKey(e.key);
       else if (e.key === '.' || e.key === ',') pressKey('.');
+      else if (OPS.includes(e.key) && !simpleMode) pressKey(e.key);
       else if (e.key === 'Backspace') pressKey('del');
       else if (e.key === 'Enter') save();
       else return;
@@ -456,14 +577,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     }`;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={dismiss}>
       <div
         className="w-full sm:max-w-[420px] max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-y-auto bg-white rounded-t-[28px] sm:rounded-[32px] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Fermer + type */}
         <div className="flex items-center gap-2">
-          <button onClick={onClose} aria-label="Annuler" className="w-10 h-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
+          <button onClick={dismiss} aria-label="Annuler" className="w-10 h-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
             <X className="w-4 h-4" />
           </button>
           <div className={`flex-1 grid ${tabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1 p-1 rounded-2xl bg-slate-200/60`}>
@@ -484,17 +605,41 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
           </div>
         </div>
 
+        {/* Brouillon : ce qui avait été tapé avant de fermer */}
+        {draft && !amount && !note && (
+          <div className="mt-3 flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-2xl bg-slate-100 animate-fade-in">
+            <History className="w-4 h-4 text-slate-500 shrink-0" />
+            <span className="flex-1 min-w-0 text-[13px] text-slate-600 truncate">
+              Brouillon : <b className="text-slate-900 tabular-nums">{fmtAmount(String(evalAmount(draft.amount)))} {draft.currency}</b>
+              {draft.note ? ` · ${draft.note}` : ''}
+            </span>
+            <button onClick={() => resumeDraft(draft)} className="h-8 px-3 rounded-full bg-accent text-[13px] font-bold cursor-pointer active:scale-95 transition">
+              Reprendre
+            </button>
+            <button
+              onClick={() => {
+                writeDraft(null);
+                setDraft(null);
+              }}
+              aria-label="Oublier le brouillon"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Montant */}
         <div className="flex flex-col items-center pt-4 pb-2">
           <div className="flex items-center gap-2 max-w-full">
             <span
-              className={`text-[46px] leading-none font-extrabold tracking-tight tabular-nums truncate ${
+              className={`${amount.length > 13 ? 'text-[28px]' : amount.length > 9 ? 'text-[36px]' : 'text-[46px]'} leading-none font-extrabold tracking-tight tabular-nums truncate ${
                 !amount ? 'text-slate-300' : direction === 'in' ? 'text-emerald-600' : direction === 'out' ? 'text-red-500' : 'text-slate-900'
               }`}
             >
               {amount && direction ? (direction === 'out' ? '−' : '+') : ''}
               {/* « 25 000,5 » : séparateur de milliers pendant la saisie */}
-              {amount ? `${Number(amount.split('.')[0] || 0).toLocaleString('fr-FR')}${amount.includes('.') ? `,${amount.split('.')[1]}` : ''}` : '0'}
+              {amount ? fmtAmount(amount) : '0'}
             </span>
             <button
               onClick={() => setPanel(panel === 'currency' ? null : 'currency')}
@@ -504,6 +649,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               {cur} <ChevronDown className="w-4 h-4" />
             </button>
           </div>
+          {/* Calculatrice : le résultat de l'opération tapée */}
+          {hasOp && value > 0 && <p className="mt-1.5 text-[15px] font-bold text-slate-500 tabular-nums animate-fade-in">= {fmtAmount(String(value))} {cur}</p>}
           {/* Seulement quand ça apporte quelque chose : le portefeuille est déjà dans « Payé avec » */}
           {(rateMissing || (wallet && cur !== wallet.currency && value > 0) || (!direction && !(mode === 'debt' && panel === 'category'))) && (
             <p className={`mt-1.5 text-xs ${rateMissing ? 'text-amber-600' : 'text-slate-500'}`}>
@@ -513,6 +660,25 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   ? 'Choisis ce qui se passe'
                   : `≈ ${formatMoney(converted ?? 0, wallet!.currency)} sur ${wallet!.name}`}
             </p>
+          )}
+          {/* Montants déjà utilisés pour cette catégorie : un toucher (la place reste réservée une fois le montant tapé) */}
+          {usualList.length > 0 && (
+            <div className={`mt-2 flex flex-wrap justify-center gap-1.5 ${amount ? 'invisible' : ''}`} aria-hidden={!!amount}>
+              {usualList.map((u) => (
+                <button
+                  key={`${u.amount}-${u.currency}`}
+                  tabIndex={amount ? -1 : 0}
+                  onClick={() => {
+                    haptic();
+                    setAmount(String(u.amount));
+                    setCurrency(u.currency);
+                  }}
+                  className="h-7 px-3 rounded-full bg-white border border-slate-200 text-[12px] font-semibold text-slate-700 tabular-nums cursor-pointer active:scale-95 transition"
+                >
+                  {fmtAmount(String(u.amount))} {u.currency}
+                </button>
+              ))}
+            </div>
           )}
           {/* Date : aujourd'hui par défaut, touche pour en choisir une autre */}
           <button
@@ -651,6 +817,18 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                       <Users className="w-3.5 h-3.5" /> Partager
                     </button>
                   )}
+                  {/* Plusieurs dépenses d'un coup (taxi, pain, crédit…) */}
+                  {mode === 'expense' && onSaveMany && !simpleMode && (
+                    <button
+                      type="button"
+                      onClick={() => setBatch(true)}
+                      aria-label="Noter plusieurs dépenses"
+                      title="Plusieurs dépenses"
+                      className="shrink-0 h-9 px-3 rounded-2xl bg-slate-100 hover:bg-slate-200/70 text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <ListPlus className="w-3.5 h-3.5" /> Plusieurs
+                    </button>
+                  )}
                 </div>
               )}
               {noteIdeas.length > 0 && (
@@ -684,15 +862,17 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 </button>
               )}
               </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {KEYS.map((k) => (
+              <div className={`grid ${simpleMode ? 'grid-cols-3' : 'grid-cols-4'} gap-1.5`}>
+                {(simpleMode ? KEYS : CALC_KEYS).map((k) => (
                   <button
                     key={k}
                     onClick={() => pressKey(k)}
-                    aria-label={k === 'del' ? 'Effacer' : k}
-                    className={`${simpleMode ? 'h-14 text-2xl' : 'h-12 text-xl'} rounded-2xl bg-slate-100 active:bg-slate-200 font-semibold text-slate-800 flex items-center justify-center cursor-pointer select-none`}
+                    aria-label={k === 'del' ? 'Effacer' : OPS.includes(k) ? { '+': 'plus', '-': 'moins', '*': 'fois', '/': 'divisé par' }[k] : k}
+                    className={`${simpleMode ? 'h-14 text-2xl' : 'h-12 text-xl'} rounded-2xl font-semibold flex items-center justify-center cursor-pointer select-none ${
+                      OPS.includes(k) ? 'bg-slate-200/70 active:bg-slate-300/70 text-slate-600' : 'bg-slate-100 active:bg-slate-200 text-slate-800'
+                    } ${OPS.includes(k) && amount.endsWith(k) ? 'is-selected' : ''}`}
                   >
-                    {k === 'del' ? <Delete className="w-5 h-5" /> : k === '.' ? ',' : k}
+                    {k === 'del' ? <Delete className="w-5 h-5" /> : k === '.' ? ',' : OPS.includes(k) ? OP_LABEL[k] : k}
                   </button>
                 ))}
               </div>
@@ -707,6 +887,22 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
           )}
         </div>
       </div>
+      {batch && onSaveMany && (
+        <BatchAddSheet
+          categories={categories}
+          wallets={wallets}
+          defaultWalletId={walletId || defaultWalletId}
+          noteHistory={noteHistory}
+          usualAmounts={usualAmounts}
+          onClose={() => setBatch(false)}
+          onSave={(items, wId, day) => {
+            onSaveMany(items, wId, day);
+            writeDraft(null);
+            setBatch(false);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 };

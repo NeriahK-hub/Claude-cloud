@@ -34,7 +34,8 @@ import { DesktopApp } from './components/DesktopApp';
 
 // Fenêtres partagées par les deux interfaces
 import { AddTransactionModal, AddMode, SplitBill } from './components/AddTransactionModal';
-import { buildNoteHistory } from './lib/noteSuggestions';
+import { buildAmountHistory, buildNoteHistory } from './lib/noteSuggestions';
+import { localDay as localDayOf } from './components/DatePicker';
 import { canConfirm as canConfirmRistourne } from './lib/ristourne';
 import { shouldShowSplash, Splash } from './components/Splash';
 import { shouldShowNews, shouldShowTutorial, Tutorial } from './components/Tutorial';
@@ -285,6 +286,25 @@ export default function App() {
         ? `${category.name} de ${formatMoney(amount, currency)} enregistré`
         : `${isExpense ? 'Dépense' : 'Revenu'} de ${formatMoney(amount, currency)} enregistré${isExpense ? 'e' : ''}`
     );
+  };
+
+  // « Plusieurs dépenses » : une opération par ligne, un seul message à la fin
+  const handleAddMany = (items: { amount: number; category: Category; note: string }[], walletId: string, day: string) => {
+    const wallet = wallets.find((w) => w.id === walletId);
+    if (!wallet) return;
+    const now = new Date();
+    const [y, m, d] = day.split('-').map(Number);
+    const createdAt = day && day !== localDayOf(now) ? new Date(y, m - 1, d, now.getHours(), now.getMinutes()).toISOString() : undefined;
+    let n = 0;
+    let total = 0;
+    for (const it of [...items].reverse()) {
+      // (on enregistre de la dernière ligne à la première : la liste montre ensuite les lignes dans l'ordre de saisie)
+      if (addOne(it.amount, it.category, it.note, walletId, wallet.currency, true, { createdAt })) {
+        n++;
+        total += it.amount;
+      }
+    }
+    if (n) showToast(`${n} dépense${n > 1 ? 's' : ''} enregistrée${n > 1 ? 's' : ''} · −${formatMoney(total, wallet.currency)}`);
   };
 
   // Partage d'addition : ma part en dépense, et les parts des autres en prêts (j'ai payé)
@@ -1233,6 +1253,7 @@ export default function App() {
 
   // Notes déjà écrites (suggestions dans la fenêtre d'ajout)
   const noteHistory = useMemo(() => buildNoteHistory(transactions), [transactions]);
+  const usualAmounts = useMemo(() => buildAmountHistory(transactions), [transactions]);
 
   // Ce qui est commun aux deux interfaces
   const shared: SharedProps = {
@@ -1357,6 +1378,8 @@ export default function App() {
         preset={addPreset}
         people={people}
         noteHistory={noteHistory}
+        usualAmounts={usualAmounts}
+        onSaveMany={handleAddMany}
         onManageCategories={() => {
           setAddMode(null);
           navigate('categories');

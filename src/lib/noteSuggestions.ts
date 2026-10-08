@@ -68,3 +68,23 @@ export function suggestNotes(
     .slice(0, limit)
     .map((r) => r.x);
 }
+
+// Montants déjà utilisés pour chaque catégorie (les plus récents d'abord, sans doublon) :
+// proposés d'un toucher quand on choisit la catégorie.
+export interface UsualAmount {
+  amount: number;
+  currency: string;
+}
+export function buildAmountHistory(transactions: Transaction[], perCategory = 3): Record<string, UsualAmount[]> {
+  const out: Record<string, UsualAmount[]> = {};
+  const sorted = [...transactions].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  for (const t of sorted) {
+    if (t.type === 'transfer' || t.type === 'adjustment' || !t.categoryId) continue;
+    // Le montant tel qu'il a été tapé (dans sa devise d'origine si elle différait du portefeuille)
+    const amount = Math.abs(t.originalAmount ?? t.amount);
+    const currency = t.originalCurrency ?? t.currency;
+    const list = (out[t.categoryId] ??= []);
+    if (list.length < perCategory && amount > 0 && !list.some((x) => x.amount === amount && x.currency === currency)) list.push({ amount, currency });
+  }
+  return out;
+}
