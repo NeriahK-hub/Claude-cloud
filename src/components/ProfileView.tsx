@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, ChevronRight, Tags, Wallet, History, Pencil, Check, Smartphone, HandCoins, PieChart, Share, MapPin, GraduationCap, CalendarClock, MessageSquareHeart, MessageCircleQuestion, Download, LifeBuoy } from 'lucide-react';
+import { Settings as SettingsIcon, ChevronRight, Tags, Pencil, Check, Smartphone, Share, MapPin, GraduationCap, MessageSquareHeart, MessageCircleQuestion, Download, LifeBuoy } from 'lucide-react';
 import { useInstallWay } from '../lib/install';
 import { InstallGuide } from './InstallGuide';
 import { resetCoach } from './CoachTour';
@@ -9,7 +9,6 @@ import { initialsOf, setProfileName, useProfile } from '../lib/profile';
 import type { Cloud } from '../lib/sync/useCloud';
 import { AccountCard } from './Account';
 import { shareApp } from '../lib/invite';
-import { useFeature } from '../lib/remoteConfig';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 
 interface ProfileViewProps {
@@ -26,8 +25,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud, onO
   const { name } = useProfile();
   const [editing, setEditing] = useState(!name);
   const [draft, setDraft] = useState(name);
-  const debtsOn = useFeature('debts');
-  const budgetsOn = useFeature('budgets');
   const [shared, setShared] = useState<'copied' | 'failed' | null>(null);
   const [tipsReset, setTipsReset] = useState(false);
   const [feedback, setFeedback] = useState(false);
@@ -107,12 +104,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud, onO
       <div className="bg-white rounded-3xl p-2 border border-slate-100">
         {link('Paramètres', 'Apparence, devises, import / export', SettingsIcon, 'settings')}
         {link('Catégories', 'Créer, modifier, ranger', Tags, 'categories')}
-        {link('Portefeuilles', 'Ajouter, réorganiser, partager', Wallet, 'wallets')}
-        {link('Historique', 'Toutes les transactions, par période', History, 'history')}
-        {debtsOn && link('Dettes et prêts', 'Qui te doit, à qui tu dois', HandCoins, 'debts')}
         {link('Banques et distributeurs', 'Trouver une banque ou un ATM près de toi', MapPin, 'places')}
-        {budgetsOn && link('Budgets', 'Limites par mois et par catégorie', PieChart, 'budgets')}
-        {link('À venir', 'Factures et opérations qui reviennent', CalendarClock, 'upcoming')}
       </div>
 
       <div className="bg-white rounded-3xl p-2 border border-slate-100 mt-4">
