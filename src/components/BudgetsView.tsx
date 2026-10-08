@@ -15,6 +15,7 @@ import { DateField } from './DatePicker';
 import { SelCheck } from './SelCheck';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { getPrefs } from '../lib/display';
+import { BudgetHistory, BudgetSuggestions } from './BudgetExtras';
 
 interface BudgetsViewProps {
   budgets: Budget[];
@@ -221,8 +222,12 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
               </button>
             ))}
           </div>
+          <BudgetHistory budgets={valid} transactions={transactions} categories={categories} settings={settings} />
         </>
       )}
+
+      {/* Budgets conseillés : aussi quand il n'y a encore aucun budget */}
+      <BudgetSuggestions transactions={transactions} categories={categories} settings={settings} budgets={valid} onCreate={(sug) => onAdd({ categoryId: sug.categoryId, amount: sug.amount, currency: settings.mainCurrency, period: 'month' })} />
 
       {viewing && (
         <BudgetDetail

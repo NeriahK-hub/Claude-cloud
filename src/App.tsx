@@ -23,7 +23,8 @@ import { QrScanner, TypeCodeSheet } from './components/QrInvite';
 import { debtKindOf, DebtEntry, debtsSummary, dueLevel, samePerson } from './lib/debts';
 import { debtCategoryOf, debtMoneyOut, isLive, shareTotals } from './lib/debtShares';
 import type { DebtPreset } from './components/DebtsView';
-import { budgetStatus, periodOf } from './lib/budgets';
+import { budgetPace, budgetStatus, periodOf } from './lib/budgets';
+import { unusualExpenses } from './lib/unusual';
 import { uuid } from './lib/ids';
 import type { DuplicatePlan } from './lib/dedupe';
 import type { Period } from './lib/periods';
@@ -937,6 +938,7 @@ export default function App() {
     } else if (n.id.startsWith('rec-')) navigate('upcoming');
     else if (n.id.startsWith('budget-')) navigate('budgets');
     else if (n.id.startsWith('sub-')) navigate('upcoming');
+    else if (n.id.startsWith('unusual-')) navigate('history');
     else if (n.id.startsWith('debt-')) navigate('debts');
     else if (n.id.startsWith('rate-')) navigate('home');
     else if (n.id === 'welcome') openAdd('expense');
@@ -1011,6 +1013,53 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [budgets, transactions, categories]);
+
+  // « Tu dépenses plus vite que prévu » : à mi-parcours d'un budget, si le rythme dépasse la limite (une alerte par période)
+  useEffect(() => {
+    const now = new Date();
+    const fresh: NotificationItem[] = [];
+    for (const b of budgets) {
+      const cat = categories.find((c) => c.id === b.categoryId);
+      if (b.categoryId && !cat) continue;
+      const st = budgetStatus(b, transactions, categories, settings);
+      if (now < st.start || now >= st.end || st.ratio >= 1) continue; // en cours, pas déjà dépassé (l'autre alerte s'en charge)
+      const part = (now.getTime() - st.start.getTime()) / (st.end.getTime() - st.start.getTime());
+      const pace = budgetPace(st.spent, b.amount, st, now);
+      if (part < 0.35 || st.ratio < 0.4 || pace.projected < b.amount * 1.1) continue;
+      const id = `budget-pace-${b.id}-${st.start.toISOString().slice(0, 10)}`;
+      if (notifications.some((n) => n.id === id)) continue;
+      fresh.push({
+        id,
+        type: 'budget',
+        read: false,
+        time: now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        title: `Tu dépenses plus vite que prévu : ${cat?.name ?? 'Toutes les dépenses'}`,
+        message: `À ce rythme, tu atteindras ≈ ${formatMoney(Math.round(pace.projected), b.currency)} pour ${formatMoney(b.amount, b.currency)} prévus. Pour tenir : ${formatMoney(Math.round(pace.perDayAllowed), b.currency)} par jour.`,
+      });
+    }
+    if (fresh.length) setNotifications((prev) => [...fresh, ...prev].slice(0, 50));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [budgets, transactions, categories]);
+
+  // Dépense inhabituelle : bien plus chère que d'habitude dans sa catégorie (une alerte par opération)
+  useEffect(() => {
+    const now = new Date();
+    const fresh: NotificationItem[] = [];
+    for (const u of unusualExpenses(transactions, settings, now)) {
+      const id = `unusual-${u.tx.id}`;
+      if (notifications.some((n) => n.id === id)) continue;
+      fresh.push({
+        id,
+        type: 'security',
+        read: false,
+        time: now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        title: 'Dépense inhabituelle',
+        message: `« ${u.tx.title} » : ${formatMoney(Math.abs(u.tx.amount), u.tx.currency)}, environ ${u.times} fois ta dépense habituelle en ${u.tx.category}. C'est normal ? Sinon, corrige-la.`,
+      });
+    }
+    if (fresh.length) setNotifications((prev) => [...fresh, ...prev].slice(0, 50));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions]);
 
   // Abonnement dont le prix change : une alerte (une seule fois par paiement)
   useEffect(() => {

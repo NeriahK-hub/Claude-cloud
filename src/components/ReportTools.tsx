@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { CalendarDays, ArrowLeftRight, Search, FileText, ChevronRight, ChevronLeft, X, Check, TrendingUp, TrendingDown, Loader2, Lightbulb, Flame, Coins, Equal, ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, PiggyBank, CalendarRange, Sparkles, Clock } from 'lucide-react';
 import { Budget, Settings, Transaction, Wallet } from '../types';
 import { SmallTool, WeekTool, WhenTool, YearTool } from './MoneyReviews';
+import { BalanceCurveTool, WhatIfTool } from './BalanceTools';
 import { track } from '../lib/usage';
 import { Category } from '../data/categories';
 import { formatMoney, toMain } from '../lib/money';
@@ -19,7 +20,7 @@ import type { Page } from './BottomNav';
 // calendrier des dépenses, comparer deux mois, rapport PDF.
 // (Les abonnements repérés sont dans « À venir ».)
 
-type Tool = 'calendar' | 'compare' | 'pdf' | 'review';
+type Tool = 'calendar' | 'compare' | 'pdf' | 'review' | 'balance' | 'whatif';
 type ReviewTab = 'week' | 'year' | 'habits';
 type HabitTab = 'what' | 'when' | 'small';
 
@@ -55,6 +56,8 @@ export const ReportTools: React.FC<{
   const rows: Row[] = [
     { id: 'calendar', title: 'Calendrier des dépenses', sub: 'Jour par jour, les jours qui coûtent cher', Icon: CalendarDays, color: '#0EA5E9' },
     { id: 'compare', title: 'Comparer deux mois', sub: 'Ce qui a augmenté, ce qui a baissé', Icon: ArrowLeftRight, color: '#8B5CF6' },
+    { id: 'balance', title: 'Évolution du solde', sub: 'Ton solde à la fin de chaque mois, sur un an', Icon: TrendingUp, color: '#6366F1' },
+    { id: 'whatif', title: 'Et si je dépensais moins ?', sub: 'Ce que tu garderais en un an, en 5 ans', Icon: PiggyBank, color: '#10B981' },
     { id: 'pdf', title: 'Rapport PDF', sub: 'À imprimer ou à envoyer', Icon: FileText, color: '#EF4444' },
   ];
   const all = [...understand, ...rows];
@@ -84,6 +87,8 @@ export const ReportTools: React.FC<{
       {tool && (
         <ToolSheet onClose={() => setTool(null)} title={all.find((r) => r.id === tool)!.title}>
           {tool === 'review' && <ReviewHub {...props} onClose={() => setTool(null)} />}
+          {tool === 'balance' && <BalanceCurveTool wallets={props.wallets} allTransactions={props.allTransactions} settings={props.settings} />}
+          {tool === 'whatif' && <WhatIfTool allTransactions={props.allTransactions} categories={props.categories} settings={props.settings} />}
           {tool === 'calendar' && <CalendarTool {...props} />}
           {tool === 'compare' && <CompareTool {...props} />}
           {tool === 'pdf' && <PdfTool {...props} />}
@@ -589,6 +594,9 @@ const HabitsTool: React.FC<React.ComponentProps<typeof ReportTools> & { onClose:
                   <Amount text={round(x.yearly)} size="lg" prefix="≈" tone="#EF4444" />
                 </div>
               </div>
+              <p className="mt-2 text-[12px] text-slate-500 text-center tabular-nums">
+                Sur 5 ans : <b className="text-slate-700">≈ {round(x.yearly * 5)}</b>
+              </p>
               {i === 0 && (
                 <p className="mt-3 text-[13px] text-slate-600 leading-snug flex gap-2 [text-wrap:pretty]">
                   <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />

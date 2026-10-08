@@ -14,6 +14,7 @@ interface NotificationsModalProps {
 function look(n: NotificationItem): { Icon: typeof Bell; color: string } {
   const id = n.id;
   if (id.startsWith('rec-')) return n.title.startsWith('Facture') ? { Icon: Receipt, color: '#F59E0B' } : { Icon: Repeat, color: '#0EA5E9' };
+  if (id.startsWith('unusual-')) return { Icon: Sparkles, color: '#F59E0B' };
   if (id.startsWith('sub-')) return { Icon: Repeat, color: '#14B8A6' };
   if (id.startsWith('rate-')) return { Icon: ArrowRightLeft, color: '#6366F1' };
   if (id.startsWith('goal-')) return { Icon: Target, color: '#8B5CF6' };
