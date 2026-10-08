@@ -2673,10 +2673,10 @@ const TransferSheet: React.FC<{
           </label>
         )}
         <label className="flex items-center gap-3 px-4 min-h-[50px] cursor-text focus-within:bg-slate-200/50 transition-colors">
-          <span className="text-[15px] text-slate-900 shrink-0">Frais</span>
+          <span className="text-[15px] text-slate-900 shrink-0">Frais de transfert</span>
           <input
             inputMode="decimal"
-            aria-label="Frais de transaction"
+            aria-label="Frais de transfert"
             value={feeText}
             onChange={(e) => setFeeText(e.target.value)}
             placeholder="0"
