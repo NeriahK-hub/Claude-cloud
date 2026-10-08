@@ -491,12 +491,12 @@ const RecurringSheet: React.FC<{
               <>
                 <Group>
                   {([
-                    ['week', 1, 'Chaque semaine', 'Ex. la cotisation du dimanche'],
-                    ['week', 2, 'Toutes les 2 semaines', 'Ex. une paie à la quinzaine'],
-                    ['month', 1, 'Chaque mois', 'Ex. le loyer, le salaire, la SNEL'],
-                    ['month', 3, 'Tous les 3 mois', 'Ex. une assurance, un abonnement trimestriel'],
-                    ['year', 1, 'Chaque année', 'Ex. le minerval, une assurance'],
-                  ] as const).map(([f, n, t, h]) => (
+                    ['week', 1, 'Chaque semaine'],
+                    ['week', 2, 'Toutes les 2 semaines'],
+                    ['month', 1, 'Chaque mois'],
+                    ['month', 3, 'Tous les 3 mois'],
+                    ['year', 1, 'Chaque année'],
+                  ] as const).map(([f, n, t]) => (
                     <PickRow
                       key={t}
                       selected={frequency === f && Number(count) === n}
@@ -506,7 +506,6 @@ const RecurringSheet: React.FC<{
                         setPicking(null);
                       }}
                       title={t}
-                      sub={h}
                     />
                   ))}
                 </Group>
