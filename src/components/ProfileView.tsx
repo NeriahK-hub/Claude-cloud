@@ -55,7 +55,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) =
       {!desktop && <h1 className="page-head text-xl font-bold text-slate-900 tracking-tight mb-5">Profil</h1>}
       <div>
 
-      <div className="bg-white rounded-3xl p-5 border border-slate-100 flex items-center gap-4 mb-4">
+      <div className="bg-white rounded-3xl p-5 border border-slate-100 mb-4">
+      <div className="flex items-center gap-4">
         <div className="w-16 h-16 rounded-full bg-[#16382F] text-white flex items-center justify-center font-extrabold text-xl shrink-0">
           {initialsOf(name) || '?'}
         </div>
@@ -81,15 +82,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) =
               <Pencil className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             </button>
           )}
-          {!cloud.user && (
+          {!cloud.user && !cloud.configured && (
             <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1.5">
               <Smartphone className="w-3.5 h-3.5 shrink-0" /> Données enregistrées sur cet appareil
             </p>
           )}
         </div>
       </div>
-
-      <AccountCard cloud={cloud} />
+      {/* Le compte fait corps avec le nom : une seule carte */}
+      <div className="mt-4 pt-4 border-t border-slate-100">
+        <AccountCard cloud={cloud} embedded />
+      </div>
+      </div>
       </div>
       <div>
 

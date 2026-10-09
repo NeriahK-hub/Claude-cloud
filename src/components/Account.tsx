@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace, Trash2, ChevronLeft, ClipboardPaste, Smartphone, Monitor, ChevronDown } from 'lucide-react';
+import { Cloud as CloudIcon, CloudOff, CloudAlert, RefreshCw, LogOut, Mail, X, Check, Loader2, Merge, Replace, Trash2, ChevronLeft, ClipboardPaste, Smartphone, Monitor, ChevronDown, ChevronRight } from 'lucide-react';
 import { deviceKey, deviceName, DeviceRow } from '../lib/devices';
 import type { Cloud } from '../lib/sync/useCloud';
 import { useFeature } from '../lib/remoteConfig';
@@ -48,7 +48,9 @@ export const SyncIndicator: React.FC<{ cloud: Cloud; onClick?: () => void }> = (
 };
 
 // Carte du profil : se connecter / état de la synchro / se déconnecter
-export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
+// embedded : dans la carte du Profil (nom + compte ensemble), sans cadre à soi
+export const AccountCard: React.FC<{ cloud: Cloud; embedded?: boolean }> = ({ cloud, embedded }) => {
+  const box = embedded ? '' : 'bg-white rounded-3xl p-4 border border-slate-100 mb-4';
   const [login, setLogin] = useState(false);
   const accountsOn = useFeature('accounts');
   const [confirmOut, setConfirmOut] = useState(false);
@@ -61,7 +63,7 @@ export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
 
   if (!cloud.configured) {
     return (
-      <div className="bg-white rounded-3xl p-4 border border-slate-100 mb-4 flex items-center gap-3">
+      <div className={`${box} flex items-center gap-3`}>
         <span className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
           <CloudOff className="w-5 h-5 text-slate-500" />
         </span>
@@ -73,7 +75,7 @@ export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
   // Connexion désactivée depuis l'espace admin (les personnes déjà connectées restent connectées)
   if (!cloud.user && !accountsOn) {
     return (
-      <div className="bg-white rounded-3xl p-4 border border-slate-100 mb-4 flex items-center gap-3">
+      <div className={`${box} flex items-center gap-3`}>
         <span className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
           <CloudOff className="w-5 h-5 text-slate-500" />
         </span>
@@ -87,7 +89,7 @@ export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
       <>
         <button
           onClick={() => setLogin(true)}
-          className="w-full text-left bg-white rounded-3xl p-4 border border-slate-100 mb-4 flex items-center gap-3 cursor-pointer hover:bg-slate-50"
+          className={`w-full text-left flex items-center gap-3 cursor-pointer ${embedded ? 'active:opacity-70 transition' : 'bg-white rounded-3xl p-4 border border-slate-100 mb-4 hover:bg-slate-50'}`}
         >
           <span className="w-10 h-10 rounded-full bg-accent flex items-center justify-center shrink-0">
             <CloudIcon className="w-5 h-5 text-slate-900" />
@@ -96,6 +98,7 @@ export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
             <span className="block text-sm font-bold text-slate-900">Se connecter</span>
             <span className="block text-xs text-slate-500">Sauvegarde tes données, retrouve-les sur tous tes appareils, partage des portefeuilles.</span>
           </span>
+          {embedded && <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
         </button>
         {login && <LoginSheet cloud={cloud} onClose={() => setLogin(false)} />}
       </>
@@ -115,7 +118,7 @@ export const AccountCard: React.FC<{ cloud: Cloud }> = ({ cloud }) => {
             : `Synchronisé ${ago(cloud.lastSync)}`;
 
   return (
-    <div className="bg-white rounded-3xl p-4 border border-slate-100 mb-4">
+    <div className={box}>
       <div className="flex items-center gap-3">
         <span className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
           <CloudIcon className="w-5 h-5 text-emerald-600" />
