@@ -1146,14 +1146,17 @@ const WalletSheet: React.FC<{
 
               {kind === 'goal' && (
                 <>
-                  <Group title="Pourquoi cet objectif ?" hint="Facultatif. Il s'affiche sur ton objectif pour te motiver.">
+                  <Group
+                    title="Pourquoi cet objectif ?"
+                    hint={why.length > 250 ? `${why.length} / 300 caractères` : "Facultatif. Il s'affiche sur ton objectif pour te motiver."}
+                  >
                     <label className="flex items-center px-4 py-3 min-h-[48px] cursor-text transition-colors focus-within:bg-slate-200/50">
                       {/* Plusieurs lignes si besoin : la phrase reste lisible en entier */}
                       <textarea
                         ref={growWhy}
                         value={why}
                         onChange={(e) => setWhy(e.target.value.replace(/\n/g, ' '))}
-                        maxLength={120}
+                        maxLength={300}
                         rows={1}
                         placeholder="Pour aller au travail sans taxi-moto"
                         className="field-plain flex-1 min-w-0 resize-none overflow-hidden bg-transparent text-[15px] leading-snug text-slate-900 outline-none placeholder:text-slate-400"
