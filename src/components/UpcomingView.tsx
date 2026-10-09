@@ -182,9 +182,10 @@ export const UpcomingView: React.FC<{
       .map(([key, items]) => {
         const sorted = items.sort((a, b) => a.day.localeCompare(b.day));
         const out = sorted.filter((x) => x.r.direction === 'out' && x.r.amount).reduce((t, x) => t + (convertBetween(x.r.amount!, x.r.currency, settings.mainCurrency, settings) ?? 0), 0);
+        const inc = sorted.filter((x) => x.r.direction === 'in' && x.r.amount).reduce((t, x) => t + (convertBetween(x.r.amount!, x.r.currency, settings.mainCurrency, settings) ?? 0), 0);
         const d = new Date(`${key}-01T00:00`);
         const label = key === today.slice(0, 7) ? 'Ce mois-ci' : d.toLocaleDateString('fr-FR', { month: 'long', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) });
-        return { key, label, items: sorted, out };
+        return { key, label, items: sorted, out, inc };
       });
   }, [recurrings, today, settings, pending]); // eslint-disable-line react-hooks/exhaustive-deps
   const paused = recurrings.filter((r) => !r.active);
@@ -192,24 +193,36 @@ export const UpcomingView: React.FC<{
     r.bill ? 'Facture' : r.mode === 'auto' ? 'Noté tout seul' : 'On te demandera';
   const section = 'text-[12px] font-bold text-slate-400 tracking-wider uppercase mb-2 px-1';
 
+  // Quand : « Aujourd'hui », « Demain », « Dans 3 jours » pour ce qui est proche
+  const soon = (day: string) => {
+    const n = daysBetween(today, day);
+    if (n < 0) return null;
+    return n === 0 ? "Aujourd'hui" : n === 1 ? 'Demain' : n <= 7 ? `Dans ${n} jours` : null;
+  };
   const row = (r: Recurring, day?: string) => {
     const cat = catOf(r.categoryId);
-    const d = parseDay(day ?? r.nextDate);
+    const date = day ?? r.nextDate;
+    const d = parseDay(date);
+    const tone = cat?.color ?? '#64748B';
+    const near = soon(date);
     return (
-      <button key={`${r.id}-${day ?? ''}`} onClick={() => setEditing(r)} className="w-full py-3 flex items-center gap-3 text-left cursor-pointer">
-        <span className="w-11 shrink-0 text-center">
-          <span className="block text-[18px] font-bold leading-none text-slate-900">{d.getDate()}</span>
-          <span className="block text-[10px] font-semibold uppercase text-slate-400 mt-0.5">{d.toLocaleDateString('fr-FR', { month: 'short' })}</span>
+      <button key={`${r.id}-${day ?? ''}`} onClick={() => setEditing(r)} className="w-full px-3.5 py-3 flex items-center gap-3 text-left cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors">
+        {/* La date, dans une pastille à la couleur de la catégorie */}
+        <span className="w-[52px] h-[56px] shrink-0 rounded-2xl flex flex-col items-center justify-center tint" style={{ backgroundColor: `${tone}1F`, '--tint': tone } as React.CSSProperties}>
+          <span className="text-[20px] font-extrabold leading-none tabular-nums">{d.getDate()}</span>
+          <span className="text-[10px] font-bold uppercase tracking-wide mt-1 opacity-80">{d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}</span>
         </span>
-        <IconBadge icon={cat?.icon ?? (r.bill ? 'Receipt' : 'Repeat')} image={cat?.image} color={cat?.color ?? '#64748B'} size="sm" />
         <span className="flex-1 min-w-0">
-          <span className="block text-[14px] font-semibold text-slate-900 truncate">{r.title}</span>
-          <span className="block text-[12px] text-slate-500 truncate">
-            {r.cancelBy ? <span className="text-amber-600 font-semibold">À résilier</span> : how(r)}
-            {r.note && <span> · {r.note}</span>}
+          <span className="block text-[15px] font-semibold text-slate-900 truncate">{r.title}</span>
+          <span className="flex items-center gap-1.5 text-[12px] text-slate-500 mt-0.5 min-w-0">
+            {near && <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 font-bold">{near}</span>}
+            <span className="truncate">
+              {r.cancelBy ? <span className="text-amber-600 font-semibold">À résilier</span> : how(r)}
+              {r.note && <span> · {r.note}</span>}
+            </span>
           </span>
         </span>
-        <span className={`text-right text-[14px] font-bold tabular-nums shrink-0 ${r.direction === 'in' ? 'text-emerald-600' : 'text-slate-900'}`}>
+        <span className={`text-right text-[15px] font-bold tabular-nums shrink-0 ${r.direction === 'in' ? 'text-emerald-600' : 'text-slate-900'}`}>
           {r.amount ? `${r.direction === 'in' ? '+' : '−'}${money(r.amount, r.currency)}` : <span className="text-[12px] font-semibold text-slate-400">à saisir</span>}
           {r.amount && other(r.amount, r.currency) && <span className="block text-right text-[11px] font-medium text-slate-400">{other(r.amount, r.currency)}</span>}
         </span>
@@ -308,11 +321,14 @@ export const UpcomingView: React.FC<{
 
           {months.map((m) => (
             <div key={m.key} className="mb-5">
-              <div className={`${section} flex items-baseline justify-between`}>
-                <span>{m.label}</span>
-                {m.out > 0 && <span className="normal-case tracking-normal font-semibold tabular-nums">{money(m.out, settings.mainCurrency)} à payer</span>}
+              <div className="flex items-end justify-between gap-3 mb-2.5 px-1">
+                <h2 className="text-[19px] font-extrabold tracking-tight text-slate-900 first-letter:uppercase">{m.label}</h2>
+                <span className="flex items-center gap-1.5 text-[12px] font-bold tabular-nums">
+                  {m.out > 0 && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-500">−{money(m.out, settings.mainCurrency)}</span>}
+                  {m.inc > 0 && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600">+{money(m.inc, settings.mainCurrency)}</span>}
+                </span>
               </div>
-              <div className="bg-white rounded-3xl border border-slate-100 px-4 divide-y divide-slate-100">{m.items.map((x) => row(x.r, x.day))}</div>
+              <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100">{m.items.map((x) => row(x.r, x.day))}</div>
             </div>
           ))}
           {months.length > 0 && <p className="text-[12px] text-slate-400 -mt-2 mb-5 px-1">Touche une ligne pour la modifier, la mettre en pause ou la supprimer.</p>}
@@ -320,7 +336,7 @@ export const UpcomingView: React.FC<{
           {paused.length > 0 && (
             <div className="mb-5 opacity-60">
               <div className={section}>En pause</div>
-              <div className="bg-white rounded-3xl border border-slate-100 px-4 divide-y divide-slate-100">{paused.map((r) => row(r))}</div>
+              <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100">{paused.map((r) => row(r))}</div>
             </div>
           )}
             </>
