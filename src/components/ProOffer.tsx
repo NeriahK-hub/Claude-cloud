@@ -44,7 +44,7 @@ export const ProCard: React.FC<{ cloud: CloudState }> = ({ cloud }) => {
           <Sparkles className="w-6 h-6" style={{ color: '#0d1015' }} />
         </span>
         <span className="relative flex-1 min-w-0">
-          <span className="block text-[17px] font-extrabold tracking-tight" style={{ color: '#fff' }}>
+          <span className="block text-[17px] font-extrabold tracking-tight whitespace-nowrap truncate" style={{ color: "#fff" }}>
             {pro.active ? 'Wallo Pro' : 'Passer à Wallo Pro'}
           </span>
           <span className="block text-[13px] leading-snug mt-0.5 truncate" style={{ color: 'rgb(255 255 255 / 0.7)' }}>
