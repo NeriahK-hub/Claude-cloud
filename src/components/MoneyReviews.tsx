@@ -485,8 +485,17 @@ export const SmallTool: React.FC<{ txs: Transaction[]; settings: Settings; categ
 // ---------- Abonnements repérés ----------
 export const SubsTool: React.FC<{ txs: Transaction[]; settings: Settings; categories: Category[]; recurrings: Recurring[]; onNavigate?: (p: Page) => void; onAdd?: (s: Subscription) => void }> = ({ txs, settings, categories, recurrings, onNavigate, onAdd }) => {
   const round = useRound(settings);
-  const list = useMemo(() => findSubscriptions(txs, settings, categories, recurrings), [txs, settings, categories, recurrings]);
+  const all = useMemo(() => findSubscriptions(txs, settings, categories, recurrings), [txs, settings, categories, recurrings]);
+  // Dans À venir (onAdd) : seulement les propositions, une fois ajoutée une ligne disparaît d'ici
+  const list = onAdd ? all.filter((x) => !x.known) : all;
   const total = list.reduce((s, x) => s + x.amount, 0);
+  if (!list.length && all.length)
+    return (
+      <div className="text-center py-10">
+        <Repeat className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+        <p className="text-[14px] text-slate-500 max-w-[280px] mx-auto">Rien de nouveau : tout ce que Wallo a repéré est déjà dans À venir.</p>
+      </div>
+    );
   if (!list.length)
     return (
       <div className="text-center py-10">
@@ -496,7 +505,7 @@ export const SubsTool: React.FC<{ txs: Transaction[]; settings: Settings; catego
     );
   return (
     <div>
-      <p className="text-[14px] text-slate-500 mb-4 leading-snug">Des dépenses qui reviennent chaque mois avec le même montant. Les oublier coûte cher&nbsp;: vérifie que tu en as encore besoin.</p>
+      <p className="text-[14px] text-slate-500 mb-4 leading-snug">Des dépenses qui reviennent chaque mois avec le même montant. Ajoute-les à À venir pour être prévenu.</p>
       <div className="grid grid-cols-2 gap-2 mb-2">
         <Tile label="Chaque mois" Icon={Repeat} color="#8B5CF6">
           <Amount text={round(total)} size="lg" />
