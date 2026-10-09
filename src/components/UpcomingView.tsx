@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronLeft, List, CalendarDays, Plus, X, Repeat, Receipt, ArrowDownLeft, ArrowUpRight, Check, Trash2, ChevronRight, Pause, Play, Pencil } from 'lucide-react';
+import { ChevronLeft, List, CalendarDays, Plus, X, Repeat, Receipt, ArrowDownLeft, ArrowUpRight, Check, Trash2, ChevronRight, Pause, Play, Pencil, ChevronDown } from 'lucide-react';
 import { Recurring, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { convertBetween, formatMoney } from '../lib/money';
@@ -122,6 +122,7 @@ export const UpcomingView: React.FC<{
   const desktop = useIsDesktop();
   const [editing, setEditing] = useState<Recurring | 'new' | 'bill' | null>(null);
   const [showSubs, setShowSubs] = useState(false);
+  const [openMonths, setOpenMonths] = useState<string[]>([]); // mois lointains dépliés (les 2 premiers le sont toujours)
   const [view, setView] = useState<'list' | 'calendar'>('list'); // liste ou calendrier
   const [fromSub, setFromSub] = useState<Subscription | null>(null); // abonnement repéré à ajouter (formulaire pré-rempli)
   const today = ymd(new Date());
@@ -287,18 +288,29 @@ export const UpcomingView: React.FC<{
       </div>
     )}
 
-    {months.map((m) => (
-      <div key={m.key} className="mb-5">
-        <div className="flex items-end justify-between gap-3 mb-2.5 px-1">
-          <h2 className="text-[19px] font-extrabold tracking-tight text-slate-900 first-letter:uppercase">{m.label}</h2>
-          <span className="flex items-center gap-1.5 text-[12px] font-bold tabular-nums">
-            {m.out > 0 && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-500">−{money(m.out, settings.mainCurrency)}</span>}
-            {m.inc > 0 && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600">+{money(m.inc, settings.mainCurrency)}</span>}
-          </span>
+    {months.map((m, i) => {
+      const folded = i >= 2 && !openMonths.includes(m.key); // à partir du 3e mois : replié, on touche pour déplier
+      return (
+        <div key={m.key} className="mb-5">
+          <button
+            onClick={() => i >= 2 && setOpenMonths((o) => (o.includes(m.key) ? o.filter((k) => k !== m.key) : [...o, m.key]))}
+            aria-expanded={i >= 2 ? !folded : undefined}
+            className={`w-full flex items-end justify-between gap-3 mb-2.5 px-1 text-left ${i >= 2 ? 'cursor-pointer' : 'cursor-default'}`}
+          >
+            <span className="flex items-center gap-1.5 min-w-0">
+              <h2 className="text-[19px] font-extrabold tracking-tight text-slate-900 first-letter:uppercase">{m.label}</h2>
+              {i >= 2 && <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${folded ? '' : 'rotate-180'}`} />}
+            </span>
+            <span className="flex items-center gap-1.5 text-[12px] font-bold tabular-nums">
+              {folded && <span className="font-semibold text-slate-400">{m.items.length} prévue{m.items.length > 1 ? 's' : ''}</span>}
+              {m.out > 0 && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-500">−{money(m.out, settings.mainCurrency)}</span>}
+              {m.inc > 0 && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600">+{money(m.inc, settings.mainCurrency)}</span>}
+            </span>
+          </button>
+          {!folded && <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100">{m.items.map((x) => row(x.r, x.day))}</div>}
         </div>
-        <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100">{m.items.map((x) => row(x.r, x.day))}</div>
-      </div>
-    ))}
+      );
+    })}
     {months.length > 0 && <p className="text-[12px] text-slate-400 -mt-2 mb-5 px-1">Touche une ligne pour la modifier, la mettre en pause ou la supprimer.</p>}
 
     {paused.length > 0 && (
