@@ -1042,8 +1042,8 @@ const WalletSheet: React.FC<{
                   <span />
                 )}
                 <div className="min-w-0 text-center">
-                  <h2 className="text-[17px] font-bold truncate">{wallet ? 'Modifier' : 'Nouveau portefeuille'}</h2>
-                  <p className="text-[12px] text-slate-500 truncate">{kindInfo?.title}</p>
+                  <h2 className="text-[17px] font-bold truncate">{wallet ? 'Modifier' : kind === 'goal' ? 'Nouvel objectif' : 'Nouveau portefeuille'}</h2>
+                  <p className="text-[12px] text-slate-500 truncate">{kind === 'goal' ? "Mets de l'argent de côté pour un projet" : kindInfo?.title}</p>
                 </div>
                 <button onClick={onClose} aria-label="Fermer" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
                   <X className="w-4 h-4" />
@@ -1081,10 +1081,10 @@ const WalletSheet: React.FC<{
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   aria-label="Nom"
-                  placeholder={kind === 'goal' ? 'Nouvelle moto' : kind === 'credit' ? 'Carte Visa' : 'Airtel Money'}
+                  placeholder={kind === 'goal' ? 'Ex. : Nouvelle moto' : kind === 'credit' ? 'Carte Visa' : 'Airtel Money'}
                   className="field-plain mt-3 w-full bg-transparent text-center text-[22px] font-bold tracking-tight text-slate-900 outline-none placeholder:text-slate-300 placeholder:font-semibold"
                 />
-                <span className="text-[12px] text-slate-400">{name.trim() ? 'Nom du portefeuille' : 'Donne-lui un nom'}</span>
+                <span className="text-[12px] text-slate-400">{name.trim() ? (kind === 'goal' ? 'Nom de l\'objectif' : 'Nom du portefeuille') : kind === 'goal' ? 'Que veux-tu t\'offrir ou payer ?' : 'Donne-lui un nom'}</span>
               </div>
 
               {showLook && (
@@ -1101,7 +1101,7 @@ const WalletSheet: React.FC<{
               {/* Objectif : le montant à atteindre en grand */}
               {kind === 'goal' && (
                 <div className="text-center mb-5">
-                  <div className="text-[13px] font-medium text-slate-500 mb-1">Montant à atteindre</div>
+                  <div className="text-[13px] font-medium text-slate-500 mb-1">Combien il te faut ?</div>
                   <label className="inline-flex items-baseline justify-center gap-1.5 cursor-text">
                     <input
                       inputMode="decimal"
@@ -1133,11 +1133,11 @@ const WalletSheet: React.FC<{
                     <InputRow label="Déjà utilisé" value={balance} onChange={setBalance} placeholder="0" suffix={currency} numeric />
                   </>
                 )}
-                {kind === 'goal' && <InputRow label="Déjà épargné" value={balance} onChange={setBalance} placeholder="0" suffix={currency} numeric />}
+                {kind === 'goal' && <InputRow label="Déjà mis de côté" value={balance} onChange={setBalance} placeholder="0" suffix={currency} numeric />}
                 {kind === 'basic' && <InputRow label="Solde de départ" value={balance} onChange={setBalance} placeholder="0" suffix={currency} numeric />}
                 {kind === 'goal' && (
                   <div className="px-3 py-2">
-                    <div className="text-[13px] text-slate-500 px-1 mb-1">Date visée (facultatif)</div>
+                    <div className="text-[13px] text-slate-500 px-1 mb-1">Pour quand ? (facultatif)</div>
                     <DateField value={goalDate} onChange={setGoalDate} placeholder="Pas de date" shortcuts="future" min={localDay(new Date())} label="Date visée" />
                   </div>
                 )}
@@ -1162,14 +1162,18 @@ const WalletSheet: React.FC<{
                   </Group>
 
                   <Group
-                    title="Pour t'aider"
+                    title="Pour y arriver plus facilement"
                     hint={
-                      remindOn
-                        ? "Une notification ce jour-là, si tu n'as pas encore mis ce montant dans la semaine."
-                        : 'Petite monnaie : chaque dépense est arrondie (4 300 FC → 5 000 FC) et Wallo te propose chaque semaine de verser la différence ici.'
+                      remindOn && roundUp
+                        ? "Tu reçois un rappel le jour choisi, et Wallo te propose chaque semaine de mettre ici la différence des arrondis."
+                        : remindOn
+                          ? "Tu reçois un rappel le jour choisi, si tu n'as pas encore mis ce montant dans la semaine."
+                          : roundUp
+                            ? 'Chaque dépense est arrondie (4 300 FC → 5 000 FC) et Wallo te propose chaque semaine de mettre la différence ici.'
+                            : "Facultatif : un rappel chaque semaine, ou l'arrondi de tes dépenses mis de côté."
                     }
                   >
-                    <SwitchRow label="Rappel chaque semaine" checked={remindOn} onChange={setRemindOn} />
+                    <SwitchRow label="Me rappeler chaque semaine" checked={remindOn} onChange={setRemindOn} />
                     {remindOn && (
                       <>
                         <div className="grid grid-cols-7 gap-1 px-3 py-2.5 animate-fade-in">
@@ -1186,16 +1190,16 @@ const WalletSheet: React.FC<{
                             </button>
                           ))}
                         </div>
-                        <InputRow label="Montant à mettre" value={remindAmount} onChange={setRemindAmount} placeholder="10" suffix={currency} numeric />
+                        <InputRow label="Combien mettre" value={remindAmount} onChange={setRemindAmount} placeholder="10" suffix={currency} numeric />
                       </>
                     )}
-                    <SwitchRow label="Épargner la petite monnaie" checked={roundUp} onChange={setRoundUp} />
+                    <SwitchRow label="Arrondir mes dépenses" checked={roundUp} onChange={setRoundUp} />
                   </Group>
                 </>
               )}
 
               <Group hint={include ? 'Son argent compte dans « Ton solde » sur l\'accueil.' : 'Son argent ne compte pas dans « Ton solde » sur l\'accueil.'}>
-                <SwitchRow label="Inclure dans le total" checked={include} onChange={setInclude} />
+                <SwitchRow label="Compter dans mon solde" checked={include} onChange={setInclude} />
               </Group>
             </div>
 
@@ -1230,7 +1234,7 @@ const WalletSheet: React.FC<{
                 }
                 className="w-full py-3.5 rounded-2xl bg-accent hover:bg-accent-hover disabled:opacity-40 font-bold text-[15px] cursor-pointer transition active:scale-[0.98]"
               >
-                {wallet ? 'Enregistrer' : 'Créer le portefeuille'}
+                {wallet ? 'Enregistrer' : kind === 'goal' ? "Créer l'objectif" : 'Créer le portefeuille'}
               </button>
             </div>
           </>

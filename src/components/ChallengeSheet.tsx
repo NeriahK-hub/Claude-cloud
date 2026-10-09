@@ -10,11 +10,11 @@ import { ymd } from '../lib/recurring';
 
 type Type = GoalChallenge['type'];
 
-const DEFS: { type: Type; title: string; text: string; Icon: typeof Trophy; icon: string; color: string }[] = [
-  { type: '52w', title: '52 semaines', text: 'Chaque semaine, un peu plus\u00a0: 1\u00a0$, puis 2\u00a0$, puis 3\u00a0$… En un an\u00a0: 1\u00a0378\u00a0$.', Icon: CalendarDays, icon: 'CalendarDays', color: '#8B5CF6' },
-  { type: 'daily', title: 'Un peu chaque jour', text: 'La même petite somme chaque jour. Par exemple 1\u00a0000\u00a0FC pendant 30\u00a0jours.', Icon: Coins, icon: 'Coins', color: '#F59E0B' },
-  { type: 'weekend', title: 'Week-end sans dépense', text: "Dépense moins le week-end\u00a0: ce que tu gardes va dans l'objectif.", Icon: Sofa, icon: 'Sofa', color: '#10B981' },
-  { type: 'roundup', title: 'Petite monnaie', text: 'Pendant 3\u00a0mois, chaque dépense est arrondie\u00a0: pour 4\u00a0300\u00a0FC, 700\u00a0FC vont de côté.', Icon: PiggyBank, icon: 'PiggyBank', color: '#EC4899' },
+const DEFS: { type: Type; title: string; tag: string; text: string; Icon: typeof Trophy; icon: string; color: string }[] = [
+  { type: '52w', title: '52 semaines', tag: 'Chaque semaine', text: 'Semaine 1\u00a0: 1\u00a0$, semaine 2\u00a0: 2\u00a0$, semaine 3\u00a0: 3\u00a0$… Au bout d\'un an, tu as 1\u00a0378\u00a0$.', Icon: CalendarDays, icon: 'CalendarDays', color: '#8B5CF6' },
+  { type: 'daily', title: 'Un peu chaque jour', tag: 'Chaque jour', text: 'Tu mets la même petite somme de côté chaque jour. Par exemple 1\u00a0000\u00a0FC pendant 30\u00a0jours.', Icon: Coins, icon: 'Coins', color: '#F59E0B' },
+  { type: 'weekend', title: 'Week-end sans dépense', tag: 'Le week-end', text: "Tu dépenses moins le week-end\u00a0: ce que tu ne dépenses pas est mis dans ton objectif.", Icon: Sofa, icon: 'Sofa', color: '#10B981' },
+  { type: 'roundup', title: 'Petite monnaie', tag: 'Automatique', text: 'Chaque dépense est arrondie et la différence est mise de côté. Pour 4\u00a0300\u00a0FC, 700\u00a0FC partent dans ton objectif.', Icon: PiggyBank, icon: 'PiggyBank', color: '#EC4899' },
 ];
 
 const addDays = (n: number) => {
@@ -102,12 +102,14 @@ export const ChallengeSheet: React.FC<{
 
         {!def ? (
           <div className="space-y-2">
+            <p className="text-[13px] text-slate-500 mb-3 px-1 [text-wrap:pretty]">Choisis une façon d'épargner. Wallo crée l'objectif pour toi, tu peux tout changer ensuite.</p>
             {DEFS.map((d) => (
               <button key={d.type} onClick={() => setType(d.type)} className="w-full flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 text-left cursor-pointer transition">
                 <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${d.color}22`, color: d.color }}>
                   <d.Icon className="w-5 h-5" />
                 </span>
                 <span className="min-w-0">
+                  <span className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: d.color }}>{d.tag}</span>
                   <span className="block text-[15px] font-bold text-slate-900">{d.title}</span>
                   <span className="block text-[13px] text-slate-500 leading-snug mt-0.5 [text-wrap:pretty]">{d.text}</span>
                 </span>
