@@ -262,6 +262,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
     ),
     currencies: (
       <>
+        {/* Réglage rapide : les deux cas les plus courants, en un toucher */}
+        <Block title="Réglage rapide" hint="Tu pourras toujours tout changer en dessous.">
+          <div className="grid grid-cols-2 gap-2">
+            {([['USD', 'CDF', 'Dollar d’abord', 'Solde en dollars, avec les francs en petit'], ['CDF', 'USD', 'Franc d’abord', 'Solde en francs, avec les dollars en petit']] as const).map(([m, sec, title, sub]) => {
+              const on = settings.mainCurrency === m && settings.secondCurrency === sec;
+              return (
+                <button
+                  key={m}
+                  aria-pressed={on}
+                  onClick={() => {
+                    setDraft({});
+                    onChange({ mainCurrency: m, secondCurrency: sec, rates: m === settings.mainCurrency ? settings.rates : {} });
+                  }}
+                  className={`rounded-2xl px-3 py-3 text-left cursor-pointer transition active:scale-[0.97] ${on ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200/70'}`}
+                >
+                  <span className="block text-[14px] font-bold text-slate-900">{title}</span>
+                  <span className="block text-[12px] text-slate-500 leading-snug mt-0.5">{sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Block>
         <Block title="Devise principale" hint="Le solde de l'accueil est affiché dans cette devise. La changer remet les taux à zéro.">
           <Collapsible label={label(settings.mainCurrency)}>
             {(close) => (

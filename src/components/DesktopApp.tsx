@@ -5,6 +5,7 @@ import { ReviewCards } from './ReviewCards';
 import { FestiveCard, FestiveLayer } from './Festive';
 import { useFestive } from '../lib/festive';
 import { BudgetsHomeCard, GoalsHomeCard } from './HomeExtraCards';
+import { StartCard } from './StartCard';
 import { CoachTour, GOAL_TIPS, HOME_TIPS, REPORT_TIPS, SIMPLE_TIPS, WALLET_TIPS } from './CoachTour';
 import { NetworkCloud } from './NetworkCloud';
 import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon, PieChart, HandCoins, Target, CalendarClock } from 'lucide-react';
@@ -56,6 +57,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
   } = p;
   const main = settings.mainCurrency;
   const { hideBalance, simpleMode } = useDisplayPrefs();
+  const firstTime = p.allTransactions.length === 0; // rien noté encore
   const layout = useHomeLayout(); // accueil au choix (Paramètres › Accueil) : sur ordinateur, on cache ce qui est décoché
   const festive = useFestive(); // design des fêtes (espace admin)
   useEffect(() => {
@@ -199,6 +201,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                   <SubsHomeCard transactions={allTransactions} settings={settings} categories={categories} recurrings={p.recurrings} onOpen={() => onNavigate('upcoming')} />
                 </div>
               )}
+              {firstTime && <StartCard onExpense={() => onQuickAction('expense')} onIncome={() => onQuickAction('income')} />}
               {layout.show('budgets') && (
                 <div className="empty:hidden">
                   <BudgetsHomeCard budgets={p.budgets} transactions={allTransactions} categories={categories} settings={settings} onOpen={() => onNavigate('budgets')} />
@@ -218,7 +221,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                   {layout.show('health') && <HealthCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} onSelectTransaction={onSelectTransaction} />}
                   {layout.show('badges') && <BadgesCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} />}
 
-                  {layout.show('month') && <MonthReportCard
+                  {layout.show('month') && !firstTime && <MonthReportCard
                     allTransactions={allTransactions}
                     wallets={wallets}
                     activeWallet={p.activeWallet}
@@ -230,7 +233,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 </>
               )}
 
-              {layout.show('list') && (
+              {layout.show('list') && !firstTime && (
               <div className="bg-white rounded-3xl p-6 border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-base font-bold">Dernières transactions</h2>

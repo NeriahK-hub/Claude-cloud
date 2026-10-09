@@ -902,14 +902,16 @@ const KindPicker: React.FC<{ onPick: (k: WalletKind) => void; onClose: () => voi
         </button>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        {KINDS.map((k) => {
-          const disabled = k.id === 'linked';
+        {/* « Portefeuille lié » n'existe pas encore : on ne le montre pas (une case qui ne fait rien déroute) */}
+        {KINDS.filter((k) => k.id !== 'linked').map((k, i, all) => {
+          const disabled = false;
+          const wide = all.length % 2 === 1 && i === all.length - 1; // dernier seul : sur toute la largeur
           return (
-            <div key={k.id} className="relative">
+            <div key={k.id} className={`relative ${wide ? 'col-span-2' : ''}`}>
               <button
                 disabled={disabled}
                 onClick={() => onPick(k.id as WalletKind)}
-                className={`relative w-full aspect-square overflow-hidden rounded-3xl p-4 text-left text-white ${k.bg} ${
+                className={`relative w-full ${wide ? 'aspect-[2.6/1]' : 'aspect-square'} overflow-hidden rounded-3xl p-4 text-left text-white ${k.bg} ${
                   disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:scale-[0.97] transition-transform'
                 }`}
               >

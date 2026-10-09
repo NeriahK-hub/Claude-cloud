@@ -5,6 +5,7 @@ import { ReviewCards } from './ReviewCards';
 import { FestiveCard, FestiveLayer, FestiveMark } from './Festive';
 import { useFestive } from '../lib/festive';
 import { BudgetsHomeCard, GoalsHomeCard } from './HomeExtraCards';
+import { StartCard } from './StartCard';
 import { CoachTour, GOAL_TIPS, HOME_TIPS, REPORT_TIPS, SIMPLE_TIPS, WALLET_TIPS } from './CoachTour';
 import { SharedProps } from './appProps';
 import { Header } from './Header';
@@ -51,6 +52,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
   const isTab = TABS.includes(tab as TabType);
 
   // Carte par carte, dans l'ordre choisi. Santé et série côte à côte quand elles se suivent.
+  const firstTime = allTransactions.length === 0; // personne qui n'a encore rien noté
   const homeCards = () => {
     const out: React.ReactNode[] = [];
     const ids = layout.shown;
@@ -69,6 +71,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
             </div>
           );
         case 'month':
+          if (firstTime) return null; // rien à comparer : la carte « Note ta première opération » le remplace
           return (
             <div key={id} className="px-5 mb-3">
               <MonthReportCard
@@ -101,6 +104,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
             </div>
           );
         case 'list':
+          if (firstTime) return null;
           return (
             <React.Fragment key={id}>
               <AdBanner className="px-5 mb-3" />
@@ -311,6 +315,11 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
             <div className="px-5 mb-3 empty:hidden">
               <ReviewCards transactions={transactions} settings={settings} categories={categories} />
             </div>
+            {firstTime && (
+              <div className="px-5 mb-3">
+                <StartCard onExpense={() => onQuickAction('expense')} onIncome={() => onQuickAction('income')} />
+              </div>
+            )}
             {homeCards()}
             </>
             )}

@@ -6,17 +6,21 @@ import { useFeature } from '../lib/remoteConfig';
 
 // Messages d'erreur de Supabase, en clair
 export function frenchError(msg: string): string {
-  if (/(join_wallet|create_wallet_invite|wallet_invite_check|revoke_wallet_invites)/.test(msg) && /(find|exist|schema cache)/i.test(msg))
-    return "L'invitation par lien n'est pas encore activée sur le serveur.";
-  if (/ristourne/.test(msg) && /(find|exist|schema cache)/i.test(msg))
-    return "L'invitation à une ristourne n'est pas encore activée sur le serveur (migration 20261006000000_ristourne_custom_invites.sql à exécuter dans Supabase).";
-  if (/schema cache|Could not find the function|does not exist/i.test(msg)) return "Le serveur n'est pas encore à jour : une migration reste à exécuter dans Supabase.";
+  const later = 'Cette fonction n’est pas encore disponible pour le moment. Réessaie un peu plus tard.';
+  if (/(join_wallet|create_wallet_invite|wallet_invite_check|revoke_wallet_invites)/.test(msg) && /(find|exist|schema cache)/i.test(msg)) return later;
+  if (/ristourne/.test(msg) && /(find|exist|schema cache)/i.test(msg)) return later;
+  if (/schema cache|Could not find the function|does not exist/i.test(msg)) return later;
   if (/expired|invalid/i.test(msg) && /token|otp|code/i.test(msg)) return 'Code incorrect ou expiré. Vérifie-le ou demande un nouveau code.';
   if (/after \d+ seconds|rate limit|too many/i.test(msg)) return 'Trop de demandes : attends une minute avant de redemander un code.';
   if (/invalid.*email|email.*invalid/i.test(msg)) return "Cette adresse e-mail n'est pas valide.";
-  if (/provider is not enabled|unsupported provider/i.test(msg)) return "La connexion Google n'est pas encore activée sur le compte en ligne.";
-  if (/delete_my_account/i.test(msg)) return "La suppression de compte n'est pas encore activée sur le serveur.";
-  if (/fetch|network/i.test(msg)) return 'Pas de connexion internet. Réessaie quand le réseau revient.';
+  if (/provider is not enabled|unsupported provider/i.test(msg)) return "La connexion avec Google n'est pas disponible pour le moment. Utilise ton e-mail.";
+  if (/delete_my_account/i.test(msg)) return later;
+  if (/fetch|network|Failed to|Load failed/i.test(msg)) return 'Pas de connexion internet. Réessaie quand le réseau revient.';
+  // Un message technique (en anglais) ne dit rien à la personne : on le garde pour le développeur, et on reste simple
+  if (/\b(the|is|are|not|error|failed|cannot|violates|permission|denied|null|constraint|row|policy|relation|column|jwt|auth|timeout|unexpected|invalid|duplicate|exceeded)\b/i.test(msg)) {
+    console.warn('[Wallo]', msg);
+    return 'Un problème est survenu. Réessaie dans un instant.';
+  }
   return msg;
 }
 

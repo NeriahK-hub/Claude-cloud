@@ -121,10 +121,10 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
             {onOpenReport && (
               <button
                 onClick={() => onOpenReport(period)}
-                aria-label="Voir le détail de cette période"
+                aria-label="Voir le rapport de cette période"
                 className="h-8 pl-2.5 pr-2 rounded-full bg-emerald-500/10 flex items-center gap-1 text-[13px] font-bold text-emerald-600 cursor-pointer active:scale-95 transition"
               >
-                <BarChart2 className="w-3.5 h-3.5" /> Voir le détail <ChevronRight className="w-3.5 h-3.5" />
+                <BarChart2 className="w-3.5 h-3.5" /> Voir le rapport <ChevronRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>

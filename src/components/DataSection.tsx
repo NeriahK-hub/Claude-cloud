@@ -74,21 +74,21 @@ export const DataSection: React.FC<DataSectionProps> = ({ wallets, transactions,
           {busy === 'read' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
           <span className="flex-1">
             Importer un fichier
-            <span className="block text-xs font-medium opacity-70">Money Lover, Excel (.xlsx), CSV ou sauvegarde</span>
+            <span className="block text-xs font-medium opacity-70">Reprends ton historique : Money Lover, Excel ou une sauvegarde</span>
           </span>
         </button>}
         <button onClick={onExcel} disabled={!!busy || transactions.length === 0} className={btn}>
           {busy === 'excel' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileSpreadsheet className="w-5 h-5 text-emerald-600" />}
           <span className="flex-1">
             Exporter en Excel
-            <span className="block text-xs font-medium text-slate-500">{transactions.length} transactions, format Money Lover</span>
+            <span className="block text-xs font-medium text-slate-500">{transactions.length} opération{transactions.length > 1 ? 's' : ''} dans un fichier Excel</span>
           </span>
         </button>
         <button onClick={() => exportBackup({ wallets, transactions, categories, settings, budgets, ristournes })} disabled={!!busy} className={btn}>
           <DatabaseBackup className="w-5 h-5 text-indigo-600" />
           <span className="flex-1">
-            Sauvegarde complète (.json)
-            <span className="block text-xs font-medium text-slate-500">Tout, pour restaurer sur un autre appareil</span>
+            Sauvegarde complète
+            <span className="block text-xs font-medium text-slate-500">Une copie de tout, à remettre sur un autre téléphone</span>
           </span>
         </button>
       </div>
