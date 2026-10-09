@@ -164,17 +164,39 @@ export const UpcomingView: React.FC<{
 
   // Prochainement : une ligne par élément (sa prochaine date), sans ceux déjà « à faire »
   const pendingIds = new Set(pending.map((r) => r.id));
-  const next = recurrings.filter((r) => r.active && !pendingIds.has(r.id)).sort((a, b) => a.nextDate.localeCompare(b.nextDate));
+  // Séparé par mois : le reste de ce mois, puis chacun des 3 mois suivants (chaque échéance à sa date), avec le total à payer
+  const months = useMemo(() => {
+    const now = new Date();
+    const end = ymd(new Date(now.getFullYear(), now.getMonth() + 4, 0));
+    const groups = new Map<string, { r: Recurring; day: string }[]>();
+    for (const r of recurrings) {
+      if (!r.active) continue;
+      for (const day of occurrencesBetween(r, today, end)) {
+        if (pendingIds.has(r.id) && day <= today) continue; // déjà dans « À faire maintenant »
+        const key = day.slice(0, 7);
+        groups.set(key, [...(groups.get(key) ?? []), { r, day }]);
+      }
+    }
+    return [...groups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, items]) => {
+        const sorted = items.sort((a, b) => a.day.localeCompare(b.day));
+        const out = sorted.filter((x) => x.r.direction === 'out' && x.r.amount).reduce((t, x) => t + (convertBetween(x.r.amount!, x.r.currency, settings.mainCurrency, settings) ?? 0), 0);
+        const d = new Date(`${key}-01T00:00`);
+        const label = key === today.slice(0, 7) ? 'Ce mois-ci' : d.toLocaleDateString('fr-FR', { month: 'long', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) });
+        return { key, label, items: sorted, out };
+      });
+  }, [recurrings, today, settings, pending]); // eslint-disable-line react-hooks/exhaustive-deps
   const paused = recurrings.filter((r) => !r.active);
   const how = (r: Recurring) =>
     r.bill ? 'Facture' : r.mode === 'auto' ? 'Noté tout seul' : 'On te demandera';
   const section = 'text-[12px] font-bold text-slate-400 tracking-wider uppercase mb-2 px-1';
 
-  const row = (r: Recurring) => {
+  const row = (r: Recurring, day?: string) => {
     const cat = catOf(r.categoryId);
-    const d = parseDay(r.nextDate);
+    const d = parseDay(day ?? r.nextDate);
     return (
-      <button key={r.id} onClick={() => setEditing(r)} className="w-full py-3 flex items-center gap-3 text-left cursor-pointer">
+      <button key={`${r.id}-${day ?? ''}`} onClick={() => setEditing(r)} className="w-full py-3 flex items-center gap-3 text-left cursor-pointer">
         <span className="w-11 shrink-0 text-center">
           <span className="block text-[18px] font-bold leading-none text-slate-900">{d.getDate()}</span>
           <span className="block text-[10px] font-semibold uppercase text-slate-400 mt-0.5">{d.toLocaleDateString('fr-FR', { month: 'short' })}</span>
@@ -210,7 +232,7 @@ export const UpcomingView: React.FC<{
       </div>
 
       {recurrings.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-slate-100 px-6 py-8 text-center">
+        <div className="bg-white rounded-3xl border border-slate-100 px-6 py-8 text-center mb-4">
           <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
             <Repeat className="w-7 h-7 text-slate-700" />
           </div>
@@ -284,18 +306,21 @@ export const UpcomingView: React.FC<{
             </div>
           )}
 
-          {next.length > 0 && (
-            <div className="mb-5">
-              <div className={section}>Prochainement</div>
-              <div className="bg-white rounded-3xl border border-slate-100 px-4 divide-y divide-slate-100">{next.map(row)}</div>
-              <p className="text-[12px] text-slate-400 mt-2 px-1">Touche une ligne pour la modifier, la mettre en pause ou la supprimer.</p>
+          {months.map((m) => (
+            <div key={m.key} className="mb-5">
+              <div className={`${section} flex items-baseline justify-between`}>
+                <span>{m.label}</span>
+                {m.out > 0 && <span className="normal-case tracking-normal font-semibold tabular-nums">{money(m.out, settings.mainCurrency)} à payer</span>}
+              </div>
+              <div className="bg-white rounded-3xl border border-slate-100 px-4 divide-y divide-slate-100">{m.items.map((x) => row(x.r, x.day))}</div>
             </div>
-          )}
+          ))}
+          {months.length > 0 && <p className="text-[12px] text-slate-400 -mt-2 mb-5 px-1">Touche une ligne pour la modifier, la mettre en pause ou la supprimer.</p>}
 
           {paused.length > 0 && (
             <div className="mb-5 opacity-60">
               <div className={section}>En pause</div>
-              <div className="bg-white rounded-3xl border border-slate-100 px-4 divide-y divide-slate-100">{paused.map(row)}</div>
+              <div className="bg-white rounded-3xl border border-slate-100 px-4 divide-y divide-slate-100">{paused.map((r) => row(r))}</div>
             </div>
           )}
             </>
@@ -313,7 +338,9 @@ export const UpcomingView: React.FC<{
             <span className="block text-[12px] text-slate-500 truncate">
               {subs.length === 0
                 ? 'Aucun pour l’instant'
-                : `${subs.length} dépense${subs.length > 1 ? 's' : ''} qui revien${subs.length > 1 ? 'nent' : 't'} chaque mois${newSubs > 0 ? ` · ${newSubs} pas encore ici` : ''}`}
+                : newSubs > 0
+                  ? `${newSubs} à ajouter dans À venir`
+                  : 'Tous sont déjà dans À venir'}
             </span>
           </span>
           <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
