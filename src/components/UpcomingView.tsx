@@ -230,8 +230,135 @@ export const UpcomingView: React.FC<{
     );
   };
 
+  const summaryP = (
+  <p className="text-[14px] text-slate-600 mb-5 px-1">
+    {month.out === 0 && month.in === 0 ? (
+      month.unknown ? (
+        "D'ici la fin du mois : seulement des factures dont tu tapes le montant au moment de payer."
+      ) : (
+        "Plus rien de prévu d'ici la fin du mois."
+      )
+    ) : (
+      <>
+        D'ici la fin du mois, il reste <b className="text-slate-900 tabular-nums whitespace-nowrap">{money(month.out, settings.mainCurrency)}</b>
+        {other(month.out, settings.mainCurrency) && <span className="tabular-nums whitespace-nowrap"> ({other(month.out, settings.mainCurrency)})</span>} à payer
+        {month.in > 0 && (
+          <>
+            {' '}et <b className="text-emerald-600 tabular-nums whitespace-nowrap">{money(month.in, settings.mainCurrency)}</b>
+            {other(month.in, settings.mainCurrency) && <span className="tabular-nums whitespace-nowrap"> ({other(month.in, settings.mainCurrency)})</span>} à recevoir
+          </>
+        )}
+        {month.unknown && ', sans compter les factures au montant qui change'}.
+      </>
+    )}
+  </p>
+  );
+  const tabsEl = (
+  <div role="tablist" className="flex gap-1 p-1 rounded-full bg-slate-200/60 mb-5">
+    {([
+      ['list', 'Liste', List],
+      ['calendar', 'Calendrier', CalendarDays],
+    ] as const).map(([id, label, Icon]) => (
+      <button
+        key={id}
+        role="tab"
+        aria-selected={view === id}
+        onClick={() => setView(id)}
+        className={`flex-1 h-9 rounded-full flex items-center justify-center gap-1.5 text-[13px] font-semibold cursor-pointer transition ${view === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+      >
+        <Icon className="w-3.5 h-3.5" /> {label}
+      </button>
+    ))}
+  </div>
+  );
+  const contentEl = (
+    <>
+    {view === 'calendar' && <UpcomingCalendar recurrings={recurrings} categories={categories} settings={settings} onEdit={setEditing} />}
+    {view === 'list' && (
+      <>
+    {pending.length > 0 && (
+      <div className="mb-5">
+        <div className={section}>À faire maintenant</div>
+        <div className="bg-white rounded-3xl border border-slate-100 px-4 divide-y divide-slate-100">
+          {pending.map((r) => (
+            <DueRow key={r.id} r={r} category={catOf(r.categoryId)} onConfirm={onConfirm} onSkip={onSkip} onEdit={setEditing} />
+          ))}
+        </div>
+      </div>
+    )}
+
+    {months.map((m) => (
+      <div key={m.key} className="mb-5">
+        <div className="flex items-end justify-between gap-3 mb-2.5 px-1">
+          <h2 className="text-[19px] font-extrabold tracking-tight text-slate-900 first-letter:uppercase">{m.label}</h2>
+          <span className="flex items-center gap-1.5 text-[12px] font-bold tabular-nums">
+            {m.out > 0 && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-500">−{money(m.out, settings.mainCurrency)}</span>}
+            {m.inc > 0 && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600">+{money(m.inc, settings.mainCurrency)}</span>}
+          </span>
+        </div>
+        <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100">{m.items.map((x) => row(x.r, x.day))}</div>
+      </div>
+    ))}
+    {months.length > 0 && <p className="text-[12px] text-slate-400 -mt-2 mb-5 px-1">Touche une ligne pour la modifier, la mettre en pause ou la supprimer.</p>}
+
+    {paused.length > 0 && (
+      <div className="mb-5 opacity-60">
+        <div className={section}>En pause</div>
+        <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100">{paused.map((r) => row(r))}</div>
+      </div>
+    )}
+      </>
+    )}
+    </>
+  );
+  const subsEl = transactions.length > 0 && (
+    <button onClick={() => setShowSubs(true)} className={`w-full flex items-center gap-3 px-4 py-3.5 ${desktop && recurrings.length > 0 ? '' : 'mb-5'} bg-white rounded-3xl border border-slate-100 text-left cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors`}>
+      <span className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-teal-500/10 text-teal-600">
+        <Repeat className="w-5 h-5" />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-[15px] font-semibold text-slate-900">Abonnements repérés</span>
+        <span className="block text-[12px] text-slate-500 truncate">
+          {subs.length === 0
+            ? 'Aucun pour l’instant'
+            : newSubs > 0
+              ? `${newSubs} à ajouter dans À venir`
+              : 'Tous sont déjà dans À venir'}
+        </span>
+      </span>
+      <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+    </button>
+  );
+  // Ordinateur : le contenu à gauche, et à droite (qui reste visible en défilant) le bouton, le résumé du mois et les abonnements repérés
+  const wide = desktop && recurrings.length > 0;
+  const summaryCard = (
+    <div className="bg-white rounded-3xl border border-slate-100 p-5">
+      <div className="text-[12px] font-bold text-slate-400 tracking-wider uppercase mb-3">D'ici la fin du mois</div>
+      {month.out === 0 && month.in === 0 ? (
+        <p className="text-[14px] text-slate-500">{month.unknown ? 'Seulement des factures dont tu tapes le montant au moment de payer.' : 'Plus rien de prévu.'}</p>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <div className="text-[13px] text-slate-500">À payer</div>
+            <div className="text-[24px] font-extrabold tabular-nums tracking-tight text-slate-900 leading-tight">{money(month.out, settings.mainCurrency)}</div>
+            {other(month.out, settings.mainCurrency) && <div className="text-[12px] text-slate-400 tabular-nums">{other(month.out, settings.mainCurrency)}</div>}
+          </div>
+          {month.in > 0 && (
+            <div className="pt-3 border-t border-slate-100">
+              <div className="text-[13px] text-slate-500">À recevoir</div>
+              <div className="text-[20px] font-extrabold tabular-nums tracking-tight text-emerald-600 leading-tight">{money(month.in, settings.mainCurrency)}</div>
+              {other(month.in, settings.mainCurrency) && <div className="text-[12px] text-slate-400 tabular-nums">{other(month.in, settings.mainCurrency)}</div>}
+            </div>
+          )}
+          {month.unknown && <p className="text-[12px] text-slate-400">Sans les factures au montant qui change.</p>}
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className={desktop ? 'max-w-3xl animate-screen' : 'px-5 pt-4 pb-8 animate-screen'}>
+    <div className={desktop ? (wide ? 'max-w-5xl animate-screen' : 'max-w-3xl animate-screen') : 'px-5 pt-4 pb-8 animate-screen'}>
+      {!wide && (
       <div className={`${desktop ? 'desk-head' : 'page-head'} flex items-center gap-3 mb-4`}>
         <button onClick={onBack} aria-label="Retour" className="w-11 h-11 shrink-0 rounded-full bg-white border border-slate-100 flex items-center justify-center cursor-pointer">
           <ChevronLeft className="w-5 h-5" />
@@ -243,6 +370,7 @@ export const UpcomingView: React.FC<{
           </button>
         )}
       </div>
+      )}
 
       {recurrings.length === 0 ? (
         <div className="bg-white rounded-3xl border border-slate-100 px-6 py-8 text-center mb-4">
@@ -262,106 +390,29 @@ export const UpcomingView: React.FC<{
             </button>
           </div>
         </div>
+      ) : wide ? (
+        <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-8 items-start">
+          <div>
+            {tabsEl}
+            {contentEl}
+          </div>
+          <aside className="sticky top-6 space-y-4">
+            <button onClick={() => setEditing('new')} className="w-full h-12 rounded-2xl bg-accent hover:bg-accent-hover text-[15px] font-bold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition">
+              <Plus className="w-4 h-4" /> Ajouter
+            </button>
+            {summaryCard}
+            {subsEl}
+          </aside>
+        </div>
       ) : (
         <>
-          {/* Résumé en une phrase */}
-          <p className="text-[14px] text-slate-600 mb-5 px-1">
-            {month.out === 0 && month.in === 0 ? (
-              month.unknown ? (
-                "D'ici la fin du mois : seulement des factures dont tu tapes le montant au moment de payer."
-              ) : (
-                "Plus rien de prévu d'ici la fin du mois."
-              )
-            ) : (
-              <>
-                D'ici la fin du mois, il reste <b className="text-slate-900 tabular-nums whitespace-nowrap">{money(month.out, settings.mainCurrency)}</b>
-                {other(month.out, settings.mainCurrency) && <span className="tabular-nums whitespace-nowrap"> ({other(month.out, settings.mainCurrency)})</span>} à payer
-                {month.in > 0 && (
-                  <>
-                    {' '}et <b className="text-emerald-600 tabular-nums whitespace-nowrap">{money(month.in, settings.mainCurrency)}</b>
-                    {other(month.in, settings.mainCurrency) && <span className="tabular-nums whitespace-nowrap"> ({other(month.in, settings.mainCurrency)})</span>} à recevoir
-                  </>
-                )}
-                {month.unknown && ', sans compter les factures au montant qui change'}.
-              </>
-            )}
-          </p>
-
-          {/* Liste ou calendrier */}
-          <div role="tablist" className="flex gap-1 p-1 rounded-full bg-slate-200/60 mb-5">
-            {([
-              ['list', 'Liste', List],
-              ['calendar', 'Calendrier', CalendarDays],
-            ] as const).map(([id, label, Icon]) => (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={view === id}
-                onClick={() => setView(id)}
-                className={`flex-1 h-9 rounded-full flex items-center justify-center gap-1.5 text-[13px] font-semibold cursor-pointer transition ${view === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-              >
-                <Icon className="w-3.5 h-3.5" /> {label}
-              </button>
-            ))}
-          </div>
-
-          {view === 'calendar' && <UpcomingCalendar recurrings={recurrings} categories={categories} settings={settings} onEdit={setEditing} />}
-          {view === 'list' && (
-            <>
-          {pending.length > 0 && (
-            <div className="mb-5">
-              <div className={section}>À faire maintenant</div>
-              <div className="bg-white rounded-3xl border border-slate-100 px-4 divide-y divide-slate-100">
-                {pending.map((r) => (
-                  <DueRow key={r.id} r={r} category={catOf(r.categoryId)} onConfirm={onConfirm} onSkip={onSkip} onEdit={setEditing} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {months.map((m) => (
-            <div key={m.key} className="mb-5">
-              <div className="flex items-end justify-between gap-3 mb-2.5 px-1">
-                <h2 className="text-[19px] font-extrabold tracking-tight text-slate-900 first-letter:uppercase">{m.label}</h2>
-                <span className="flex items-center gap-1.5 text-[12px] font-bold tabular-nums">
-                  {m.out > 0 && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-500">−{money(m.out, settings.mainCurrency)}</span>}
-                  {m.inc > 0 && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600">+{money(m.inc, settings.mainCurrency)}</span>}
-                </span>
-              </div>
-              <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100">{m.items.map((x) => row(x.r, x.day))}</div>
-            </div>
-          ))}
-          {months.length > 0 && <p className="text-[12px] text-slate-400 -mt-2 mb-5 px-1">Touche une ligne pour la modifier, la mettre en pause ou la supprimer.</p>}
-
-          {paused.length > 0 && (
-            <div className="mb-5 opacity-60">
-              <div className={section}>En pause</div>
-              <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100">{paused.map((r) => row(r))}</div>
-            </div>
-          )}
-            </>
-          )}
+          {summaryP}
+          {tabsEl}
+          {contentEl}
         </>
       )}
 
-      {transactions.length > 0 && (
-        <button onClick={() => setShowSubs(true)} className="w-full flex items-center gap-3 px-4 py-3.5 mb-5 bg-white rounded-3xl border border-slate-100 text-left cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors">
-          <span className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-teal-500/10 text-teal-600">
-            <Repeat className="w-5 h-5" />
-          </span>
-          <span className="flex-1 min-w-0">
-            <span className="block text-[15px] font-semibold text-slate-900">Abonnements repérés</span>
-            <span className="block text-[12px] text-slate-500 truncate">
-              {subs.length === 0
-                ? 'Aucun pour l’instant'
-                : newSubs > 0
-                  ? `${newSubs} à ajouter dans À venir`
-                  : 'Tous sont déjà dans À venir'}
-            </span>
-          </span>
-          <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
-        </button>
-      )}
+      {!wide && subsEl}
 
       {showSubs && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-end sm:items-center justify-center animate-fade-in" onClick={() => setShowSubs(false)}>
