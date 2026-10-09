@@ -104,8 +104,8 @@ export const ChallengeSheet: React.FC<{
           <div className="space-y-2">
             <p className="text-[13px] text-slate-500 mb-3 px-1 [text-wrap:pretty]">Choisis une façon d'épargner. Wallo crée l'objectif pour toi, tu peux tout changer ensuite.</p>
             {DEFS.map((d) => (
-              <button key={d.type} onClick={() => setType(d.type)} className="w-full flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 text-left cursor-pointer transition">
-                <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${d.color}22`, color: d.color }}>
+              <button key={d.type} onClick={() => setType(d.type)} className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 text-left cursor-pointer transition">
+                <span className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: `${d.color}22`, color: d.color }}>
                   <d.Icon className="w-5 h-5" />
                 </span>
                 <span className="min-w-0">
