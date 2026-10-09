@@ -1346,7 +1346,7 @@ const ChallengeLine: React.FC<{ wallet: Wallet; className?: string }> = ({ walle
 // « Pourquoi cet objectif ? » : rappelé en citation
 const GoalWhy: React.FC<{ wallet: Wallet; className?: string }> = ({ wallet: w, className = '' }) =>
   w.goalWhy?.trim() ? (
-    <p className={`flex items-start gap-2 text-[13px] italic text-slate-600 ${className}`}>
+    <p className={`flex items-start gap-2 text-[12.5px] leading-snug italic text-slate-500 ${className}`}>
       <Quote className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400 not-italic" />
       <span className="min-w-0">{w.goalWhy.trim()}</span>
     </p>
@@ -1900,26 +1900,29 @@ const GoalCard: React.FC<{
           >
             {savedText}
           </div>
-          <div className="mt-1.5 text-[13px] text-slate-500 tabular-nums">
-            sur {roundMoney(w.goalAmount, w.currency)}
-            {g.left > 0 && <> · <span className="whitespace-nowrap">reste {roundMoney(g.left, w.currency)}</span></>}
+          <div className="mt-1.5 text-[12px] text-slate-400 tabular-nums">sur {roundMoney(w.goalAmount, w.currency)}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 empty:hidden">
+            {g.left > 0 && (
+              <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[12px] font-semibold whitespace-nowrap tabular-nums bg-sky-500/10 text-sky-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                reste {roundMoney(g.left, w.currency)}
+              </span>
+            )}
+            <GoalStatusPill wallet={w} insight={g} />
+            <GoalStreakPill wallet={w} transactions={transactions} />
           </div>
           <GoalBalanceNote wallet={w} transactions={transactions} className="mt-1.5" />
         </div>
         <GoalRing ratio={g.ratio} />
       </div>
       <ChallengeLine wallet={w} className="mt-3" />
-      <GoalWhy wallet={w} className="mt-3" />
+      <GoalWhy wallet={w} className="mt-3 [&>span]:line-clamp-2" />
       {equivalence && (
-        <p className="mt-3 flex items-start gap-2 text-[13px] text-slate-600">
-          <Lightbulb className="w-4 h-4 shrink-0 mt-px text-amber-500" />
+        <p className="mt-3 flex items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-slate-600">
+          <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-px text-amber-500" />
           <span className="min-w-0">Tu as déjà épargné {equivalence}.</span>
         </p>
       )}
-      <div className="mt-4 flex flex-wrap gap-1.5 empty:hidden">
-        <GoalStatusPill wallet={w} insight={g} />
-        <GoalStreakPill wallet={w} transactions={transactions} />
-      </div>
       <GoalActions wallet={w} wallets={wallets} transactions={transactions} spending={spending} settings={settings} onDeposit={onDeposit} />
       {!fixedPace(w) && <GoalPace wallet={w} insight={g} />}
       {g.left > 0 && (
