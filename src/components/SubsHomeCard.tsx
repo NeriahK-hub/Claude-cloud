@@ -3,12 +3,20 @@ import { Repeat, ChevronRight } from 'lucide-react';
 import { Recurring, Settings, Transaction } from '../types';
 import { Category } from '../data/categories';
 import { findSubscriptions } from '../lib/review';
-import { formatMoney } from '../lib/money';
+import { formatMoney, toMain } from '../lib/money';
 import { getPrefs } from '../lib/display';
 import { SecretMoney } from './MatrixSwap';
 
 // Carte d'accueil « Abonnements » (cachée par défaut : Paramètres › Accueil) :
-// ce que coûtent les dépenses qui reviennent chaque mois.
+// ce que coûtent par mois les dépenses qui reviennent. Elle compte ce qui est déjà dans « À venir »
+// (au rythme de chacune) + ce que Wallo a repéré et qui n'y est pas encore : jamais deux fois la même.
+const perMonth = (r: Recurring) => {
+  const n = Math.max(1, (r.frequency === 'days' ? r.everyDays : r.every) ?? 1);
+  if (r.frequency === 'week') return (52 / 12) / n;
+  if (r.frequency === 'days') return 30.4 / n;
+  if (r.frequency === 'year') return 1 / (12 * n);
+  return 1 / n;
+};
 export const SubsHomeCard: React.FC<{ transactions: Transaction[]; settings: Settings; categories: Category[]; recurrings: Recurring[]; onOpen: () => void }> = ({
   transactions,
   settings,
@@ -16,9 +24,13 @@ export const SubsHomeCard: React.FC<{ transactions: Transaction[]; settings: Set
   recurrings,
   onOpen,
 }) => {
-  const list = useMemo(() => findSubscriptions(transactions, settings, categories, recurrings), [transactions, settings, categories, recurrings]);
+  const list = useMemo(() => {
+    const saved = recurrings.filter((r) => r.active && r.direction === 'out' && r.amount).map((r) => toMain(r.amount!, r.currency, settings) * perMonth(r));
+    const found = findSubscriptions(transactions, settings, categories, recurrings).filter((x) => !x.known).map((x) => x.amount);
+    return [...saved, ...found];
+  }, [transactions, settings, categories, recurrings]);
   if (list.length === 0) return null;
-  const total = list.reduce((s, x) => s + x.amount, 0);
+  const total = list.reduce((s, x) => s + x, 0);
   const money = (v: number) => formatMoney(Math.round(v), settings.mainCurrency, { ...getPrefs(), decimals: 'never' });
   return (
     <button onClick={onOpen} className="w-full text-left bg-white rounded-3xl border border-slate-100 p-4 flex items-center gap-3.5 cursor-pointer hover:bg-slate-50 active:scale-[0.99] transition">
