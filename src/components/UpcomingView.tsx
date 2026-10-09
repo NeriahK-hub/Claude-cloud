@@ -678,6 +678,18 @@ const RecurringSheet: React.FC<{
             />
           </Group>
 
+          <Group title="Note">
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={200}
+              rows={2}
+              placeholder="Facultatif : code client, compte à utiliser, rappel…"
+              aria-label="Note"
+              className="w-full px-4 py-3 bg-transparent text-[15px] text-slate-900 placeholder:text-slate-400 outline-none field-plain resize-none"
+            />
+          </Group>
+
           <Group title="Quand">
             <NavRow
               label="Revient"
@@ -739,19 +751,6 @@ const RecurringSheet: React.FC<{
               )}
             </Group>
           )}
-
-          <Group>
-            <label className="flex items-center gap-3 px-4 min-h-[50px] cursor-text focus-within:bg-slate-200/50 transition-colors">
-              <span className="text-[15px] text-slate-900 shrink-0">Note</span>
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={120}
-                placeholder="Facultatif"
-                className="flex-1 min-w-0 bg-transparent text-right text-[15px] text-slate-900 placeholder:text-slate-400 outline-none field-plain"
-              />
-            </label>
-          </Group>
 
           {initial && (
             <Group>
