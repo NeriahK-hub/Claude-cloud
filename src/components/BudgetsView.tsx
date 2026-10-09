@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { takeJump } from '../lib/jumpTo';
 import { BudgetDraft, clearBudgetDraft, peekBudgetDraft } from '../lib/budgetDraft';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, Layers, Pencil, Trash2, PieChart, Delete, CalendarDays, HelpCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, Layers, Pencil, Trash2, PieChart, Delete, CalendarDays, HelpCircle, Clock } from 'lucide-react';
 import { Budget, Recurring, Settings, Transaction } from '../types';
 import { occurrencesBetween, ymd, parseDay } from '../lib/recurring';
 import { convertBetween } from '../lib/money';
@@ -192,11 +192,19 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
                 <div className={`${money(Math.abs(total - spent)).length > 14 ? 'text-[20px]' : 'text-[26px]'} leading-tight font-bold tracking-tight tabular-nums break-words ${total - spent < 0 ? 'text-red-600' : 'text-slate-900'}`}>
                   {money(Math.abs(total - spent))}
                 </div>
-                <div className="text-[13px] text-slate-500 mt-0.5">
-                  sur {money(total)}
-                  {isNow && total - spent >= 0 && <> · <span className="whitespace-nowrap">{daysLeft} jour{daysLeft > 1 ? 's' : ''}</span></>}
+                <div className="text-[12px] text-slate-400 mt-0.5">sur {money(total)}</div>
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold text-slate-700 tabular-nums" style={{ background: `${RING_COLOR(spent / (total || 1))}1f` }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: RING_COLOR(spent / (total || 1)) }} />
+                    {money(spent)} dépensés
+                  </span>
+                  {isNow && total - spent >= 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold text-slate-500 bg-slate-100 whitespace-nowrap">
+                      <Clock className="w-3 h-3" />
+                      {daysLeft} jour{daysLeft > 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
-                <div className="text-[12px] text-slate-400 mt-0.5">{money(spent)} dépensés</div>
               </div>
             </div>
             {(range || rows.length === 1) && <PaceRows spent={spent} amount={total} range={range ?? rows[0].st} money={about} />}
@@ -291,13 +299,14 @@ const PaceRows: React.FC<{ spent: number; amount: number; range: { start: Date; 
     if (before) return [before[2], before[1]];
     return [t, ''];
   };
-  const tile = (label: [string, string], value: number | string, tone = 'text-slate-900') => {
+  const tile = (label: [string, string], value: number | string, tone = 'text-slate-900', hue = '#94A3B8') => {
     let [num, unit] = typeof value === 'number' ? split(value) : [value, ''];
     // Très grands montants : « 14,6 M » (un million et plus) pour tenir dans la case
     if (typeof value === 'number' && Math.abs(value) >= 1e6) num = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
     const approx = typeof value === 'number' && Math.round(value) !== 0;
     return (
-      <div className="rounded-2xl bg-slate-100 px-2.5 py-3 min-w-0 flex flex-col gap-1.5">
+      <div className="rounded-2xl px-2.5 py-3 min-w-0 flex flex-col gap-1.5" style={{ background: `${hue}22` }}>
+        <span className="w-6 h-1 rounded-full" style={{ background: hue }} />
         <div className="text-[12px] leading-tight font-medium text-slate-500">
           <span className="block truncate">{label[0]}</span>
           <span className="block truncate">{label[1]}</span>
@@ -315,9 +324,9 @@ const PaceRows: React.FC<{ spent: number; amount: number; range: { start: Date; 
   return (
     <>
       <div className={`grid gap-2 mt-4 ${p.current ? 'grid-cols-3' : 'grid-cols-1'}`}>
-        {p.current && tile(['Tu peux', 'par jour'], spent >= amount ? 'Épuisé' : p.perDayAllowed, spent >= amount ? 'text-red-600' : 'text-slate-900')}
-        {p.current && tile(['Prévu', 'à la fin'], p.projected, over ? 'text-red-600' : 'text-slate-900')}
-        {tile(['Dépensé', 'par jour'], p.perDay)}
+        {p.current && tile(['Tu peux', 'par jour'], spent >= amount ? 'Épuisé' : p.perDayAllowed, spent >= amount ? 'text-red-600' : 'text-slate-900', '#10B981')}
+        {p.current && tile(['Prévu', 'à la fin'], p.projected, over ? 'text-red-600' : 'text-slate-900', over ? '#EF4444' : '#F59E0B')}
+        {tile(['Dépensé', 'par jour'], p.perDay, 'text-slate-900', '#3B82F6')}
       </div>
       {p.current && over && (
         <p className="text-[12px] text-red-600 mt-2">À ce rythme, tu dépasseras de {money(p.projected - amount)}.</p>
