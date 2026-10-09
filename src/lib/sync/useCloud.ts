@@ -187,6 +187,7 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
       p.wallets?.upsert.forEach((w) => w.members?.forEach((m) => known.current!.add(m.id)));
       p.ristournes?.upsert.forEach((r) => [...r.members, ...r.payments].forEach((x) => known.current!.add(x.id)));
       p.debtShares?.upsert.forEach((s) => s.moves.forEach((m) => known.current!.add(m.id)));
+      if (res.heal) again.current = true; // une opération manquait d'un côté : on répare tout de suite
       writeMeta(res.meta);
       if (refetch) refetchShared.current = false;
       // Réglages de l'appareil (thème, couleur, affichage…) : gardés aussi dans le compte
