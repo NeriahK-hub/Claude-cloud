@@ -101,6 +101,7 @@ export interface Recurring {
   everyDays?: number; // seulement 'days' : tous les N jours
   cancelBy?: string; // abonnement « à résilier » : rappel à cette date (AAAA-MM-JJ) ; '' = rappel retiré
   every?: number; // semaine / mois / année : tous les N (absent = 1 : « toutes les 2 semaines », « tous les 3 mois »)
+  until?: string; // dernier paiement (AAAA-MM-JJ, inclus) : ensuite c'est fini ; absent = sans fin ; '' = fin retirée
   note?: string; // mémo libre (« code client », « résilier avant… ») ; '' = retiré
   nextDate: string; // AAAA-MM-JJ : prochaine fois (facture : date limite)
   anchorDay?: number; // chaque mois / année : le jour voulu (31 -> 28 février puis de nouveau 31 mars)

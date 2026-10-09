@@ -4,7 +4,7 @@ import { Recurring, Settings, Transaction, Wallet } from '../types';
 import { Category } from '../data/categories';
 import { convertBetween, formatMoney } from '../lib/money';
 import { getPrefs } from '../lib/display';
-import { BILL_PRESETS, daysBetween, dueLevel, frequencyText, occurrencesBetween, parseDay, ymd } from '../lib/recurring';
+import { BILL_PRESETS, countUntil, daysBetween, dueLevel, frequencyText, nthDate, occurrencesBetween, parseDay, ymd } from '../lib/recurring';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { DateField } from './DatePicker';
 import { Group, NavRow, PickRow, SwitchRow } from './FormRows';
@@ -206,6 +206,8 @@ export const UpcomingView: React.FC<{
     const d = parseDay(date);
     const tone = cat?.color ?? '#64748B';
     const near = soon(date);
+    const ended = !r.active && !!r.until && r.nextDate > r.until; // tous les paiements prévus ont été faits
+    const lastOne = !!r.until && date === r.until && !ended;
     return (
       <button key={`${r.id}-${day ?? ''}`} onClick={() => setEditing(r)} className="w-full px-3.5 py-3 flex items-center gap-3 text-left cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors">
         {/* La date, dans une pastille à la couleur de la catégorie */}
@@ -216,9 +218,10 @@ export const UpcomingView: React.FC<{
         <span className="flex-1 min-w-0">
           <span className="block text-[15px] font-semibold text-slate-900 truncate">{r.title}</span>
           <span className="flex items-center gap-1.5 text-[12px] text-slate-500 mt-0.5 min-w-0">
-            {near && <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 font-bold">{near}</span>}
+            {near && !ended && <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 font-bold">{near}</span>}
+            {lastOne && <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-slate-500/15 text-slate-500 font-bold">Dernier</span>}
             <span className="truncate">
-              {r.cancelBy ? <span className="text-amber-600 font-semibold">À résilier</span> : how(r)}
+              {ended ? <span className="text-emerald-600 font-semibold">Terminé</span> : r.cancelBy ? <span className="text-amber-600 font-semibold">À résilier</span> : how(r)}
               {r.note && <span> · {r.note}</span>}
             </span>
           </span>
@@ -315,7 +318,7 @@ export const UpcomingView: React.FC<{
 
     {paused.length > 0 && (
       <div className="mb-5 opacity-60">
-        <div className={section}>En pause</div>
+        <div className={section}>En pause ou terminées</div>
         <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100">{paused.map((r) => row(r))}</div>
       </div>
     )}
@@ -536,10 +539,18 @@ const RecurringSheet: React.FC<{
   const [cancel, setCancel] = useState(!!seed?.cancelBy);
   const [cancelBy, setCancelBy] = useState(seed?.cancelBy || '');
   const [note, setNote] = useState(seed?.note ?? '');
+  // Fin (facultatif) : jamais, après N fois, ou à une date
+  const [endMode, setEndMode] = useState<'never' | 'times' | 'date'>(seed?.until ? 'date' : 'never');
+  const [endTimes, setEndTimes] = useState('6');
+  const [endDate, setEndDate] = useState(seed?.until ?? '');
   const [picking, setPicking] = useState<'wallet' | 'category' | 'frequency' | null>(null); // liste ouverte dans la fenêtre
 
   const wallet = wallets.find((w) => w.id === walletId);
   const currency = wallet?.currency ?? defaultCurrency;
+  // Dernier paiement choisi (null = sans fin)
+  const stepOf = { frequency, everyDays: frequency === 'days' ? Math.max(1, Number(count)) : undefined, every: frequency !== 'days' && Number(count) > 1 ? Number(count) : undefined, anchorDay: frequency === 'month' || frequency === 'year' ? Number(nextDate.slice(8, 10)) : undefined };
+  const untilValue = endMode === 'never' ? null : endMode === 'times' ? nthDate(nextDate, Math.max(1, Number(endTimes) || 1), stepOf) : endDate || null;
+  const untilBad = !!untilValue && untilValue < nextDate; // fin avant le premier paiement
   const direction: 'in' | 'out' = kind === 'in' ? 'in' : 'out';
   const cats = categories.filter((c) => c.type === (direction === 'in' ? 'income' : 'expense'));
   const cat = categories.find((c) => c.id === categoryId);
@@ -547,7 +558,7 @@ const RecurringSheet: React.FC<{
   const catName = (c?: Category) => (c ? (parentOf(c) ? `${parentOf(c)!.name} › ${c.name}` : c.name) : 'Aucune');
   const value = parseFloat(amount.replace(/\s/g, '').replace(',', '.'));
   const askAmount = kind === 'bill' && variable;
-  const valid = title.trim() !== '' && !!wallet && nextDate !== '' && (askAmount || value > 0) && Number(count) >= 1;
+  const valid = !untilBad && title.trim() !== '' && !!wallet && nextDate !== '' && (askAmount || value > 0) && Number(count) >= 1;
   const symbol = currency === 'USD' ? '$' : currency === 'CDF' ? 'FC' : currency === 'EUR' ? '€' : currency;
 
   const chip = (on: boolean) => `h-9 px-3.5 rounded-full text-[13px] font-semibold cursor-pointer transition ${on ? 'bg-accent' : 'bg-white text-slate-600 border border-slate-200'}`;
@@ -808,6 +819,30 @@ const RecurringSheet: React.FC<{
             </div>
           </Group>
 
+          <Group title="Fin" hint={endMode === 'never' ? 'Facultatif : ça revient tant que tu ne l\'arrêtes pas.' : untilBad ? 'La fin est avant la première date.' : untilValue ? `Dernier paiement le ${parseDay(untilValue).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}${endMode === 'times' ? '' : ` (${countUntil(nextDate, untilValue, stepOf)} fois)`}.` : undefined}>
+            <div className="p-1.5">
+              <div className="flex gap-1 p-1 rounded-full bg-slate-200/60">
+                {([['never', 'Sans fin'], ['times', 'Après N fois'], ['date', 'À une date']] as const).map(([id, label]) => (
+                  <button key={id} type="button" onClick={() => setEndMode(id)} className={`flex-1 h-9 rounded-full text-[13px] font-semibold cursor-pointer transition ${endMode === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {endMode === 'times' && (
+              <label className="flex items-center gap-3 px-4 min-h-[50px] cursor-text">
+                <span className="text-[15px] text-slate-900 shrink-0">Nombre de paiements</span>
+                <input inputMode="numeric" value={endTimes} onChange={(e) => setEndTimes(e.target.value.replace(/\D/g, '').slice(0, 3))} aria-label="Nombre de paiements" className="flex-1 min-w-0 bg-transparent text-right text-[15px] font-semibold tabular-nums text-slate-900 outline-none field-plain" />
+              </label>
+            )}
+            {endMode === 'date' && (
+              <div className="px-3 py-2">
+                <div className="text-[13px] text-slate-500 px-1 mb-1">Dernier paiement le</div>
+                <DateField value={endDate} onChange={setEndDate} shortcuts="future" min={nextDate} label="Dernière date" />
+              </div>
+            )}
+          </Group>
+
           {kind === 'bill' ? (
             <Group title="Rappel">
               <div className="flex flex-wrap gap-1.5 px-4 py-3">
@@ -894,6 +929,7 @@ const RecurringSheet: React.FC<{
                 every: frequency !== 'days' ? (Number(count) > 1 ? Math.min(60, Math.round(Number(count))) : initial?.every ? 1 : undefined) : undefined,
                 cancelBy: kind !== 'bill' && direction === 'out' && cancel && cancelBy ? cancelBy : initial?.cancelBy ? '' : undefined,
                 note: note.trim() ? note.trim() : initial?.note ? '' : undefined,
+                until: untilValue ?? (initial?.until ? '' : undefined),
                 nextDate,
                 // Chaque mois / année : on retient le jour choisi (un 31 reste un 31 après février)
                 anchorDay: frequency === 'month' || frequency === 'year' ? Number(nextDate.slice(8, 10)) : undefined,

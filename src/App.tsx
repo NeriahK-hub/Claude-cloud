@@ -60,7 +60,7 @@ import { GoalCelebration } from './components/pages';
 import { RistourneGoalPrompt } from './components/WalletsView';
 import { checkMilestones, Crossing, requestDeposit, requestNewGoal, requestViewGoal } from './lib/goalMilestones';
 import { reminderDue } from './lib/goals';
-import { dueDates, dueLevel as recurringDue, nextAfter, occurrenceId, ymd } from './lib/recurring';
+import { dueDates, dueLevel as recurringDue, endsAfter, nextAfter, occurrenceId, ymd } from './lib/recurring';
 import { currentMarket, useMarketRates } from './lib/marketRate';
 import { usesUsdAndCdf } from './components/RateCard';
 
@@ -880,24 +880,25 @@ export default function App() {
     const value = amount ?? r.amount;
     if (!value || value <= 0) return;
     recordOccurrence(r, r.nextDate, value);
-    handleUpdateRecurring(r.id, { nextDate: nextAfter(r.nextDate, r) });
-    showToast(r.bill ? `${r.title} : payé` : `${r.title} : enregistré`);
+    const last = endsAfter(r, r.nextDate); // dernier paiement prévu : c'est fini
+    handleUpdateRecurring(r.id, { nextDate: nextAfter(r.nextDate, r), ...(last ? { active: false } : {}) });
+    showToast(last ? `${r.title} : dernier paiement, terminé` : r.bill ? `${r.title} : payé` : `${r.title} : enregistré`);
   };
   // « Pas cette fois » : on passe à la date suivante sans rien créer
   const handleSkipRecurring = (r: Recurring) => {
-    handleUpdateRecurring(r.id, { nextDate: nextAfter(r.nextDate, r) });
+    handleUpdateRecurring(r.id, { nextDate: nextAfter(r.nextDate, r), ...(endsAfter(r, r.nextDate) ? { active: false } : {}) });
     showToast('Passé à la prochaine fois');
   };
 
   // Les « automatiques » arrivées à échéance sont créées toutes seules (rattrapage des jours sans ouvrir l'app)
   useEffect(() => {
     const today = ymd(new Date());
-    const updates: { id: string; nextDate: string }[] = [];
+    const updates: { id: string; nextDate: string; active?: boolean }[] = [];
     for (const r of liveRecurrings) {
       if (r.mode !== 'auto' || r.bill || !r.amount || !r.active || r.nextDate > today) continue;
       const days = dueDates(r, today);
       days.forEach((day) => recordOccurrence(r, day, r.amount!));
-      if (days.length) updates.push({ id: r.id, nextDate: nextAfter(days[days.length - 1], r) });
+      if (days.length) updates.push({ id: r.id, nextDate: nextAfter(days[days.length - 1], r), ...(endsAfter(r, days[days.length - 1]) ? { active: false } : {}) });
     }
     if (updates.length) setRecurrings((prev) => prev.map((r) => ({ ...r, ...(updates.find((u) => u.id === r.id) ?? {}) })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
