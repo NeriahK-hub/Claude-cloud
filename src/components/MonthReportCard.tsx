@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { track } from '../lib/usage';
-import { ChevronRight, Target, TrendingDown, TrendingUp } from 'lucide-react';
+import { ChevronDown, ChevronRight, Target, TrendingDown, TrendingUp } from 'lucide-react';
 import { Recurring, Settings, Transaction, Wallet } from '../types';
 import { occurrencesBetween, ymd } from '../lib/recurring';
 import { countsInReport, fitAmount, formatMoney, toMain, walletBalance } from '../lib/money';
@@ -54,7 +54,8 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
 // comparées à la moyenne des 3 mois précédents au même jour du mois.
 export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransactions, wallets, activeWallet, settings, onOpenReports, onOpenGoals, recurrings = [] }) => {
   const [side, setSide] = useState<Side>('expense');
-  const [hover, setHover] = useState<number | null>(null); // jour survolé (index 0 = le 1er)
+  const [hover, setHover] = useState<number | null>(null);
+  const [how, setHow] = useState(false); // « Comment c'est calculé ? » // jour survolé (index 0 = le 1er)
   const [boxRef, width] = useWidth<HTMLDivElement>();
   const main = settings.mainCurrency;
 
@@ -153,9 +154,6 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
   const about = (v: number) => formatMoney(Math.round(v), main, { ...getPrefs(), decimals: 'never' });
   const dateLabel = (i: number) => formatDate(new Date(data.start.getFullYear(), data.start.getMonth(), data.start.getDate() + i), true);
 
-  // Écart avec la moyenne à la même date (aujourd'hui)
-  const avgToday = series.average[data.today - 1] ?? 0;
-  const diff = avgToday > 0 ? (series.total - avgToday) / avgToday : null;
 
   // Géométrie
   const plotW = Math.max(0, width - PAD.left - PAD.right);
@@ -211,24 +209,36 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
       ) : (
         <>
           {/* Lecture du jour survolé (aujourd'hui par défaut) : la valeur d'abord, le nom ensuite */}
-          <div className="rounded-2xl bg-slate-100 px-3.5 py-2.5 mb-2" aria-live="polite">
-            <div className="text-[11px] font-semibold text-slate-500 mb-1.5">
-              {day === data.today - 1 ? `Aujourd'hui, ${dateLabel(day)}` : dateLabel(day)}
+          {/* Lecture en phrases simples : ce mois-ci, d'habitude, et la différence */}
+          <div className="rounded-2xl bg-slate-100 px-3.5 py-3 mb-2" aria-live="polite">
+            <div className="text-[11px] font-semibold text-slate-500 mb-2">
+              {day === data.today - 1 ? `Aujourd'hui, ${dateLabel(day)}` : `Au ${dateLabel(day)}`}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                  <span className="w-3 h-0.5 rounded-full chart-key-series shrink-0" /> {future ? 'Prévu' : 'Ce mois-ci'}
-                </div>
-                <div className="text-[15px] font-bold text-slate-900 tabular-nums truncate">{cur === null ? '—' : future ? `≈ ${about(cur)}` : money(cur)}</div>
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                  <span className="w-3 shrink-0 border-t-2 border-dashed" style={{ borderColor: 'var(--ref)' }} /> Moyenne 3 mois
-                </div>
-                <div className="text-[15px] font-bold text-slate-900 tabular-nums truncate">{money(avg)}</div>
-              </div>
+            <div className="flex items-center gap-2 text-[13px]">
+              <span className="w-3 h-0.5 rounded-full chart-key-series shrink-0" />
+              <span className="text-slate-500">{future ? 'Prévu' : 'Ce mois-ci'}</span>
+              <span className="ml-auto font-bold text-slate-900 tabular-nums whitespace-nowrap">{cur === null ? '—' : future ? `≈ ${about(cur)}` : money(cur)}</span>
             </div>
+            <div className="flex items-center gap-2 text-[13px] mt-1">
+              <span className="w-3 shrink-0 border-t-2 border-dashed" style={{ borderColor: 'var(--ref)' }} />
+              <span className="text-slate-500">D'habitude</span>
+              <span className="ml-auto font-bold text-slate-900 tabular-nums whitespace-nowrap">{money(avg)}</span>
+            </div>
+            {cur !== null && avg > 0 && Math.abs(cur - avg) >= Math.max(1, avg * 0.01) && (() => {
+              const more = cur > avg;
+              // Dépenser moins ou gagner plus que d'habitude : bon signe (vert) ; l'inverse : à surveiller (orange)
+              const good = side === 'expense' ? !more : more;
+              const Icon = more ? TrendingUp : TrendingDown;
+              return (
+                <div className={`mt-2.5 pt-2.5 border-t border-slate-200/70 flex items-center gap-2 text-[12.5px] font-semibold ${good ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="tabular-nums">{about(Math.abs(cur - avg))}</span> de {more ? 'plus' : 'moins'} que d'habitude
+                  </span>
+                </div>
+              );
+            })()}
+            <p className="text-[11px] text-slate-400 mt-2">« D'habitude » : la moyenne de tes 3 derniers mois, au même jour.</p>
           </div>
 
           <div ref={boxRef} className="relative select-none">
@@ -288,57 +298,51 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
             )}
           </div>
 
-          {diff !== null && Math.abs(diff) >= 0.01 && (() => {
-            // Dépenser moins ou gagner plus que d'habitude : bon signe (vert) ; l'inverse : à surveiller (orange)
-            const good = side === 'expense' ? diff < 0 : diff > 0;
-            const Icon = diff > 0 ? TrendingUp : TrendingDown;
-            return (
-              <p className={`mt-2.5 flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] leading-snug ${good ? 'bg-emerald-500/10 text-emerald-700' : 'bg-amber-500/10 text-amber-700'}`}>
-                <Icon className="w-4 h-4 shrink-0" />
-                <span className="min-w-0">
-                  À cette date, tu as {side === 'expense' ? 'dépensé' : 'gagné'} <b>{Math.round(Math.abs(diff) * 100)} % de {diff > 0 ? 'plus' : 'moins'}</b> que d'habitude.
-                </span>
-              </p>
-            );
-          })()}
-
           {data.forecast && (
             <div className={`mt-3 rounded-2xl px-3.5 py-3 ${data.forecast.end < 0 ? 'bg-red-500/10' : 'bg-slate-100'}`}>
-              {/* Titre, puis le montant en grand sur sa propre ligne : rien ne se coupe */}
-              <div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-500">
-                {data.forecast.end < 0 ? <TrendingDown className="w-4 h-4 text-red-600 shrink-0" /> : <TrendingUp className="w-4 h-4 text-emerald-600 shrink-0" />}
-                Fin du mois, à ce rythme
+              <div className="text-[12px] font-semibold text-slate-500">Ton solde à la fin du mois</div>
+              <div className={`mt-1 text-[22px] leading-tight font-bold tabular-nums break-words ${data.forecast.end < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                ≈ {about(data.forecast.end)}
               </div>
-              <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <span className={`text-[20px] leading-tight font-bold tabular-nums break-words ${data.forecast.end < 0 ? 'text-red-600' : 'text-slate-900'}`}>
-                  ≈ {about(data.forecast.end)}
-                </span>
+              <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12.5px] text-slate-500 tabular-nums">
+                <span>Aujourd'hui : {about(data.forecast.balance)}</span>
                 {Math.round(data.forecast.end - data.forecast.balance) !== 0 && (
-                  <span
-                    className={`text-[12px] font-semibold tabular-nums whitespace-nowrap ${data.forecast.end >= data.forecast.balance ? 'text-emerald-600' : 'text-slate-500'}`}
-                  >
-                    {data.forecast.end >= data.forecast.balance ? '+' : '−'}
-                    {about(Math.abs(data.forecast.end - data.forecast.balance))} par rapport à aujourd'hui
+                  <span className={`font-semibold whitespace-nowrap ${data.forecast.end >= data.forecast.balance ? 'text-emerald-600' : 'text-slate-600'}`}>
+                    ({data.forecast.end >= data.forecast.balance ? '+' : '−'}
+                    {about(Math.abs(data.forecast.end - data.forecast.balance))})
                   </span>
                 )}
               </div>
-              <div className={`mt-3 pt-3 grid gap-3 border-t border-slate-200/70 ${data.forecast.incomeAhead > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                <div className="min-w-0">
-                  <div className="text-[11px] text-slate-500">Dépenses à venir</div>
-                  <div className="text-[14px] font-bold tabular-nums text-slate-900 truncate">≈ {about(data.forecast.expenseAhead)}</div>
-                </div>
-                {data.forecast.incomeAhead > 0 && (
-                  <div className="min-w-0">
-                    <div className="text-[11px] text-slate-500">Revenus à venir</div>
-                    <div className="text-[14px] font-bold tabular-nums text-slate-900 truncate">≈ {about(data.forecast.incomeAhead)}</div>
-                  </div>
-                )}
-              </div>
-              <p className="text-[11.5px] leading-snug text-slate-400 mt-2.5">
-                Sur les {data.forecast.left} jour{data.forecast.left > 1 ? 's' : ''} qui restent, {data.forecast.hasHistory ? 'd\u2019après tes 3 derniers mois et ce mois-ci' : 'au rythme de ce mois-ci'}
-                {data.forecast.billsOut > 0 ? <>, dont <span className="whitespace-nowrap">{about(data.forecast.billsOut)}</span> de factures prévues.</> : '.'}
-              </p>
               {data.forecast.end < 0 && <p className="text-[12px] font-semibold text-red-600 mt-1.5">Attention : tu risques de manquer d'argent.</p>}
+              <button
+                type="button"
+                onClick={() => setHow((v) => !v)}
+                aria-expanded={how}
+                className="mt-2.5 inline-flex items-center gap-1 text-[12px] font-semibold text-slate-500 cursor-pointer"
+              >
+                Comment c'est calculé ?
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${how ? 'rotate-180' : ''}`} />
+              </button>
+              {how && (
+                <div className="mt-2 text-[12px] leading-snug text-slate-500 space-y-1 animate-fade-in">
+                  <p>
+                    Ton solde d'aujourd'hui, <b className="text-slate-700">moins</b> ce que tu dépenses d'habitude d'ici la fin du mois (≈{' '}
+                    <span className="whitespace-nowrap">{about(data.forecast.expenseAhead)}</span>)
+                    {data.forecast.incomeAhead > 0 && (
+                      <>
+                        , <b className="text-slate-700">plus</b> ce que tu reçois d'habitude (≈ <span className="whitespace-nowrap">{about(data.forecast.incomeAhead)}</span>)
+                      </>
+                    )}
+                    .
+                  </p>
+                  {data.forecast.billsOut > 0 && (
+                    <p>
+                      Tes factures prévues dans « À venir » sont comprises (<span className="whitespace-nowrap">{about(data.forecast.billsOut)}</span>).
+                    </p>
+                  )}
+                  <p>Sur le graphique, les pointillés de couleur montrent tes {side === 'expense' ? 'dépenses' : 'revenus'} probables jusqu'à la fin du mois.</p>
+                </div>
+              )}
             </div>
           )}
 
