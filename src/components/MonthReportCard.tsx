@@ -109,13 +109,14 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
     const pace = today >= 5 ? (expense.total / today) * left : null;
     const habit = hasHistory ? after(expense) : null;
     const blended = habit !== null && pace !== null ? habit * 0.6 + pace * 0.4 : habit ?? pace;
-    const from = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+    const todayStr = ymd(now);
     const to = ymd(new Date(cur.end.getTime() - 1));
     let billsOut = 0;
     let billsIn = 0;
     for (const r of recurrings) {
       if (!r.active || !r.amount || !ids.has(r.walletId)) continue;
-      const n = occurrencesBetween(r, from, to).length;
+      // (ce qui est dû aujourd'hui ou en retard compte aussi : ce n'est pas encore payé, donc pas encore dans le solde)
+      const n = occurrencesBetween(r, r.nextDate < todayStr ? r.nextDate : todayStr, to).length;
       const v = toMain(r.amount, r.currency, settings) * n;
       if (r.direction === 'out') billsOut += v;
       else billsIn += v;

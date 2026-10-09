@@ -453,6 +453,12 @@ html.dark {
   --color-blue-50: rgb(59 130 246 / 0.14);
 }
 html.dark body { background: #07090c; }
+/* Ordinateur : l'app remplit toute la fenêtre. Le fond derrière a sa couleur (pas du noir) quand la page rebondit en bas (Mac) */
+html { overscroll-behavior: none; }
+@media (min-width: 1024px) {
+  body { background: var(--color-slate-100); }
+  html.dark body { background: var(--color-slate-100); }
+}
 
 /* Blanc sur fond coloré : reste blanc (y compris les variantes translucides) */
 html.dark .text-white { color: #fff; }
