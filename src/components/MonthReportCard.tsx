@@ -125,7 +125,7 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
     const incomeAhead = Math.max(income.average[days - 1] > 0 ? after(income) : 0, billsIn);
     const balance = scope.reduce((sum, w) => sum + toMain(walletBalance(w, allTransactions), w.currency, settings), 0);
     const forecast =
-      left > 0 && expenseAhead !== null ? { left, end: balance + incomeAhead - expenseAhead, expenseAhead, incomeAhead, hasHistory, billsOut } : null;
+      left > 0 && expenseAhead !== null ? { left, balance, end: balance + incomeAhead - expenseAhead, expenseAhead, incomeAhead, hasHistory, billsOut } : null;
     return { days, today, start: cur.start, expense, income, forecast };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTransactions, wallets, activeWallet, settings, prefs, recurrings]);
@@ -140,7 +140,13 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
   const series = data[side];
   const hasData = series.total > 0 || series.average.some((v) => v > 0);
   const day = hover ?? data.today - 1;
-  const cur = day < series.current.length ? series.current[day] : null;
+  // Suite probable du mois (pointillés) : d'aujourd'hui au dernier jour, au rythme de la prévision
+  const ahead = data.forecast ? (side === 'expense' ? data.forecast.expenseAhead : data.forecast.incomeAhead) : 0;
+  const lastIdx = series.current.length - 1;
+  const projected = ahead > 0 && lastIdx >= 0 && lastIdx < data.days - 1 ? series.total + ahead : null;
+  const projAt = (i: number) => (projected === null ? null : series.total + (ahead * (i - lastIdx)) / (data.days - 1 - lastIdx));
+  const future = day > lastIdx;
+  const cur = !future ? series.current[day] ?? null : projAt(day);
   const avg = series.average[day] ?? 0;
   const money = (v: number) => formatMoney(v, main);
   // Prévision : un ordre d'idée, donc arrondi (pas de centimes)
@@ -153,7 +159,7 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
 
   // Géométrie
   const plotW = Math.max(0, width - PAD.left - PAD.right);
-  const max = Math.max(1, ...series.current, ...series.average);
+  const max = Math.max(1, ...series.current, ...series.average, projected ?? 0);
   const step = niceStep(max);
   const top = Math.ceil(max / step) * step;
   const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step);
@@ -212,13 +218,13 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
             <div className="grid grid-cols-2 gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                  <span className="w-3 h-0.5 rounded-full chart-key-series shrink-0" /> Ce mois-ci
+                  <span className="w-3 h-0.5 rounded-full chart-key-series shrink-0" /> {future ? 'Prévu' : 'Ce mois-ci'}
                 </div>
-                <div className="text-[15px] font-bold text-slate-900 tabular-nums truncate">{cur === null ? '—' : money(cur)}</div>
+                <div className="text-[15px] font-bold text-slate-900 tabular-nums truncate">{cur === null ? '—' : future ? `≈ ${about(cur)}` : money(cur)}</div>
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                  <span className="w-3 h-0.5 rounded-full chart-key-ref shrink-0" /> Moyenne 3 mois
+                  <span className="w-3 shrink-0 border-t-2 border-dashed" style={{ borderColor: 'var(--ref)' }} /> Moyenne 3 mois
                 </div>
                 <div className="text-[15px] font-bold text-slate-900 tabular-nums truncate">{money(avg)}</div>
               </div>
@@ -257,9 +263,23 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
                 <text x={PAD.left + plotW} y={H - 4} textAnchor="end" className="fill-slate-400 text-[11px]">{dateLabel(data.days - 1)}</text>
 
                 {/* Moyenne (référence grise) puis ce mois-ci (couleur + voile léger) */}
-                <path d={path(series.average)} fill="none" className="chart-ref" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                <path d={path(series.average)} fill="none" className="chart-ref" strokeWidth={1.75} strokeDasharray="3 4" strokeLinejoin="round" strokeLinecap="round" />
                 {area && <path d={area} className="chart-area" />}
-                <path d={path(series.current)} fill="none" className="chart-series" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                {projected !== null && (
+                  <>
+                    <path
+                      d={`M${x(lastIdx).toFixed(1)},${yv(series.total).toFixed(1)}L${x(data.days - 1).toFixed(1)},${yv(projected).toFixed(1)}`}
+                      fill="none"
+                      className="chart-series"
+                      strokeWidth={2}
+                      strokeDasharray="2 5"
+                      strokeLinecap="round"
+                      opacity={0.55}
+                    />
+                    <circle cx={x(data.days - 1)} cy={yv(projected)} r={3.5} fill="none" className="chart-series" strokeWidth={2} opacity={0.55} />
+                  </>
+                )}
+                <path d={path(series.current)} fill="none" className="chart-series" strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" />
 
                 {/* Repère du jour lu */}
                 <line x1={x(day)} x2={x(day)} y1={PAD.top} y2={yv(0)} className="stroke-slate-300" strokeWidth={1} />
@@ -289,8 +309,18 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
                 {data.forecast.end < 0 ? <TrendingDown className="w-4 h-4 text-red-600 shrink-0" /> : <TrendingUp className="w-4 h-4 text-emerald-600 shrink-0" />}
                 Fin du mois, à ce rythme
               </div>
-              <div className={`mt-1 text-[20px] leading-tight font-bold tabular-nums break-words ${data.forecast.end < 0 ? 'text-red-600' : 'text-slate-900'}`}>
-                ≈ {about(data.forecast.end)}
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className={`text-[20px] leading-tight font-bold tabular-nums break-words ${data.forecast.end < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                  ≈ {about(data.forecast.end)}
+                </span>
+                {Math.round(data.forecast.end - data.forecast.balance) !== 0 && (
+                  <span
+                    className={`text-[12px] font-semibold tabular-nums whitespace-nowrap ${data.forecast.end >= data.forecast.balance ? 'text-emerald-600' : 'text-slate-500'}`}
+                  >
+                    {data.forecast.end >= data.forecast.balance ? '+' : '−'}
+                    {about(Math.abs(data.forecast.end - data.forecast.balance))} par rapport à aujourd'hui
+                  </span>
+                )}
               </div>
               <div className={`mt-3 pt-3 grid gap-3 border-t border-slate-200/70 ${data.forecast.incomeAhead > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 <div className="min-w-0">
