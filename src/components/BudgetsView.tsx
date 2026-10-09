@@ -325,11 +325,16 @@ const PaceRows: React.FC<{ spent: number; amount: number; range: { start: Date; 
     <>
       <div className={`grid gap-2 mt-4 ${p.current ? 'grid-cols-3' : 'grid-cols-1'}`}>
         {p.current && tile(['Tu peux', 'par jour'], spent >= amount ? 'Épuisé' : p.perDayAllowed, spent >= amount ? 'text-red-600' : 'text-slate-900', '#10B981')}
-        {p.current && tile(['Prévu', 'à la fin'], p.projected, over ? 'text-red-600' : 'text-slate-900', over ? '#EF4444' : '#F59E0B')}
+        {p.current && tile(['Prévu', 'à la fin'], p.projected, over ? 'text-red-600' : 'text-slate-900', over ? '#EF4444' : p.projected >= amount * 0.8 ? '#F59E0B' : '#10B981')}
         {tile(['Dépensé', 'par jour'], p.perDay, 'text-slate-900', '#3B82F6')}
       </div>
       {p.current && over && (
         <p className="text-[12px] text-red-600 mt-2">À ce rythme, tu dépasseras de {money(p.projected - amount)}.</p>
+      )}
+      {p.current && !over && spent > 0 && (
+        p.projected >= amount * 0.8
+          ? <p className="text-[12px] text-amber-600 mt-2">Tu y arrives de justesse : à ce train-là, il ne te restera que {money(amount - p.projected)}.</p>
+          : <p className="text-[12px] text-emerald-600 mt-2">Tu es dans le bon rythme : à ce train-là, il te restera environ {money(amount - p.projected)}.</p>
       )}
       {/* Petite explication des trois cases, ouverte à la demande */}
       {p.current && (
