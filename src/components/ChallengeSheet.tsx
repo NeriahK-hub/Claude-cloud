@@ -12,9 +12,9 @@ type Type = GoalChallenge['type'];
 
 const DEFS: { type: Type; title: string; tag: string; text: string; Icon: typeof Trophy; icon: string; color: string }[] = [
   { type: '52w', title: '52 semaines', tag: 'Chaque semaine', text: 'Semaine 1\u00a0: 1\u00a0$, semaine 2\u00a0: 2\u00a0$, semaine 3\u00a0: 3\u00a0$… Au bout d\'un an, tu as 1\u00a0378\u00a0$.', Icon: CalendarDays, icon: 'CalendarDays', color: '#8B5CF6' },
-  { type: 'daily', title: 'Un peu chaque jour', tag: 'Chaque jour', text: 'Tu mets la même petite somme de côté chaque jour. Par exemple 1\u00a0000\u00a0FC pendant 30\u00a0jours.', Icon: Coins, icon: 'Coins', color: '#F59E0B' },
+  { type: 'daily', title: 'Un peu chaque jour', tag: 'Chaque jour', text: 'Tu mets la même petite somme de côté chaque jour. Par exemple 1\u00a0000\u00a0FC pendant 30\u00a0jours.', Icon: PiggyBank, icon: 'PiggyBank', color: '#F59E0B' },
   { type: 'weekend', title: 'Week-end sans dépense', tag: 'Le week-end', text: "Tu dépenses moins le week-end\u00a0: ce que tu ne dépenses pas est mis dans ton objectif.", Icon: Sofa, icon: 'Sofa', color: '#10B981' },
-  { type: 'roundup', title: 'Petite monnaie', tag: 'Automatique', text: 'Chaque dépense est arrondie et la différence est mise de côté. Pour 4\u00a0300\u00a0FC, 700\u00a0FC partent dans ton objectif.', Icon: PiggyBank, icon: 'PiggyBank', color: '#EC4899' },
+  { type: 'roundup', title: 'Petite monnaie', tag: 'Automatique', text: 'Chaque dépense est arrondie et la différence est mise de côté. Pour 4\u00a0300\u00a0FC, 700\u00a0FC partent dans ton objectif.', Icon: Coins, icon: 'Coins', color: '#EC4899' },
 ];
 
 const addDays = (n: number) => {
