@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { LayoutDashboard, Users, Megaphone, Shapes, ToggleRight, LogOut, ShieldAlert, RectangleHorizontal, ArrowRightLeft, MessageSquareHeart, BarChart3, LifeBuoy } from 'lucide-react';
+import { LayoutDashboard, Users, Megaphone, Shapes, ToggleRight, LogOut, ShieldAlert, RectangleHorizontal, ArrowRightLeft, MessageSquareHeart, BarChart3, LifeBuoy, Sparkles } from 'lucide-react';
 import { api, configured, errorText, sb } from './api';
 import { Button, ErrorLine, inputCls, Loading } from './ui';
 import { Dashboard } from './pages/Dashboard';
@@ -13,8 +13,9 @@ import { RatesPage } from './pages/Rates';
 import { FeedbackPage } from './pages/Feedback';
 import { UsagePage } from './pages/Usage';
 import { HelpPage } from './pages/Help';
+import { ProPage } from './pages/Pro';
 
-type Tab = 'dashboard' | 'usage' | 'users' | 'feedback' | 'announcements' | 'help' | 'rates' | 'ads' | 'icons' | 'features';
+type Tab = 'dashboard' | 'usage' | 'users' | 'feedback' | 'announcements' | 'help' | 'rates' | 'ads' | 'icons' | 'pro' | 'features';
 
 const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'dashboard', label: 'Tableau de bord', Icon: LayoutDashboard },
@@ -26,6 +27,7 @@ const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: 'rates', label: 'Taux du jour', Icon: ArrowRightLeft },
   { id: 'ads', label: 'Publicités', Icon: RectangleHorizontal },
   { id: 'icons', label: 'Icônes', Icon: Shapes },
+  { id: 'pro', label: 'Wallo Pro', Icon: Sparkles },
   { id: 'features', label: 'Fonctionnalités', Icon: ToggleRight },
 ];
 
@@ -120,6 +122,7 @@ export const AdminApp: React.FC = () => {
         {tab === 'rates' && <RatesPage />}
         {tab === 'ads' && <AdsPage />}
         {tab === 'icons' && <IconsPage />}
+        {tab === 'pro' && <ProPage />}
         {tab === 'features' && <FeaturesPage />}
       </main>
     </div>

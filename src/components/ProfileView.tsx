@@ -4,6 +4,7 @@ import { Page } from './BottomNav';
 import { initialsOf, setProfileName, useProfile } from '../lib/profile';
 import type { Cloud } from '../lib/sync/useCloud';
 import { AccountCard } from './Account';
+import { ProCard } from './ProOffer';
 import { shareApp } from '../lib/invite';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 
@@ -91,6 +92,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) =
       <AccountCard cloud={cloud} />
       </div>
       <div>
+
+      <ProCard cloud={cloud} />
 
       <div className="bg-white rounded-3xl p-2 border border-slate-100">
         {link('Paramètres', 'Apparence, devises, import / export', SettingsIcon, 'settings')}

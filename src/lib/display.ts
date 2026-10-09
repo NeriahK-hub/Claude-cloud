@@ -25,7 +25,7 @@ export interface DisplayPrefs {
   homeHidden: string[]; // accueil : cartes cachées
 }
 
-export const DEFAULT_PREFS: DisplayPrefs = { number: 'fr', decimals: 'always', date: 'dmy', weekStart: 1, monthStart: 1, yearStart: 0, excludeOption: false, hideBalance: false, homeWalletCard: false, simpleMode: false, iconsOnly: false, festiveOff: false, textSize: 'normal', reduceMotion: false, hideAmounts: false, homeOrder: [], homeHidden: ['wallet', 'festive', 'review', 'rates', 'due', 'health', 'badges', 'subs', 'budgets', 'goals'] }; // par défaut : seulement le résumé du mois et les dernières opérations
+export const DEFAULT_PREFS: DisplayPrefs = { number: 'fr', decimals: 'always', date: 'dmy', weekStart: 1, monthStart: 1, yearStart: 0, excludeOption: false, hideBalance: false, homeWalletCard: false, simpleMode: false, iconsOnly: false, festiveOff: false, textSize: 'normal', reduceMotion: false, hideAmounts: false, homeOrder: [], homeHidden: ['wallet', 'rates', 'due', 'health', 'badges', 'subs', 'budgets', 'goals'] }; // par défaut : seulement le résumé du mois et les dernières opérations
 
 export const NUMBER_LOCALES: Record<DisplayPrefs['number'], string> = { fr: 'fr-FR', en: 'en-US', de: 'de-DE', ch: 'de-CH' };
 

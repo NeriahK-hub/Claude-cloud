@@ -180,12 +180,10 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               )}
 
-              {festive && layout.show('festive') && <FestiveCard kind={festive} onNavigate={onNavigate} />}
-              {layout.show('review') && (
-                <div className="empty:hidden">
-                  <ReviewCards transactions={p.transactions} settings={settings} categories={categories} />
-                </div>
-              )}
+              {festive && <FestiveCard kind={festive} onNavigate={onNavigate} />}
+              <div className="empty:hidden">
+                <ReviewCards transactions={p.transactions} settings={settings} categories={categories} />
+              </div>
               {layout.show('rates') && (
                 <div className="empty:hidden">
                   <RateCard settings={settings} wallets={wallets} onChangeSettings={p.onChangeSettings} />

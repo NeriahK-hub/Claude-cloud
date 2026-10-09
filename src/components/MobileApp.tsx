@@ -56,12 +56,6 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
     const ids = layout.shown;
     const card = (id: HomeCardId): React.ReactNode => {
       switch (id) {
-        case 'review':
-          return (
-            <div key={id} className="px-5 mb-3 empty:hidden">
-              <ReviewCards transactions={transactions} settings={settings} categories={categories} />
-            </div>
-          );
         case 'rates':
           return (
             <div key={id} className="px-5 mb-3 empty:hidden">
@@ -268,12 +262,12 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
             {simpleMode ? (
               // Mode simple : l'essentiel, en gros
               <>
-                {festive && layout.show('festive') && (
+                {festive && (
                   <div className="px-5 mb-3">
                     <FestiveCard kind={festive} onNavigate={onNavigate} />
                   </div>
                 )}
-                {layout.show('review') && (
+                {(
                   <div className="px-5 mb-3 empty:hidden">
                     <ReviewCards transactions={transactions} settings={settings} categories={categories} />
                   </div>
@@ -307,12 +301,16 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               </div>
             )}
-            {festive && layout.show('festive') && (
+            {festive && (
               <div className="px-5 mb-3">
                 <FestiveCard kind={festive} onNavigate={onNavigate} />
               </div>
             )}
             {/* Les cartes, dans l'ordre choisi (Paramètres › Accueil) */}
+            {/* Bilans (semaine, Wrapped) : automatiques, ou quand l'admin les allume */}
+            <div className="px-5 mb-3 empty:hidden">
+              <ReviewCards transactions={transactions} settings={settings} categories={categories} />
+            </div>
             {homeCards()}
             </>
             )}

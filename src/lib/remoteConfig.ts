@@ -8,7 +8,7 @@ import type { HelpArticle } from '../data/help';
 // Lus sans compte (fonction app_config de la base), gardés sur l'appareil pour le mode hors ligne.
 // Base pas encore à jour ou réseau absent : on garde la dernière version connue (tout activé au départ).
 
-export type FeatureKey = 'debts' | 'budgets' | 'ristournes' | 'sharedWallets' | 'importData' | 'accounts' | 'wrapped' | 'wrappedNow' | 'wrappedCountdown' | 'festive';
+export type FeatureKey = 'debts' | 'budgets' | 'ristournes' | 'sharedWallets' | 'importData' | 'accounts' | 'wrapped' | 'wrappedNow' | 'wrappedCountdown' | 'festive' | 'pro';
 
 export interface Announcement {
   id: string;
@@ -35,17 +35,26 @@ export interface Ad {
   sponsored: boolean;
 }
 
+// Wallo Pro : ce qui est gratuit et ce qui est Pro (liste faite depuis l'espace admin)
+export interface ProFeature {
+  id: string;
+  label: string;
+  description: string;
+  tier: 'free' | 'pro';
+}
+
 export interface RemoteConfig {
   features: Partial<Record<FeatureKey, boolean>>;
   announcements: Announcement[];
   icons: GlobalIcon[];
   ads: Ad[];
   help: HelpArticle[]; // articles d'aide ajoutés depuis l'espace admin
+  pro: ProFeature[];
 }
 
 export const GLOBAL_PREFIX = 'global:';
 const KEY = 'ap.remote';
-const EMPTY: RemoteConfig = { features: {}, announcements: [], icons: [], ads: [], help: [] };
+const EMPTY: RemoteConfig = { features: {}, announcements: [], icons: [], ads: [], help: [], pro: [] };
 
 let config: RemoteConfig = read();
 const listeners = new Set<() => void>();
@@ -91,7 +100,10 @@ function parse(raw: Record<string, unknown>): RemoteConfig {
       category: typeof h.category === 'string' && h.category ? h.category : 'Autres',
       platform: h.platform === 'iphone' || h.platform === 'android' ? h.platform : undefined,
     })) as HelpArticle[];
-  return { features, announcements, icons, ads, help };
+  const pro = (Array.isArray(raw.pro) ? raw.pro : [])
+    .filter((x) => x && typeof x.id === 'string' && typeof x.label === 'string')
+    .map((x) => ({ id: x.id, label: String(x.label), description: String(x.description ?? ''), tier: x.tier === 'free' ? 'free' : 'pro' })) as ProFeature[];
+  return { features, announcements, icons, ads, help, pro };
 }
 
 // Vue / clic sur une bannière (compté par la base, sans savoir qui). Une vue par pub et par jour sur cet appareil.

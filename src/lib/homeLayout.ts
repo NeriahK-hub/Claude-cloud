@@ -2,14 +2,13 @@ import { useMemo } from 'react';
 import { useDisplayPrefs } from './display';
 
 // Accueil au choix : quelles cartes, dans quel ordre (Paramètres › Accueil).
+// Les bilans (semaine, Wrapped) et les fêtes ne sont pas au choix : ils viennent tout seuls, ou quand l'admin les allume.
 // Les cartes ajoutées plus tard à l'app arrivent à la fin, sans rien casser.
 
-export type HomeCardId = 'wallet' | 'festive' | 'review' | 'rates' | 'due' | 'health' | 'badges' | 'month' | 'subs' | 'budgets' | 'goals' | 'list';
+export type HomeCardId = 'wallet' | 'rates' | 'due' | 'health' | 'badges' | 'month' | 'subs' | 'budgets' | 'goals' | 'list';
 
 export const HOME_CARDS: { id: HomeCardId; label: string; hint: string }[] = [
   { id: 'wallet', label: 'Portefeuille choisi', hint: 'Objectif, crédit ou partage' },
-  { id: 'festive', label: 'Fêtes', hint: 'Noël et Nouvel An' },
-  { id: 'review', label: 'Bilans', hint: 'Ta semaine et ton Wrapped' },
   { id: 'rates', label: 'Taux de change', hint: 'Dollar et franc du jour' },
   { id: 'due', label: 'À payer bientôt', hint: 'Factures et rappels à venir' },
   { id: 'health', label: 'Santé financière', hint: 'Ta note sur 100' },

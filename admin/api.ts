@@ -84,6 +84,22 @@ export interface HelpRow {
   created_at: string;
 }
 
+export interface ProFeatureRow {
+  id: string;
+  label: string;
+  description: string;
+  tier: 'free' | 'pro';
+  sort_order: number;
+}
+
+export interface ProAccessRow {
+  user_id: string;
+  email: string;
+  note: string;
+  until: string | null;
+  granted_at: string;
+}
+
 export interface GlobalIconRow {
   id: string;
   name: string;
@@ -143,6 +159,15 @@ export const api = {
   addHelp: async (a: Pick<HelpRow, 'title' | 'body' | 'category' | 'platform'>) => void check(await sb.from('help_articles').insert(a)),
   setHelpActive: async (id: string, active: boolean) => void check(await sb.from('help_articles').update({ active }).eq('id', id)),
   deleteHelp: async (id: string) => void check(await sb.from('help_articles').delete().eq('id', id)),
+
+  // Wallo Pro : liste gratuit / Pro, et les comptes qui ont l'accès (migration 20261025)
+  proFeatures: async () => (check(await sb.from('pro_features').select('*').order('sort_order').order('created_at')) ?? []) as ProFeatureRow[],
+  addProFeature: async (f: Pick<ProFeatureRow, 'label' | 'description' | 'tier'>, sort_order: number) => void check(await sb.from('pro_features').insert({ ...f, sort_order })),
+  setProTier: async (id: string, tier: 'free' | 'pro') => void check(await sb.from('pro_features').update({ tier }).eq('id', id)),
+  deleteProFeature: async (id: string) => void check(await sb.from('pro_features').delete().eq('id', id)),
+  proAccess: async () => (check(await sb.rpc('admin_pro_list')) ?? []) as ProAccessRow[],
+  grantPro: async (email: string, until: string | null, note: string) => void check(await sb.rpc('admin_pro_grant', { p_email: email, p_until: until, p_note: note })),
+  revokePro: async (target: string) => void check(await sb.rpc('admin_pro_revoke', { target })),
 
   icons: async () => (check(await sb.from('global_icons').select('*').order('sort_order').order('created_at')) ?? []) as GlobalIconRow[],
   addIcon: async (name: string, data_url: string, keep_colors: boolean, folder: string) => void check(await sb.from('global_icons').insert({ name, data_url, keep_colors, folder })),
