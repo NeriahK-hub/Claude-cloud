@@ -10,7 +10,7 @@ const KEY = 'ap.welcomed';
 const DURATION = 3200; // ms avant le fondu de sortie
 
 // Session Supabase gardée sur l'appareil (clé « sb-<projet>-auth-token ») : lu tout de suite, sans réseau
-function signedIn(): boolean {
+export function signedIn(): boolean {
   return Object.keys(localStorage).some((k) => /^sb-.+-auth-token$/.test(k) && !!localStorage.getItem(k));
 }
 

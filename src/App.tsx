@@ -40,7 +40,8 @@ import { buildAmountHistory, buildNoteHistory } from './lib/noteSuggestions';
 import { localDay as localDayOf } from './components/DatePicker';
 import { findSubscriptions } from './lib/review';
 import { canConfirm as canConfirmRistourne } from './lib/ristourne';
-import { shouldShowSplash, Splash } from './components/Splash';
+import { shouldShowSplash, signedIn, Splash } from './components/Splash';
+import { resetWelcome, shouldShowWelcome, Welcome } from './components/Welcome';
 import { shouldShowNews, shouldShowTutorial, Tutorial } from './components/Tutorial';
 import { InstallGuide } from './components/InstallGuide';
 import { shouldOfferInstall } from './lib/install';
@@ -94,6 +95,7 @@ export default function App() {
   const [notifications, setNotifications] = usePersistentState<NotificationItem[]>('ap.notifications', WELCOME);
   const remote = useRemoteConfig(); // fonctionnalités, annonces, icônes (espace admin)
   const [showSplash, setShowSplash] = useState(shouldShowSplash); // écran d'accueil : 1re ouverture seulement
+  const [showWelcome, setShowWelcome] = useState(() => shouldShowWelcome(signedIn())); // connexion ou « sans compte »
   const [showTutorial, setShowTutorial] = useState(shouldShowTutorial);
   // « Installe Wallo sur ton écran d'accueil » : après le tutoriel ; pour qui l'a déjà vu, une fois au lancement
   const [showInstall, setShowInstall] = useState(false);
@@ -1347,6 +1349,8 @@ export default function App() {
       if (all) setActiveWalletId('all');
     },
     clearLocal: () => {
+      resetWelcome();
+      setShowWelcome(true);
       setShowSplash(true); // déconnecté : on repart de l'écran d'accueil, puis de l'Accueil
       setPage('home');
       setWallets(DEFAULT_WALLETS);
@@ -1368,6 +1372,7 @@ export default function App() {
 
   // Compte connecté (dettes partagées : qui a noté quoi)
   const me = cloud.user?.id ?? '';
+  const welcomeOn = showWelcome && !cloud.user;
 
   // Notifications du téléphone : chaque nouvelle alerte de l'app (budget, annonce…) devient aussi
   // une notification système ; celles déjà là à l'ouverture ne sont pas renvoyées
@@ -1473,7 +1478,8 @@ export default function App() {
         <MobileApp {...shared} onOpenDrawer={() => setIsDrawerOpen(true)} />
       )}
       {/* Sous l'écran d'accueil (z-100), qui s'efface dessus */}
-      {showTutorial && (
+      {welcomeOn && <Welcome cloud={cloud} onDone={() => setShowWelcome(false)} />}
+      {showTutorial && !welcomeOn && (
         <Tutorial
           onDone={() => {
             setShowTutorial(false);
@@ -1483,7 +1489,7 @@ export default function App() {
         />
       )}
       {showInstall && <InstallGuide onClose={() => setShowInstall(false)} />}
-      {!showTutorial && showNews && (
+      {!showTutorial && !welcomeOn && showNews && (
         <Tutorial
           news
           onDone={() => {

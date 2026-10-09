@@ -962,3 +962,9 @@ html[data-festive="newyear"] .fab-add { background: linear-gradient(135deg, #FDE
 @media (prefers-reduced-motion: reduce) {
   .wrap-float, .wrap-ring, .wrap-eq, .wrap-grid { animation: none; }
 }
+
+/* Page de bienvenue : les deux pièces flottent doucement */
+.welcome-coin { animation: splash-float 3.4s ease-in-out infinite alternate; }
+.welcome-coin-2 { animation-duration: 4.1s; animation-delay: -1.2s; }
+@media (prefers-reduced-motion: reduce) { .welcome-coin { animation: none; } }
+html[data-calm] .welcome-coin { animation: none; }

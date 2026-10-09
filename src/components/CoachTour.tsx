@@ -43,7 +43,7 @@ let busy = false; // un seul parcours à la fois dans toute l'app
 
 const find = (target: string) => [...document.querySelectorAll<HTMLElement>(`[data-coach="${target}"]`)].find((el) => el.offsetParent !== null || getComputedStyle(el).position === 'fixed');
 // Une fenêtre, l'écran d'accueil ou le tutoriel est ouvert : on attend
-const blocked = () => !!document.querySelector('.fixed.inset-0.z-50, .fixed.inset-0.z-\\[60\\], .fixed.inset-0.z-\\[95\\], .splash');
+const blocked = () => !!document.querySelector('.fixed.inset-0.z-50, .fixed.inset-0.z-\\[60\\], .fixed.inset-0.z-\\[95\\], .splash, .welcome');
 
 export const CoachTour: React.FC<{ steps: CoachStep[]; delay?: number }> = ({ steps, delay = 900 }) => {
   const [list, setList] = useState<CoachStep[] | null>(null);
