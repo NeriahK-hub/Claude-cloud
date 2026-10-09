@@ -175,6 +175,40 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
     if (next !== hover) haptic();
     setHover(next);
   };
+  const pickRef = useRef(pickDay);
+  pickRef.current = pickDay;
+
+  // Doigt sur le graphique : un geste plutôt horizontal lit les jours (la page ne défile pas),
+  // un geste vertical fait défiler la page comme d'habitude. Le jour choisi reste affiché après.
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    let start: { x: number; y: number } | null = null;
+    let mode: 'read' | 'scroll' | null = null;
+    const down = (e: TouchEvent) => {
+      const t = e.touches[0];
+      start = { x: t.clientX, y: t.clientY };
+      mode = null;
+      pickRef.current(t.clientX, el);
+    };
+    const move = (e: TouchEvent) => {
+      if (!start || mode === 'scroll') return;
+      const t = e.touches[0];
+      const dx = Math.abs(t.clientX - start.x);
+      const dy = Math.abs(t.clientY - start.y);
+      if (!mode && dx + dy > 6) mode = dx >= dy ? 'read' : 'scroll';
+      if (mode === 'read') {
+        e.preventDefault();
+        pickRef.current(t.clientX, el);
+      }
+    };
+    el.addEventListener('touchstart', down, { passive: true });
+    el.addEventListener('touchmove', move, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchmove', move);
+    };
+  }, [boxRef, width]);
 
   const tab = (s: Side, label: string, value: number) => (
     <button
@@ -211,8 +245,13 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
           {/* Lecture du jour survolé (aujourd'hui par défaut) : la valeur d'abord, le nom ensuite */}
           {/* Lecture en phrases simples : ce mois-ci, d'habitude, et la différence */}
           <div className="rounded-2xl bg-slate-100 px-3.5 py-3 mb-2" aria-live="polite">
-            <div className="text-[11px] font-semibold text-slate-500 mb-2">
-              {day === data.today - 1 ? `Aujourd'hui, ${dateLabel(day)}` : `Au ${dateLabel(day)}`}
+            <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-slate-500 mb-2">
+              <span>{day === data.today - 1 ? `Aujourd'hui, ${dateLabel(day)}` : `Au ${dateLabel(day)}`}</span>
+              {day !== data.today - 1 && (
+                <button type="button" onClick={() => setHover(null)} className="text-emerald-700 cursor-pointer">
+                  Revenir à aujourd'hui
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2 text-[13px]">
               <span className="w-3 h-0.5 rounded-full chart-key-series shrink-0" />
@@ -250,9 +289,9 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
                 aria-label={`${side === 'expense' ? 'Dépenses' : 'Revenus'} cumulées ce mois-ci comparées à la moyenne des 3 mois précédents`}
                 tabIndex={0}
                 className="block outline-none touch-pan-y"
-                onPointerMove={(e) => pickDay(e.clientX, e.currentTarget)}
-                onPointerDown={(e) => pickDay(e.clientX, e.currentTarget)}
-                onPointerLeave={() => setHover(null)}
+                onPointerMove={(e) => e.pointerType === 'mouse' && pickDay(e.clientX, e.currentTarget)}
+                onPointerDown={(e) => e.pointerType === 'mouse' && pickDay(e.clientX, e.currentTarget)}
+                onPointerLeave={(e) => e.pointerType === 'mouse' && setHover(null)}
                 onKeyDown={(e) => {
                   if (e.key === 'ArrowLeft') setHover(Math.max(0, day - 1));
                   else if (e.key === 'ArrowRight') setHover(Math.min(data.days - 1, day + 1));
@@ -297,6 +336,7 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
               </svg>
             )}
           </div>
+          <p className="text-[11px] text-slate-400 text-center mt-0.5">Glisse ton doigt sur le graphique pour voir chaque jour.</p>
 
           {data.forecast && (
             <div className={`mt-3 rounded-2xl px-3.5 py-3 ${data.forecast.end < 0 ? 'bg-red-500/10' : 'bg-slate-100'}`}>
