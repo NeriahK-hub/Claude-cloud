@@ -33,6 +33,11 @@ export const LivingTool: React.FC<{ allTransactions: Transaction[]; categories: 
   const [saved, setSaved] = usePersistentState<Saved>('ap.living', DEFAULT);
   const main = settings.mainCurrency;
   const money = (v: number, cur = main) => formatMoney(Math.round(v), cur, { ...getPrefs(), decimals: 'never' });
+  // Cases des niveaux : nombre court (« 1,16 M ») pour tenir dans la case, devise à part
+  const short = (v: number) =>
+    Math.abs(v) >= 1e6
+      ? `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(v / 1e6)} M`
+      : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(v));
   const other = (v: number) => {
     const x = mainToSecond(v, settings);
     return x === null || !settings.secondCurrency ? null : `≈ ${money(x, settings.secondCurrency)}`;
@@ -70,33 +75,41 @@ export const LivingTool: React.FC<{ allTransactions: Transaction[]; categories: 
               onClick={() => set({ level: l.id })}
               className={`rounded-2xl px-2 py-3 text-center cursor-pointer transition active:scale-[0.97] ${on ? 'is-selected' : 'bg-slate-100'}`}
             >
-              <span className="block text-[13px] font-bold text-slate-900">{l.title}</span>
-              <span className="block text-[15px] font-extrabold tabular-nums text-slate-900 mt-1 whitespace-nowrap"><SecretMoney text={money(v)} /></span>
-              <span className="block text-[10.5px] text-slate-500 mt-0.5 leading-tight">{l.hint}</span>
+              <span className="block text-[12.5px] font-semibold text-slate-500">{l.title}</span>
+              <span className="block text-[17px] font-bold tabular-nums text-slate-900 mt-1 whitespace-nowrap"><SecretMoney text={short(v)} /></span>
+              <span className="block text-[11px] font-medium text-slate-400 leading-tight">{main} / mois</span>
+              <span className="block text-[10.5px] text-slate-500 mt-1.5 leading-tight">{l.hint}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Le résultat */}
-      <div className="mt-3 rounded-[28px] p-5" style={{ background: 'linear-gradient(135deg, #6D4AF0, #3B1FB8)' }}>
-        <p className="text-[13px] font-semibold" style={{ color: 'rgb(255 255 255 / 0.8)' }}>Pour vivre {level === 'essential' ? 'avec l’essentiel' : level === 'comfort' ? 'à l’aise' : 'en sérénité'}, il te faut</p>
-        <p className="text-[34px] font-black tabular-nums leading-tight mt-0.5 whitespace-nowrap" style={{ color: '#fff' }}>
-          <SecretMoney text={money(need)} /> <span className="text-[14px] font-semibold opacity-75">par mois</span>
+      {/* Le résultat : carte calme, le montant en grand, puis où tu en es */}
+      <div className="mt-3 rounded-3xl bg-white border border-slate-100 p-5">
+        <p className="text-[13px] font-medium text-slate-500">Pour vivre {level === 'essential' ? 'avec l’essentiel' : level === 'comfort' ? 'à l’aise' : 'en sérénité'}, il te faut</p>
+        <p className={`${money(need).length > 13 ? 'text-[26px]' : 'text-[30px]'} font-bold tracking-tight tabular-nums leading-tight mt-1 whitespace-nowrap text-slate-900`}>
+          <SecretMoney text={money(need)} />
         </p>
-        {other(need) && <p className="text-[12px] tabular-nums" style={{ color: 'rgb(255 255 255 / 0.7)' }}>{other(need)}</p>}
-        <div className="mt-4 h-2.5 rounded-full overflow-hidden" style={{ background: 'rgb(255 255 255 / 0.2)' }}>
-          <div className="h-full rounded-full" style={{ width: `${Math.min(100, ratio * 100)}%`, background: ratio >= 1 ? '#34D399' : '#D8FB52' }} />
-        </div>
-        <p className="text-[14px] font-semibold mt-2.5" style={{ color: '#fff' }}>
-          {r.income <= 0 ? (
-            'Note tes revenus pour voir où tu en es.'
-          ) : gap > 0 ? (
-            <>Tu gagnes en moyenne <span className="whitespace-nowrap">{money(r.income)}</span> : il manque <span className="whitespace-nowrap">{money(gap)}</span>.</>
-          ) : (
-            <>Tu gagnes en moyenne <span className="whitespace-nowrap">{money(r.income)}</span> : tu as <span className="whitespace-nowrap">{money(-gap)}</span> de marge.</>
-          )}
-        </p>
+        <p className="text-[12.5px] text-slate-400 tabular-nums">par mois{other(need) ? ` · ${other(need)}` : ''}</p>
+        {r.income > 0 ? (
+          <>
+            <div className="mt-4 h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div className={`h-full rounded-full ${ratio >= 1 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[13px] text-slate-500">
+                Tu gagnes ≈ <b className="text-slate-800 tabular-nums whitespace-nowrap">{money(r.income)}</b> / mois
+              </span>
+              <span
+                className={`inline-flex items-center h-7 px-2.5 rounded-full text-[12px] font-semibold tabular-nums whitespace-nowrap ${gap > 0 ? 'bg-amber-500/10 text-amber-600' : 'bg-emerald-500/10 text-emerald-600'}`}
+              >
+                {gap > 0 ? `Il manque ${money(gap)}` : `+${money(-gap)} de marge`}
+              </span>
+            </div>
+          </>
+        ) : (
+          <p className="text-[13px] text-slate-500 mt-3">Note tes revenus pour voir où tu en es.</p>
+        )}
       </div>
 
       {/* Épargne (niveau Sérénité) */}
