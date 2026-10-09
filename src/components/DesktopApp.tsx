@@ -4,6 +4,7 @@ import { BadgesCard } from './BadgesCard';
 import { ReviewCards } from './ReviewCards';
 import { FestiveCard, FestiveLayer } from './Festive';
 import { useFestive } from '../lib/festive';
+import { BudgetsHomeCard, GoalsHomeCard } from './HomeExtraCards';
 import { CoachTour, GOAL_TIPS, HOME_TIPS, REPORT_TIPS, SIMPLE_TIPS, WALLET_TIPS } from './CoachTour';
 import { NetworkCloud } from './NetworkCloud';
 import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon, PieChart, HandCoins, Target, CalendarClock } from 'lucide-react';
@@ -54,7 +55,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
     onSelectTransaction, categories, onAddCategory, onDeleteCategory,
   } = p;
   const main = settings.mainCurrency;
-  const { hideBalance, homeWalletCard: showWalletCard, simpleMode } = useDisplayPrefs();
+  const { hideBalance, simpleMode } = useDisplayPrefs();
   const layout = useHomeLayout(); // accueil au choix (Paramètres › Accueil) : sur ordinateur, on cache ce qui est décoché
   const festive = useFestive(); // design des fêtes (espace admin)
   useEffect(() => {
@@ -175,11 +176,11 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                   ))}
                 </div>
               </div>
-              {showWalletCard && p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
+              {layout.show('wallet') && p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               )}
 
-              {festive && <FestiveCard kind={festive} onNavigate={onNavigate} />}
+              {festive && layout.show('festive') && <FestiveCard kind={festive} onNavigate={onNavigate} />}
               {layout.show('review') && (
                 <div className="empty:hidden">
                   <ReviewCards transactions={p.transactions} settings={settings} categories={categories} />
@@ -198,6 +199,16 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
               {layout.show('subs') && (
                 <div className="empty:hidden">
                   <SubsHomeCard transactions={allTransactions} settings={settings} categories={categories} recurrings={p.recurrings} onOpen={() => onNavigate('upcoming')} />
+                </div>
+              )}
+              {layout.show('budgets') && (
+                <div className="empty:hidden">
+                  <BudgetsHomeCard budgets={p.budgets} transactions={allTransactions} categories={categories} settings={settings} onOpen={() => onNavigate('budgets')} />
+                </div>
+              )}
+              {layout.show('goals') && (
+                <div className="empty:hidden">
+                  <GoalsHomeCard wallets={wallets} transactions={allTransactions} onOpen={() => onNavigate('goals')} />
                 </div>
               )}
               <AdBanner />

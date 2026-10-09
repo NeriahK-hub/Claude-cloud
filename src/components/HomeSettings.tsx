@@ -64,7 +64,7 @@ export const HomeSettings: React.FC = () => {
         })}
       </div>
       <p className="text-[12px] text-slate-400 px-4 mt-1.5 leading-snug">
-        Les cartes cachées ne s’affichent plus sur l’accueil. Tu peux les retrouver ici à tout moment. Le solde et les boutons d’ajout restent toujours en haut.
+        Une carte cachée n’apparaît plus sur l’accueil. Le solde et les boutons d’ajout restent toujours en haut.
       </p>
       {changed && (
         <button

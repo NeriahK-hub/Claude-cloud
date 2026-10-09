@@ -4,17 +4,21 @@ import { useDisplayPrefs } from './display';
 // Accueil au choix : quelles cartes, dans quel ordre (Paramètres › Accueil).
 // Les cartes ajoutées plus tard à l'app arrivent à la fin, sans rien casser.
 
-export type HomeCardId = 'review' | 'rates' | 'due' | 'health' | 'badges' | 'month' | 'subs' | 'list';
+export type HomeCardId = 'wallet' | 'festive' | 'review' | 'rates' | 'due' | 'health' | 'badges' | 'month' | 'subs' | 'budgets' | 'goals' | 'list';
 
 export const HOME_CARDS: { id: HomeCardId; label: string; hint: string }[] = [
-  { id: 'review', label: 'Bilans', hint: 'Ta semaine, ton Wrapped de fin d’année' },
-  { id: 'rates', label: 'Taux de change', hint: 'Le taux du jour entre dollar et franc' },
-  { id: 'due', label: 'À payer bientôt', hint: 'Factures et opérations qui reviennent' },
-  { id: 'health', label: 'Santé financière', hint: 'Ta note sur 100 et un conseil' },
-  { id: 'badges', label: 'Série et badges', hint: 'Les jours de suite où tu notes tes dépenses' },
-  { id: 'month', label: 'Résumé du mois', hint: 'Entrées, sorties et prévision' },
-  { id: 'subs', label: 'Abonnements', hint: 'Ce que tes abonnements coûtent chaque mois' },
-  { id: 'list', label: 'Dernières opérations', hint: 'Les opérations les plus récentes' },
+  { id: 'wallet', label: 'Portefeuille choisi', hint: 'Objectif, crédit ou partage' },
+  { id: 'festive', label: 'Fêtes', hint: 'Noël et Nouvel An' },
+  { id: 'review', label: 'Bilans', hint: 'Ta semaine et ton Wrapped' },
+  { id: 'rates', label: 'Taux de change', hint: 'Dollar et franc du jour' },
+  { id: 'due', label: 'À payer bientôt', hint: 'Factures et rappels à venir' },
+  { id: 'health', label: 'Santé financière', hint: 'Ta note sur 100' },
+  { id: 'badges', label: 'Série et badges', hint: 'Tes jours de suite' },
+  { id: 'month', label: 'Résumé du mois', hint: 'Entrées, sorties, prévision' },
+  { id: 'subs', label: 'Abonnements repérés', hint: 'À ajouter dans À venir' },
+  { id: 'budgets', label: 'Budgets', hint: 'Les plus remplis' },
+  { id: 'goals', label: 'Objectifs', hint: 'Ton épargne' },
+  { id: 'list', label: 'Dernières opérations', hint: 'Les plus récentes' },
 ];
 
 const IDS = HOME_CARDS.map((c) => c.id);

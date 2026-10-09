@@ -22,7 +22,7 @@ PWA de finances personnelles (ex-AetherPay) pour la RDC : portefeuilles, opérat
 
 - Notifications : `src/lib/notify.ts` (A : alertes de l'app montrées en notification système ; B : abonnement push). Push serveur : triggers de `supabase/migrations/20261009000000_push.sql` -> file `push_queue` -> Edge Function `supabase/functions/send-push` (pg_cron, `supabase/push_cron.sql`). Gestionnaires `push` / `notificationclick` dans `scripts/serviceWorker.ts`.
 - Accueil au choix : `src/lib/homeLayout.ts` (cartes, ordre, cachées ; Paramètres › Apparence › Accueil). Corbeille 30 jours + « Annuler » : `src/lib/trash.ts` (local, éléments rétablis avec un nouvel identifiant). Aide : `src/data/help.ts` + articles de l'admin via `app_config()` (`help`). Appareils connectés : `src/lib/devices.ts` + migration `20261021`.
-- Migrations récentes à exécuter à la main (dans l'ordre) : `20261019` (fréquence « toutes les N »), `20261020` (« à résilier »), `20261021` (appareils), `20261022` (aide admin), `20261023` (note d'une opération qui revient). L'app marche sans elles : les champs concernés ne sont envoyés que s'ils sont réglés.
+- Migrations récentes à exécuter à la main (dans l'ordre) : `20261019` (fréquence « toutes les N »), `20261020` (« à résilier »), `20261021` (appareils), `20261022` (aide admin), `20261023` (note d'une opération qui revient), `20261024` (accents des fonctionnalités de l'admin). L'app marche sans elles : les champs concernés ne sont envoyés que s'ils sont réglés.
 - Espace admin : fonctions `admin_*` et table fermée `admins` (`supabase/migrations/20261002000000_admin.sql`). L'app lit fonctionnalités / annonces / icônes via `app_config()` (`src/lib/remoteConfig.ts`, `useFeature('debts')`…), gardées pour le hors ligne.
 
 ## Règles

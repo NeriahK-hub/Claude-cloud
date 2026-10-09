@@ -4,6 +4,7 @@ import { BadgesCard } from './BadgesCard';
 import { ReviewCards } from './ReviewCards';
 import { FestiveCard, FestiveLayer, FestiveMark } from './Festive';
 import { useFestive } from '../lib/festive';
+import { BudgetsHomeCard, GoalsHomeCard } from './HomeExtraCards';
 import { CoachTour, GOAL_TIPS, HOME_TIPS, REPORT_TIPS, SIMPLE_TIPS, WALLET_TIPS } from './CoachTour';
 import { SharedProps } from './appProps';
 import { Header } from './Header';
@@ -32,7 +33,7 @@ interface MobileAppProps extends SharedProps {
 const TABS: TabType[] = ['home', 'transactions', 'wallets', 'profile'];
 
 export const MobileApp: React.FC<MobileAppProps> = (p) => {
-  const { homeWalletCard: showWalletCard, simpleMode, hideBalance } = useDisplayPrefs(); // carte désactivée par défaut (Paramètres › Affichage)
+  const { simpleMode, hideBalance } = useDisplayPrefs(); // carte désactivée par défaut (Paramètres › Affichage)
   const layout = useHomeLayout(); // accueil au choix : cartes montrées et leur ordre (Paramètres › Accueil)
   const {
     page, onNavigate, settings, wallets, balance, activeWalletLabel, transactions, allTransactions,
@@ -91,6 +92,18 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
           return (
             <div key={id} className="px-5 mb-3 empty:hidden">
               <SubsHomeCard transactions={allTransactions} settings={settings} categories={categories} recurrings={p.recurrings} onOpen={() => onNavigate('upcoming')} />
+            </div>
+          );
+        case 'budgets':
+          return (
+            <div key={id} className="px-5 mb-3 empty:hidden">
+              <BudgetsHomeCard budgets={p.budgets} transactions={allTransactions} categories={categories} settings={settings} onOpen={() => onNavigate('budgets')} />
+            </div>
+          );
+        case 'goals':
+          return (
+            <div key={id} className="px-5 mb-3 empty:hidden">
+              <GoalsHomeCard wallets={wallets} transactions={allTransactions} onOpen={() => onNavigate('goals')} />
             </div>
           );
         case 'list':
@@ -255,7 +268,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
             {simpleMode ? (
               // Mode simple : l'essentiel, en gros
               <>
-                {festive && (
+                {festive && layout.show('festive') && (
                   <div className="px-5 mb-3">
                     <FestiveCard kind={festive} onNavigate={onNavigate} />
                   </div>
@@ -289,12 +302,12 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
               </>
             ) : (
             <>
-            {showWalletCard && p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
+            {layout.show('wallet') && p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
               <div className="px-5 mb-3">
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               </div>
             )}
-            {festive && (
+            {festive && layout.show('festive') && (
               <div className="px-5 mb-3">
                 <FestiveCard kind={festive} onNavigate={onNavigate} />
               </div>
