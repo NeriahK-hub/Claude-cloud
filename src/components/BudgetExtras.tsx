@@ -17,7 +17,8 @@ export const BudgetSuggestions: React.FC<{
   settings: Settings;
   budgets: Budget[];
   onCreate: (s: BudgetSuggestion) => void;
-}> = ({ transactions, categories, settings, budgets, onCreate }) => {
+  onOpen: (s: BudgetSuggestion) => void; // voir le détail avant de créer
+}> = ({ transactions, categories, settings, budgets, onCreate, onOpen }) => {
   const list = useMemo(() => suggestBudgets(transactions, categories, settings, budgets), [transactions, categories, settings, budgets]);
   if (list.length === 0) return null;
   const cur = settings.mainCurrency;
@@ -30,14 +31,22 @@ export const BudgetSuggestions: React.FC<{
         {list.map((s) => {
           const c = categories.find((x) => x.id === s.categoryId)!;
           return (
-            <div key={s.categoryId} className="py-3 flex items-center gap-3">
+            <div
+              key={s.categoryId}
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpen(s)}
+              onKeyDown={(e) => e.key === 'Enter' && onOpen(s)}
+              className="py-3 flex items-center gap-3 cursor-pointer active:opacity-70 transition"
+            >
               <IconBadge icon={c.icon} image={c.image} color={c.color} size="sm" />
               <span className="flex-1 min-w-0">
                 <span className="block text-[14px] font-semibold text-slate-900 truncate">{c.name}</span>
                 <span className="block text-[12px] text-slate-500 truncate">Tu dépenses ≈ {about(s.average, cur)} par mois</span>
               </span>
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   haptic('success');
                   onCreate(s);
                 }}
