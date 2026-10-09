@@ -299,14 +299,13 @@ const PaceRows: React.FC<{ spent: number; amount: number; range: { start: Date; 
     if (before) return [before[2], before[1]];
     return [t, ''];
   };
-  const tile = (label: [string, string], value: number | string, tone = 'text-slate-900', hue = '#94A3B8') => {
+  const tile = (label: [string, string], value: number | string, tone = 'text-slate-900') => {
     let [num, unit] = typeof value === 'number' ? split(value) : [value, ''];
     // Très grands montants : « 14,6 M » (un million et plus) pour tenir dans la case
     if (typeof value === 'number' && Math.abs(value) >= 1e6) num = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
     const approx = typeof value === 'number' && Math.round(value) !== 0;
     return (
-      <div className="rounded-2xl px-2.5 py-3 min-w-0 flex flex-col gap-1.5" style={{ background: `${hue}22` }}>
-        <span className="w-6 h-1 rounded-full" style={{ background: hue }} />
+      <div className="rounded-2xl bg-slate-100 px-2.5 py-3 min-w-0 flex flex-col gap-1.5">
         <div className="text-[12px] leading-tight font-medium text-slate-500">
           <span className="block truncate">{label[0]}</span>
           <span className="block truncate">{label[1]}</span>
@@ -324,9 +323,9 @@ const PaceRows: React.FC<{ spent: number; amount: number; range: { start: Date; 
   return (
     <>
       <div className={`grid gap-2 mt-4 ${p.current ? 'grid-cols-3' : 'grid-cols-1'}`}>
-        {p.current && tile(['Tu peux', 'par jour'], spent >= amount ? 'Épuisé' : p.perDayAllowed, spent >= amount ? 'text-red-600' : 'text-slate-900', '#10B981')}
-        {p.current && tile(['Prévu', 'à la fin'], p.projected, over ? 'text-red-600' : 'text-slate-900', over ? '#EF4444' : p.projected >= amount * 0.8 ? '#F59E0B' : '#10B981')}
-        {tile(['Dépensé', 'par jour'], p.perDay, 'text-slate-900', '#3B82F6')}
+        {p.current && tile(['Tu peux', 'par jour'], spent >= amount ? 'Épuisé' : p.perDayAllowed, spent >= amount ? 'text-red-600' : 'text-emerald-600')}
+        {p.current && tile(['Prévu', 'à la fin'], p.projected, over ? 'text-red-600' : p.projected >= amount * 0.8 ? 'text-amber-600' : 'text-emerald-600')}
+        {tile(['Dépensé', 'par jour'], p.perDay, 'text-sky-500')}
       </div>
       {p.current && over && (
         <p className="text-[12px] text-red-600 mt-2">À ce rythme, tu dépasseras de {money(p.projected - amount)}.</p>
