@@ -25,6 +25,7 @@ interface StatisticViewProps {
   onBack?: () => void; // téléphone : le Rapport s'ouvre depuis Transactions, avec un retour
   initialPeriod?: Period; // « Afficher le rapport pour cette période »
   budgets?: Budget[];
+  recurrings?: Recurring[];
   onNavigate?: (page: Page) => void;
 }
 
@@ -52,6 +53,7 @@ export const StatisticView: React.FC<StatisticViewProps> = ({
   onBack,
   initialPeriod,
   budgets = [],
+  recurrings = [],
   onNavigate,
 }) => {
   const [period, setPeriod] = useState<Period>(initialPeriod ?? { kind: 'month', offset: 0 });
@@ -142,6 +144,7 @@ export const StatisticView: React.FC<StatisticViewProps> = ({
       allTransactions={allTransactions}
       wallets={wallets}
       budgets={budgets}
+      recurrings={recurrings}
       categories={categories}
       settings={settings}
       onSelectTransaction={onSelectTransaction}

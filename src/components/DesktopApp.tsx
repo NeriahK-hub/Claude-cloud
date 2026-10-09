@@ -403,6 +403,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             {page === 'statistic' && (
               <StatisticView
                 allTransactions={allTransactions}
+                recurrings={p.recurrings}
                 wallets={wallets}
                 activeWallet={p.activeWallet}
                 activeWalletLabel={activeWalletLabel}

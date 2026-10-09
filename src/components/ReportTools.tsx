@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, ArrowLeftRight, Search, FileText, ChevronRight, ChevronLeft, X, Check, TrendingUp, TrendingDown, Loader2, Lightbulb, Flame, Coins, Equal, ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, PiggyBank, CalendarRange, Sparkles, Clock, FileSpreadsheet } from 'lucide-react';
-import { Budget, Settings, Transaction, Wallet } from '../types';
+import { CalendarDays, ArrowLeftRight, Search, FileText, ChevronRight, ChevronLeft, X, Check, TrendingUp, TrendingDown, Loader2, Lightbulb, Flame, Coins, Equal, ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, PiggyBank, Target, CalendarRange, Sparkles, Clock, FileSpreadsheet } from 'lucide-react';
+import { Budget, Recurring, Settings, Transaction, Wallet } from '../types';
 import { SmallTool, WeekTool, WhenTool, YearTool } from './MoneyReviews';
+import { LivingTool } from './LivingTool';
 import { BalanceCurveTool, WhatIfTool } from './BalanceTools';
 import { exportExcel } from '../lib/importExport';
 import { track } from '../lib/usage';
@@ -47,6 +48,7 @@ export const ReportTools: React.FC<{
   pdf: ReportPdfData;
   onSelectTransaction: (tx: Transaction) => void;
   onNavigate?: (page: Page) => void;
+  recurrings?: Recurring[];
 }> = (props) => {
   const [tool, setTool] = useState<Tool | null>(null);
   type Row = { id: Tool; title: string; sub: string; Icon: typeof CalendarDays; color: string };
@@ -142,18 +144,20 @@ const UnderstandHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClo
 };
 
 // « Évolution » : le solde sur 12 mois, et ce que donnerait une dépense en moins
-const EVOLUTION_TABS: { id: 'balance' | 'whatif'; label: string; Icon: typeof Search }[] = [
+const EVOLUTION_TABS: { id: 'balance' | 'whatif' | 'living'; label: string; Icon: typeof Search }[] = [
   { id: 'balance', label: 'Mon solde', Icon: TrendingUp },
   { id: 'whatif', label: 'Et si…', Icon: PiggyBank },
+  { id: 'living', label: 'Pour vivre', Icon: Target },
 ];
 const EvolutionHub: React.FC<React.ComponentProps<typeof ReportTools>> = (props) => {
-  const [tab, setTab] = useState<'balance' | 'whatif'>('balance');
+  const [tab, setTab] = useState<'balance' | 'whatif' | 'living'>('balance');
   return (
     <>
       <Tabs items={EVOLUTION_TABS} value={tab} onChange={setTab} />
       <div key={tab} className="animate-fade-in">
         {tab === 'balance' && <BalanceCurveTool wallets={props.wallets} allTransactions={props.allTransactions} settings={props.settings} />}
         {tab === 'whatif' && <WhatIfTool allTransactions={props.allTransactions} categories={props.categories} settings={props.settings} />}
+        {tab === 'living' && <LivingTool allTransactions={props.allTransactions} categories={props.categories} settings={props.settings} recurrings={props.recurrings} />}
       </div>
     </>
   );
