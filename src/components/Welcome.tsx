@@ -1,8 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CloudOff, Mail } from 'lucide-react';
 import { Cloud } from '../lib/sync/useCloud';
 import { cloudConfigured } from '../lib/config';
 import { LoginSheet } from './Account';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 
 // Page de bienvenue / connexion : après l'écran animé, tant qu'on n'est pas connecté.
 // « Se connecter » ouvre la connexion (code par e-mail ou Google, le compte est créé au besoin) ;
@@ -32,7 +33,7 @@ export const resetWelcome = () => {
 const card = (from: string, to: string): React.CSSProperties => ({ background: `linear-gradient(135deg, ${from}, ${to})` });
 
 const Mark: React.FC = () => (
-  <span className="absolute top-3.5 left-4 w-6 h-6 rounded-lg bg-white/25 flex items-center justify-center text-white text-[13px] font-extrabold">W</span>
+  <span className="absolute top-3.5 left-4 w-6 h-6 rounded-lg flex items-center justify-center text-[13px] font-extrabold" style={{ background: 'rgba(255,255,255,0.25)', color: '#fff' }}>W</span>
 );
 
 // 1. Les portefeuilles : deux cartes qui se chevauchent, avec deux pièces
@@ -40,13 +41,13 @@ const CardsArt: React.FC = () => (
   <div className="relative w-[260px] h-[230px] scale-110" aria-hidden>
     <div className="absolute left-0 top-[96px] w-[190px] h-[116px] rounded-[22px] -rotate-[12deg] shadow-xl" style={card('#B79BFF', '#8B5CF6')}>
       <Mark />
-      <span className="absolute bottom-3.5 left-4 text-white/80 text-[11px] font-semibold">Orange Money</span>
-      <span className="absolute bottom-7 left-4 text-white text-[17px] font-extrabold tabular-nums">FC 1 250 000</span>
+      <span className="absolute bottom-3.5 left-4 text-[11px] font-semibold" style={{ color: 'rgba(255,255,255,0.8)' }}>Orange Money</span>
+      <span className="absolute bottom-7 left-4 text-[17px] font-extrabold tabular-nums" style={{ color: '#fff' }}>FC 1 250 000</span>
     </div>
     <div className="absolute right-0 top-[26px] w-[210px] h-[128px] rounded-[22px] rotate-[8deg] shadow-2xl" style={card('#6F4BF2', '#3B1FB8')}>
       <Mark />
-      <span className="absolute bottom-3.5 left-4 text-white/75 text-[11px] font-semibold">Total</span>
-      <span className="absolute bottom-7 left-4 text-white text-[20px] font-extrabold tabular-nums">$ 24 597,36</span>
+      <span className="absolute bottom-3.5 left-4 text-[11px] font-semibold" style={{ color: 'rgba(255,255,255,0.75)' }}>Total</span>
+      <span className="absolute bottom-7 left-4 text-[20px] font-extrabold tabular-nums" style={{ color: '#fff' }}>$ 24 597,36</span>
     </div>
     <span className="welcome-coin absolute top-[-6px] left-[150px] w-12 h-12 rounded-full bg-slate-100 border border-slate-200 shadow-lg flex items-center justify-center text-[18px] font-extrabold text-slate-700">$</span>
     <span className="welcome-coin welcome-coin-2 absolute top-[120px] right-[-4px] w-10 h-10 rounded-full bg-slate-100 border border-slate-200 shadow-lg flex items-center justify-center text-[13px] font-extrabold text-slate-700">FC</span>
@@ -79,7 +80,7 @@ const OfflineArt: React.FC = () => (
   <div className="relative w-[200px] h-[200px] flex items-center justify-center" aria-hidden>
     <span className="absolute inset-0 rounded-full" style={{ background: 'radial-gradient(closest-side, rgba(111,75,242,0.22), transparent)' }} />
     <div className="relative w-28 h-28 rounded-[30px] shadow-2xl flex items-center justify-center" style={card('#7B5CFF', '#3B1FB8')}>
-      <CloudOff className="w-12 h-12 text-white" strokeWidth={1.8} />
+      <CloudOff className="w-12 h-12" color="#fff" strokeWidth={1.8} />
     </div>
   </div>
 );
@@ -94,6 +95,14 @@ export const Welcome: React.FC<{ cloud: Cloud; onDone: () => void }> = ({ cloud,
   const [index, setIndex] = useState(0);
   const [login, setLogin] = useState(false);
   const track = useRef<HTMLDivElement>(null);
+  const desktop = useIsDesktop();
+
+  // Ordinateur : les écrans défilent tout seuls (sauf pendant la connexion) ; les points se touchent
+  useEffect(() => {
+    if (!desktop || login) return;
+    const t = setInterval(() => setIndex((i) => (i + 1) % SLIDES.length), 5000);
+    return () => clearInterval(t);
+  }, [desktop, login, index]);
 
   const skip = () => {
     try {
@@ -103,6 +112,60 @@ export const Welcome: React.FC<{ cloud: Cloud; onDone: () => void }> = ({ cloud,
     }
     onDone();
   };
+
+  if (desktop) {
+    const sl = SLIDES[index];
+    return (
+      <div className="welcome fixed inset-0 z-[45] overflow-y-auto animate-fade-in">
+        <div className="absolute inset-0 -z-20 bg-white" />
+        <div className="absolute inset-0 -z-10" style={{ background: 'radial-gradient(70% 60% at 75% 40%, rgba(139,92,246,0.16), rgba(139,92,246,0) 70%)' }} />
+        <div className="min-h-full flex items-center justify-center px-10 py-10">
+          <div className="w-full max-w-[1040px] grid grid-cols-2 gap-16 items-center">
+            <div>
+              <div className="flex items-center gap-3 mb-14">
+                <img src="/icons/wallo.svg" alt="" className="w-11 h-11 rounded-xl" />
+                <span className="text-[22px] font-extrabold tracking-tight text-slate-900">Wallo</span>
+              </div>
+              <div key={index} className="animate-fade-in min-h-[190px]">
+                <h1 className="text-[48px] leading-[1.05] font-extrabold tracking-tight text-slate-900 whitespace-pre-line">{sl.title}</h1>
+                <p className="mt-4 text-[18px] leading-snug text-slate-500 max-w-[420px]">{sl.text}</p>
+              </div>
+              <div className="flex gap-2 my-8">
+                {SLIDES.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setIndex(i)}
+                    aria-label={`Écran ${i + 1}`}
+                    className="h-6 flex items-center cursor-pointer"
+                  >
+                    <span className={`h-1.5 rounded-full transition-all ${i === index ? 'w-7 bg-slate-900' : 'w-1.5 bg-slate-300'}`} />
+                  </button>
+                ))}
+              </div>
+              <div className="max-w-[360px] space-y-2.5">
+                <button
+                  onClick={() => setLogin(true)}
+                  className="w-full h-[54px] rounded-full bg-accent hover:bg-accent-hover text-on-accent text-[16px] font-bold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition"
+                >
+                  <Mail className="w-[18px] h-[18px]" /> Se connecter
+                </button>
+                <button
+                  onClick={skip}
+                  className="w-full h-[54px] rounded-full bg-white border border-slate-300 text-slate-900 text-[16px] font-semibold cursor-pointer hover:bg-slate-50 active:scale-[0.98] transition"
+                >
+                  Continuer sans compte
+                </button>
+              </div>
+            </div>
+            <div className="h-[520px] rounded-[44px] flex items-center justify-center" style={{ background: 'linear-gradient(160deg, rgba(139,92,246,0.14), rgba(139,92,246,0.04))' }}>
+              <div key={index} className="animate-fade-in scale-125">{sl.art}</div>
+            </div>
+          </div>
+        </div>
+        {login && <LoginSheet cloud={cloud} onClose={() => setLogin(false)} />}
+      </div>
+    );
+  }
 
   return (
     <div
