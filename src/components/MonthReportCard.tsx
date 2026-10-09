@@ -220,7 +220,7 @@ export const MonthReportCard: React.FC<MonthReportCardProps> = ({ allTransaction
       className={`flex-1 min-w-0 pb-2 text-center cursor-pointer border-b-2 transition-colors ${side === s ? 'chart-underline' : 'border-slate-100'}`}
     >
       <div className="text-xs font-semibold text-slate-500">{label}</div>
-      <div className={`${fitAmount(money(value), 'base')} font-bold tabular-nums whitespace-nowrap ${side === s ? 'text-slate-900' : 'text-slate-500'}`}>{money(value)}</div>
+      <div className={`${fitAmount(money(value), 'base')} font-bold tabular-nums whitespace-nowrap transition-opacity ${s === 'expense' ? 'text-rose-600' : 'text-emerald-600'} ${side === s ? '' : 'opacity-60'}`}>{money(value)}</div>
     </button>
   );
 
