@@ -8,6 +8,7 @@ PWA de finances personnelles (ex-AetherPay) pour la RDC : portefeuilles, opérat
 - `npm run lint` : vérification TypeScript (`tsc --noEmit`) — à lancer avant chaque commit
 - `npm run build` / `npm run deploy` : construit puis publie sur Firebase Hosting (https://wallo-b13b0.web.app)
 - `npm run dev:admin` / `npm run deploy:admin` : espace admin (site séparé, dossier `admin/`, port 3001), voir `supabase/README.md`
+- `npm run assistant` : assistant « Demande à Wallo » (Profil) sur ton ordinateur : serveur local 127.0.0.1:8787 qui relaie les questions à Claude Code (`claude -p`) avec un code affiché au lancement (`scripts/assistant-bridge.mjs`, `src/lib/assistant.ts`). Usage personnel uniquement (abonnement Claude).
 - `npm run test:db` et `npm run test:sync` : tests de la base et de la synchro sur un PostgreSQL local (base `wallo_test`, voir `supabase/README.md`)
 
 ## Architecture

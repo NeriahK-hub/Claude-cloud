@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Settings as SettingsIcon, ChevronRight, Tags, Pencil, Check, Smartphone, Share, MapPin, LifeBuoy } from 'lucide-react';
+import React, { Suspense, lazy, useState } from 'react';
+import { Settings as SettingsIcon, ChevronRight, Tags, Pencil, Check, Smartphone, Share, MapPin, LifeBuoy, Sparkles } from 'lucide-react';
 import { Page } from './BottomNav';
 import { initialsOf, setProfileName, useProfile } from '../lib/profile';
 import type { Cloud } from '../lib/sync/useCloud';
@@ -7,6 +7,8 @@ import { AccountCard } from './Account';
 import { ProCard } from './ProOffer';
 import { shareApp } from '../lib/invite';
 import { useIsDesktop } from '../hooks/useIsDesktop';
+
+const AssistantSheet = lazy(() => import('./AssistantSheet').then((m) => ({ default: m.AssistantSheet })));
 
 interface ProfileViewProps {
   onNavigate: (page: Page) => void;
@@ -20,6 +22,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) =
   const [editing, setEditing] = useState(!name);
   const [draft, setDraft] = useState(name);
   const [shared, setShared] = useState<'copied' | 'failed' | null>(null);
+  const [assistant, setAssistant] = useState(false); // « Demande à Wallo »
 
   const share = async () => {
     const r = await shareApp();
@@ -99,6 +102,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) =
 
       <ProCard cloud={cloud} />
 
+      <button
+        onClick={() => setAssistant(true)}
+        className="w-full mb-4 bg-white rounded-3xl p-2 border border-slate-100 cursor-pointer text-left"
+      >
+        <span className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition">
+          <span className="w-9 h-9 rounded-full bg-accent flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 text-slate-900" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-slate-900">Demande à Wallo</span>
+            <span className="block text-xs text-slate-500 truncate">Une question sur ton argent ? Ton assistant répond</span>
+          </span>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </span>
+      </button>
+
       <div className="bg-white rounded-3xl p-2 border border-slate-100">
         {link('Paramètres', 'Apparence, devises, import / export', SettingsIcon, 'settings')}
         {link('Catégories', 'Créer, modifier, ranger', Tags, 'categories')}
@@ -131,6 +150,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigate, cloud }) =
       </div>
 
       <p className="text-center text-xs text-slate-400 mt-6">Wallo</p>
+      {assistant && (
+        <Suspense fallback={null}>
+          <AssistantSheet onClose={() => setAssistant(false)} />
+        </Suspense>
+      )}
       </div>
     </div>
   );
