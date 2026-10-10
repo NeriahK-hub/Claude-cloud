@@ -305,7 +305,7 @@ const Setup: React.FC<{ config: AssistantConfig | null; onSave: (c: AssistantCon
       )}
 
       <p className="text-[12px] text-slate-400 mt-5 leading-snug text-center">
-        Tes données restent entre l'app et ton ordinateur. Seul un résumé (soldes, dépenses du mois, budgets) est envoyé à Claude avec ta question.
+        Avec chaque question, toutes tes données Wallo passent par ton ordinateur et sont lues par Claude (en lecture seule) pour te répondre. Elles sont effacées de l'ordinateur quand tu arrêtes l'assistant.
       </p>
 
       <div className="mt-4 text-center">

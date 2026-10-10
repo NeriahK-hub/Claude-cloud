@@ -54,7 +54,7 @@ export async function askAssistant(c: AssistantConfig, question: string, context
     r = await fetch(`${c.url}/ask`, {
       method: 'POST',
       headers: headers(c),
-      body: JSON.stringify({ question, context, history: history.filter((m) => !m.error).map(({ role, text }) => ({ role, text })) }),
+      body: JSON.stringify({ question, context, data: exportAll(), history: history.filter((m) => !m.error).map(({ role, text }) => ({ role, text })) }),
       signal: AbortSignal.timeout(200_000),
     });
   } catch {
@@ -63,6 +63,23 @@ export async function askAssistant(c: AssistantConfig, question: string, context
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(r.status === 401 ? 'Le code ne correspond plus : recolle celui affiché sur ton ordinateur.' : j.error || 'Une erreur est survenue.');
   return String(j.answer ?? '').trim() || "Je n'ai pas su répondre. Reformule ta question ?";
+}
+
+// ---------- Toutes les données de l'app (choix de l'utilisateur) : l'ordinateur les range en fichiers
+// que Claude Code peut lire pour répondre aux questions précises ----------
+export function exportAll() {
+  const wallets = read<Wallet[]>('ap.wallets', []);
+  const transactions = read<Transaction[]>('ap.transactions', []);
+  return {
+    settings: read<Settings>('ap.settings', { mainCurrency: 'USD', secondCurrency: null, rates: {} } as Settings),
+    wallets: wallets.map((w) => ({ ...w, image: undefined, balance: walletBalance(w, transactions) })),
+    transactions: transactions.map((t) => ({ ...t, avatarValue: undefined })),
+    categories: read<Category[]>('ap.categories', []).map((c) => ({ ...c, image: undefined })),
+    budgets: read<Budget[]>('ap.budgets', []),
+    recurrings: read<Recurring[]>('ap.recurrings', []),
+    ristournes: read<unknown[]>('ap.ristournes', []),
+    debtShares: read<unknown[]>('ap.debtShares', []),
+  };
 }
 
 // ---------- Résumé envoyé avec chaque question (lu dans les données de l'app) ----------
