@@ -9,6 +9,7 @@
 \set m3   'eeeeeeee-0000-0000-0000-000000000003'
 \set m4   'eeeeeeee-0000-0000-0000-000000000004'
 \set m5   'eeeeeeee-0000-0000-0000-000000000005'
+\set m6   'eeeeeeee-0000-0000-0000-000000000006'
 
 insert into auth.users (id, email) values (:'nk', 'nk@test.cd'), (:'dm', 'dm@test.cd'), (:'zoe', 'zoe@test.cd');
 update profiles set name = 'Neriah' where id = :'nk';
@@ -118,6 +119,46 @@ select pg_temp.login(:'nk', 'nk@test.cd');
 update debt_moves set deleted_at = now() where id = :'m4';
 select pg_temp.check((select deleted_at is not null from debt_moves where id = :'m4'), 'Neriah refuse un remboursement pas reçu');
 
+-- ---------- Pas de réponse : relances à 1 et 3 jours, confirmé tout seul à 7 jours ----------
+select pg_temp.login(:'dm', 'dm@test.cd');
+insert into debt_moves (id, share_id, kind, amount, currency, pending_since, auto_confirmed, reminders)
+values (:'m6', :'sh', 'repay', 7000, 'CDF', now() - interval '30 days', true, 5);
+select pg_temp.check((select pending and not auto_confirmed and reminders = 0 and pending_since > now() - interval '1 minute' from debt_moves where id = :'m6'),
+  'le délai part de l''enregistrement (l''app ne le choisit pas)');
+update debt_moves set pending_since = now() - interval '30 days', auto_confirmed = true, reminders = 2 where id = :'m6';
+select pg_temp.check((select pending_since > now() - interval '1 minute' and not auto_confirmed and reminders = 0 from debt_moves where id = :'m6'),
+  'l''app ne recule pas le délai');
+reset role;
+select set_config('request.jwt.claims', '', false); -- comme le cron : aucun compte connecté
+insert into push_subscriptions (user_id, endpoint, p256dh, auth) values (:'nk', 'https://push.test/nk', 'k', 'a'), (:'dm', 'https://push.test/dm', 'k', 'a');
+select pg_temp.check(debt_moves_follow_up() = 0, 'moins d''un jour : rien');
+update debt_moves set pending_since = now() - interval '26 hours' where id = :'m6';
+select pg_temp.check(debt_moves_follow_up() = 1, 'après 1 jour : une relance');
+select pg_temp.check((select reminders from debt_moves where id = :'m6') = 1, 'relance comptée');
+select pg_temp.check((select count(*) from push_queue where user_id = :'nk' and body like '%attend ta réponse%dans 6 jours.') = 1, 'la relance va à Neriah (6 jours restants)');
+select pg_temp.check(debt_moves_follow_up() = 0, 'pas deux fois la même relance');
+update debt_moves set pending_since = now() - interval '73 hours' where id = :'m6';
+select pg_temp.check(debt_moves_follow_up() = 1, 'après 3 jours : deuxième relance');
+select pg_temp.check((select reminders from debt_moves where id = :'m6') = 2, 'deuxième relance comptée');
+set role authenticated;
+select pg_temp.login(:'dm', 'dm@test.cd');
+update debt_moves set amount = 8000 where id = :'m6';
+select pg_temp.check((select pending_since > now() - interval '1 minute' and reminders = 0 from debt_moves where id = :'m6'), 'DM change le montant : Neriah a de nouveau 7 jours');
+reset role;
+select set_config('request.jwt.claims', '', false);
+update debt_moves set pending_since = now() - interval '7 days 1 minute' where id = :'m6';
+delete from push_queue;
+select pg_temp.check(debt_moves_follow_up() = 1, 'après 7 jours : traité');
+select pg_temp.check((select not pending and auto_confirmed from debt_moves where id = :'m6'), 'après 7 jours sans réponse : confirmé tout seul');
+select pg_temp.check((select count(*) from push_queue where user_id = :'dm' and body like 'Confirmé sans réponse%') = 1
+  and (select count(*) from push_queue where user_id = :'nk' and body like 'Un remboursement%est confirmé%') = 1
+  and (select count(*) from push_queue where body like '%a confirmé%') = 0, 'les deux sont prévenus (pas de « a confirmé »)');
+set role authenticated;
+select pg_temp.login(:'nk', 'nk@test.cd');
+update debt_moves set deleted_at = now() where id = :'m6';
+select pg_temp.check((select deleted_at is null from debt_moves where id = :'m6'), 'confirmé sans réponse : Neriah ne le supprime pas seul');
+select pg_temp.login(:'dm', 'dm@test.cd');
+
 -- ---------- DM arrête de suivre la dette ----------
 select pg_temp.login(:'dm', 'dm@test.cd');
 select leave_debt_share(:'sh');
@@ -126,7 +167,7 @@ select pg_temp.must_fail(format($$insert into debt_moves (share_id, kind, amount
 
 select pg_temp.login(:'nk', 'nk@test.cd');
 select pg_temp.check((select guest_left_at is not null from debt_shares where id = :'sh'), 'Neriah voit que DM ne suit plus');
-select pg_temp.check((select count(*) from debt_moves where share_id = :'sh' and deleted_at is null) = 2, 'chez Neriah, tout l''historique reste');
+select pg_temp.check((select count(*) from debt_moves where share_id = :'sh' and deleted_at is null) = 3, 'chez Neriah, tout l''historique reste');
 update debt_moves set amount = 160000 where id = :'m1';
 update debt_moves set deleted_at = now() where id = :'m3';
 select pg_temp.check((select amount from debt_moves where id = :'m1') = 160000 and (select deleted_at is not null from debt_moves where id = :'m3'), 'seul à suivre : Neriah corrige librement');
