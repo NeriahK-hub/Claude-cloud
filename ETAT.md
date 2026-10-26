@@ -30,6 +30,7 @@ npm run deploy
 ## Supabase : migrations
 
 - Tout est installé jusqu'à `20261029000000_debt_refuse.sql`, ainsi que la tâche `wallo-debt-follow-up` (étape 8 de `supabase/push_cron.sql`).
+- **À installer avant de publier la 1.1.0** : `20261030000000_wallet_cards.sql` (cartes bancaires). Sans elle, enregistrer une carte bloque la synchro du portefeuille.
 - L'ancienne version des relances venue du Mac (`20261019000000_debt_followup.sql`, branche `travail-local-mac`) avait été installée. Elle a été défaite le 26 octobre : colonnes `asked_at` et `nudged_at`, fonctions `nudge_debt_move`, `push_debt_pending_reminders` et `debt_auto_confirm_days`, tâche `wallo-debt-pending`. Ne pas la relancer.
 - Il reste une fonction inutilisée, sans effet : `push_debt_move_label`.
 - `push_cron.sql` ne se lance pas en entier une deuxième fois, car le coffre (Vault) existe déjà. Lancer seulement la nouvelle ligne.
