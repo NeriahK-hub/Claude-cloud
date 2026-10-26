@@ -9,12 +9,12 @@ insert into auth.users (id, email, raw_user_meta_data) values
   (:'carol', 'carol@test.cd', '{}');
 
 -- Se connecter en tant que … (comme le ferait Supabase avec le jeton de l'utilisateur)
-create function pg_temp.login(uid uuid, mail text) returns void language sql as $$
+create or replace function pg_temp.login(uid uuid, mail text) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'email', mail)::text, false);
 $$;
 
 -- Test qui DOIT échouer (règle d'accès ou garde-fou)
-create function pg_temp.must_fail(sql text, what text) returns void language plpgsql as $$
+create or replace function pg_temp.must_fail(sql text, what text) returns void language plpgsql as $$
 begin
   begin
     execute sql;
@@ -25,7 +25,7 @@ begin
   raise exception 'ÉCHEC : aurait dû être refusé : %', what;
 end $$;
 
-create function pg_temp.check(ok boolean, what text) returns void language plpgsql as $$
+create or replace function pg_temp.check(ok boolean, what text) returns void language plpgsql as $$
 begin
   if not ok then raise exception 'ÉCHEC : %', what; end if;
   raise notice 'OK : %', what;
