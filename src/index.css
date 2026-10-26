@@ -627,7 +627,7 @@ html:not(.dark) .status-bar {
 /* ---------- Ordinateur : fenêtres (ajout, modification, réglages…) ----------
    Sur téléphone ce sont des fenêtres du bas ; sur ordinateur (même seuil que useIsDesktop),
    une vraie fenêtre centrée : plus large, jamais coupée en haut ou en bas, qui apparaît en fondu,
-   avec une barre de défilement fine qui ne déborde pas sur les coins arrondis. */
+   avec une barre de défilement fine qui ne déborde pas sur les coins arrondis (plus bas). */
 @media (min-width: 1024px) {
   .fixed.inset-0.z-50.items-end {
     padding: 2rem;
@@ -642,9 +642,7 @@ html:not(.dark) .status-bar {
   .fixed.inset-0.z-50.items-end > .animate-slide-up:is(.overflow-y-auto, .flex-col) {
     max-width: 520px;
     max-height: calc(100dvh - 4rem);
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-slate-300) transparent;
-    scrollbar-gutter: stable;
+    scrollbar-gutter: stable; /* (la barre elle-même : voir « Barre de défilement des fenêtres ») */
   }
   .fixed.inset-0.z-50.items-end > .animate-slide-up.overflow-y-auto {
     padding-left: 1.75rem;
@@ -656,6 +654,30 @@ html:not(.dark) .status-bar {
     margin-right: calc(-1.75rem + 6px);
     padding-left: 1.75rem;
     padding-right: calc(1.75rem - 6px);
+  }
+}
+/* Barre de défilement des fenêtres : elle s'arrête avant les coins arrondis (sinon elle part tout en
+   haut, dans l'arrondi). La marge du rail n'existe qu'avec ::-webkit-scrollbar (Chrome, Safari, Edge),
+   qui n'est pris en compte que si scrollbar-width / scrollbar-color restent à « auto ». */
+@supports selector(::-webkit-scrollbar) {
+  .fixed.inset-0.z-50 > .animate-slide-up.overflow-y-auto {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  .fixed.inset-0.z-50 > .animate-slide-up.overflow-y-auto::-webkit-scrollbar {
+    width: 12px;
+  }
+  .fixed.inset-0.z-50 > .animate-slide-up.overflow-y-auto::-webkit-scrollbar-track {
+    background: transparent;
+    margin-block: 24px;
+  }
+  .fixed.inset-0.z-50 > .animate-slide-up.overflow-y-auto::-webkit-scrollbar-thumb {
+    background: rgb(148 163 184 / 0.45) padding-box;
+    border: 4px solid transparent;
+    border-radius: 999px;
+  }
+  html.dark .fixed.inset-0.z-50 > .animate-slide-up.overflow-y-auto::-webkit-scrollbar-thumb {
+    background-color: rgb(148 163 184 / 0.3);
   }
 }
 @keyframes dialog-in {
