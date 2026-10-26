@@ -7,7 +7,7 @@ export type TabType = 'home' | 'transactions' | 'wallets' | 'profile';
 
 // Toutes les pages de l'app (les onglets + les écrans sans onglet)
 // 'statistic' : le Rapport (ouvert depuis Transactions ; plus un onglet sur téléphone)
-export type Page = TabType | 'statistic' | 'history' | 'ristourne' | 'categories' | 'settings' | 'budgets' | 'goals' | 'upcoming' | 'debts' | 'places';
+export type Page = TabType | 'statistic' | 'history' | 'ristourne' | 'categories' | 'settings' | 'budgets' | 'goals' | 'upcoming' | 'debts' | 'places' | 'help';
 
 interface BottomNavProps {
   activeTab: TabType;

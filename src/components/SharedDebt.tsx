@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { QrButton } from './QrInvite';
-import { X, Plus, Undo2, Link2, Share2, Copy, Loader2, Check, Clock, Trash2, Wallet as WalletIcon, LogOut, CircleAlert, Percent, Pencil, ChevronDown } from 'lucide-react';
+import { X, Plus, Undo2, Link2, Share2, Copy, Loader2, Check, Clock, Trash2, Wallet as WalletIcon, LogOut, CircleAlert, Percent, Pencil, ChevronDown, Send, RotateCw, CircleX } from 'lucide-react';
 import { DebtMove, DebtShare, Settings, Wallet } from '../types';
 import type { DebtEntry } from '../lib/debts';
 import type { SharedDebts } from './DebtsView';
 import { convertBetween, formatMoney } from '../lib/money';
-import { debtMoneyOut, interestAmount, isLive, moveLabel, movesMoney, shareCurrency, shareTotals } from '../lib/debtShares';
-import { copyText, debtInviteUrl, formatCode, shareDebtInvite } from '../lib/invite';
+import { AUTO_CONFIRM_DAYS, autoConfirmDate, debtMoneyOut, interestAmount, isLive, moveLabel, movesMoney, shareCurrency, shareTotals } from '../lib/debtShares';
+import { copyText, debtInviteUrl, formatCode, shareDebtInvite, shareDebtNudge } from '../lib/invite';
 import { frenchError } from './Account';
 import { MemberAvatar } from './Members';
 import { IconBadge } from './AppIcon';
@@ -15,6 +15,33 @@ import { haptic } from '../lib/haptics';
 const COLORS = ['#F97316', '#3B82F6', '#EC4899', '#14B8A6', '#8B5CF6', '#EAB308', '#EF4444', '#0EA5E9'];
 const colorOf = (name: string) => COLORS[[...name].reduce((s, c) => s + c.charCodeAt(0), 0) % COLORS.length];
 const day = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+const shortDay = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+const what = (m: DebtMove) => `${m.kind === 'more' ? 'un prêt' : m.kind === 'interest' ? 'des intérêts' : 'un remboursement'} de ${formatMoney(m.amount, m.currency)}`;
+
+// Message de relance : mes mouvements qui attendent l'autre, et quand ils seront confirmés tout seuls
+const nudgeText = (moves: DebtMove[]) => {
+  const until = moves.map(autoConfirmDate).filter((d): d is string => !!d).sort()[0];
+  const list = moves.map((m) => `${what(m)} (le ${shortDay(m.date)})`).join(', ');
+  return `Salut ! J'ai noté sur Wallo ${list}. Ouvre Wallo › Dettes et prêts pour confirmer ou refuser.${
+    until ? ` Sans réponse, ce sera confirmé le ${shortDay(until)}.` : ''
+  }`;
+};
+
+// Relancer l'autre, avec un petit retour quand le message a été copié au lieu d'être partagé
+const NudgeButton: React.FC<{ moves: DebtMove[]; person: string; className: string }> = ({ moves, person, className }) => {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        if ((await shareDebtNudge(nudgeText(moves))) === 'copied') setCopied(true);
+      }}
+      className={className}
+    >
+      {copied ? <Check className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
+      {copied ? 'Message copié : colle-le dans WhatsApp' : `Relancer ${person}`}
+    </button>
+  );
+};
 
 // Fenêtre posée au-dessus de la fiche (rendue à côté d'elle, pas dedans : l'animation l'y enfermerait)
 const Sheet: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => (
@@ -58,8 +85,20 @@ export const SharedDebtDetail: React.FC<{
   const t = shareTotals(sh, settings);
   // Tout dans la devise de la dette : les deux personnes voient les mêmes chiffres
   const money = (v: number) => formatMoney(v, t.currency);
-  const toAnswer = live ? sh.moves.filter((m) => (m.pending && m.recordedBy !== me) || (!!m.deleteRequestedBy && m.deleteRequestedBy !== me)) : [];
-  const mineWaiting = live ? sh.moves.filter((m) => m.pending && m.recordedBy === me).length : 0;
+  const toAnswer = live ? sh.moves.filter((m) => (m.pending && !m.refusedAt && m.recordedBy !== me) || (!!m.deleteRequestedBy && m.deleteRequestedBy !== me)) : [];
+  const mineWaiting = live ? sh.moves.filter((m) => m.pending && !m.refusedAt && m.recordedBy === me) : [];
+  // Mes mouvements que l'autre a refusés : à corriger, renvoyer ou retirer
+  const mineRefused = live ? sh.moves.filter((m) => m.pending && m.refusedAt && m.recordedBy === me) : [];
+  const [resending, setResending] = useState<string | null>(null);
+  const resend = async (m: DebtMove) => {
+    setResending(m.id);
+    try {
+      await shared.cloud.resendDebtMove(m.id);
+    } catch {
+      /* hors ligne : le mouvement reste refusé, on peut réessayer */
+    }
+    setResending(null);
+  };
   const by = (m: DebtMove) => (m.recordedBy === me ? 'toi' : e.name);
   const signed = (m: DebtMove) => `${m.kind === 'repay' ? '−' : '+'}${formatMoney(m.amount, m.currency)}`;
   const [showPast, setShowPast] = useState(false);
@@ -82,9 +121,23 @@ export const SharedDebtDetail: React.FC<{
                       {day(m.date)} · noté par {by(m)}
                       {m.txId && ' · dans ton portefeuille'}
                     </span>
-                    {live && m.pending && (
-                      <span className="inline-flex items-center gap-1 mt-0.5 text-[11px] font-bold text-amber-700">
-                        <Clock className="w-3 h-3" /> {m.recordedBy === me ? `En attente de ${e.name}` : 'À confirmer'}
+                    {live && m.pending && m.refusedAt && (
+                      <span className="flex items-center gap-1 mt-0.5 text-[11px] font-bold text-red-600">
+                        <CircleX className="w-3 h-3 shrink-0" /> {m.recordedBy === me ? `Refusé par ${e.name}` : 'Refusé par toi'}
+                      </span>
+                    )}
+                    {live && m.pending && !m.refusedAt && (
+                      <span className="flex items-center gap-1 mt-0.5 text-[11px] font-bold text-amber-700">
+                        <Clock className="w-3 h-3 shrink-0" />
+                        <span className="truncate">
+                          {m.recordedBy === me ? `En attente de ${e.name}` : 'À confirmer'}
+                          {autoConfirmDate(m) && <span className="font-medium text-slate-500"> · auto le {shortDay(autoConfirmDate(m)!)}</span>}
+                        </span>
+                      </span>
+                    )}
+                    {live && !m.pending && m.autoConfirmed && (
+                      <span className="flex items-center gap-1 mt-0.5 text-[11px] font-semibold text-slate-500">
+                        <Check className="w-3 h-3 shrink-0" /> Confirmé sans réponse
                       </span>
                     )}
                     {live && m.deleteRequestedBy && (
@@ -144,10 +197,58 @@ export const SharedDebtDetail: React.FC<{
 
           <DebtSummary side={sh.side} total={t.total} interest={t.interest} paid={t.paid} left={t.left} money={money} settings={settings} currency={t.currency} />
           
-          {mineWaiting > 0 && (
-            <p className="text-xs text-slate-500 mb-2 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 shrink-0" /> {mineWaiting} mouvement{mineWaiting > 1 ? 's' : ''} noté{mineWaiting > 1 ? 's' : ''} par toi, en attente de {e.name} : pas encore compté{mineWaiting > 1 ? 's' : ''}.
-            </p>
+          {mineWaiting.length > 0 && (
+            <div className="mb-3 rounded-2xl bg-slate-100 p-3">
+              <p className="text-xs text-slate-600 flex gap-1.5">
+                <Clock className="w-3.5 h-3.5 shrink-0 mt-px" />
+                <span>
+                  {mineWaiting.length === 1 ? (
+                    <b className="text-slate-800">{what(mineWaiting[0])[0].toUpperCase() + what(mineWaiting[0]).slice(1)}</b>
+                  ) : (
+                    <b className="text-slate-800">{mineWaiting.length} mouvements</b>
+                  )}{' '}
+                  en attente de {e.name} : pas encore compté{mineWaiting.length > 1 ? 's' : ''} dans le reste. Sans réponse, confirmé{mineWaiting.length > 1 ? 's' : ''} tout seul{mineWaiting.length > 1 ? 's' : ''} après {AUTO_CONFIRM_DAYS} jours.
+                </span>
+              </p>
+              <NudgeButton
+                moves={mineWaiting}
+                person={e.name}
+                className="mt-2 w-full py-2.5 rounded-xl bg-white text-sm font-semibold text-slate-800 flex items-center justify-center gap-1.5 cursor-pointer"
+              />
+            </div>
+          )}
+
+          {/* Mes mouvements refusés par l'autre */}
+          {mineRefused.length > 0 && (
+            <div className="mb-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-3 space-y-3">
+              <div className="text-xs font-bold text-red-600">Refusé par {e.name}</div>
+              {mineRefused.map((m) => (
+                <div key={m.id}>
+                  <p className="text-sm text-slate-800">
+                    {e.name} ne reconnaît pas : <b>{moveLabel(sh.side, m.kind).toLowerCase()} de {formatMoney(m.amount, m.currency)}</b> du {day(m.date)}.
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Il ne compte pas. Corrige-le, renvoie-le tel quel ou retire-le.</p>
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => setEditingMove(m)} className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer">
+                      Corriger
+                    </button>
+                    <button
+                      onClick={() => resend(m)}
+                      disabled={resending === m.id}
+                      className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                    >
+                      {resending === m.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />} Renvoyer
+                    </button>
+                    <button
+                      onClick={() => shared.onRemove(sh.id, m.id, 'Mouvement retiré')}
+                      className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-red-600 cursor-pointer"
+                    >
+                      Retirer
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
 
           {/* Ce que l'autre a noté et qui attend ma réponse */}
@@ -170,10 +271,13 @@ export const SharedDebtDetail: React.FC<{
                       )}
                     </p>
                     {m.note && <p className="text-xs text-slate-500 mt-0.5">« {m.note} »</p>}
+                    {!del && autoConfirmDate(m) && (
+                      <p className="text-[11px] text-slate-500 mt-0.5">Sans réponse de ta part, il sera confirmé le {shortDay(autoConfirmDate(m)!)}.</p>
+                    )}
                     <div className="flex gap-2 mt-2">
                       <button
                         onClick={() =>
-                          del ? shared.onAnswerDelete(sh.id, m.id, false) : shared.onRemove(sh.id, m.id, m.kind === 'repay' ? 'Remboursement refusé' : 'Mouvement refusé')
+                          del ? shared.onAnswerDelete(sh.id, m.id, false) : shared.onRefuse(sh.id, m.id)
                         }
                         className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer"
                       >
@@ -412,8 +516,18 @@ const MoveActions: React.FC<{
       <p className="text-sm text-slate-500 mb-4">
         {day(m.date)} · noté par {mine ? 'toi' : person}
         {m.note ? ` · « ${m.note} »` : ''}
-        {live && (m.pending ? (mine ? ` · en attente de ${person}` : ' · à confirmer') : ' · confirmé')}
+        {live &&
+          (m.pending
+            ? m.refusedAt
+              ? mine ? ` · refusé par ${person}` : ' · refusé par toi'
+              : mine ? ` · en attente de ${person}` : ' · à confirmer'
+            : m.autoConfirmed ? ' · confirmé sans réponse' : ' · confirmé')}
       </p>
+      {live && autoConfirmDate(m) && (
+        <p className="text-[12px] text-slate-500 -mt-2 mb-4">
+          Sans réponse de {mine ? person : 'ta part'}, il sera confirmé tout seul le {shortDay(autoConfirmDate(m)!)}.
+        </p>
+      )}
       <div className="space-y-2">
         {/* Modifier : mon mouvement pas encore confirmé, ou tout quand je suis seul à suivre */}
         {(!live || (m.pending && mine)) && (
@@ -423,18 +537,30 @@ const MoveActions: React.FC<{
         )}
         {live && m.pending && !mine && (
           <>
+            {/* Refusé : on peut encore changer d'avis et le confirmer */}
             <button onClick={onConfirm} className={`${btn} bg-accent text-slate-900 font-bold`}>
-              <Check className="w-4 h-4" /> Confirmer
+              <Check className="w-4 h-4" /> {m.refusedAt ? 'Finalement, confirmer' : 'Confirmer'}
             </button>
-            <button onClick={done(() => shared.onRemove(sh.id, m.id, 'Mouvement refusé'))} className={`${btn} bg-slate-100 text-red-600`}>
-              Refuser
-            </button>
+            {!m.refusedAt && (
+              <button onClick={done(() => shared.onRefuse(sh.id, m.id))} className={`${btn} bg-slate-100 text-red-600`}>
+                Refuser
+              </button>
+            )}
           </>
         )}
         {live && m.pending && mine && (
-          <button onClick={done(() => shared.onRemove(sh.id, m.id, 'Mouvement annulé'))} className={`${btn} bg-slate-100 text-red-600`}>
-            <Trash2 className="w-4 h-4" /> Annuler ce mouvement
-          </button>
+          <>
+            {m.refusedAt ? (
+              <button onClick={done(() => void shared.cloud.resendDebtMove(m.id).catch(() => {}))} className={`${btn} bg-slate-100`}>
+                <RotateCw className="w-4 h-4" /> Renvoyer tel quel
+              </button>
+            ) : (
+              <NudgeButton moves={[m]} person={person} className={`${btn} bg-slate-100`} />
+            )}
+            <button onClick={done(() => shared.onRemove(sh.id, m.id, 'Mouvement annulé'))} className={`${btn} bg-slate-100 text-red-600`}>
+              <Trash2 className="w-4 h-4" /> Annuler ce mouvement
+            </button>
+          </>
         )}
         {live && !m.pending && !m.deleteRequestedBy && (
           <>

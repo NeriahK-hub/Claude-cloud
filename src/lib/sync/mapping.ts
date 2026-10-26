@@ -386,6 +386,8 @@ export const debtMoveRow = (s: DebtShare, m: DebtMove): Row => ({
   pending: m.pending,
   delete_requested_by: m.deleteRequestedBy ?? null,
   [s.ownerId ? 'guest_tx_id' : 'owner_tx_id']: m.txId ?? null,
+  // Refus : envoyé seulement quand il y en a un (la base ne garde que celui de l'autre, voir …_debt_refuse.sql)
+  ...(m.refusedAt ? { refused_at: iso(m.refusedAt) } : {}),
 });
 
 const flip = (side: unknown): DebtShare['side'] => (side === 'receivable' ? 'payable' : 'receivable');
@@ -414,6 +416,10 @@ export const debtMoveFromRow = (row: Row, iAmOwner: boolean): DebtMove => ({
   pending: row.pending === true,
   recordedBy: row.recorded_by ? String(row.recorded_by) : '',
   deleteRequestedBy: row.delete_requested_by ? String(row.delete_requested_by) : undefined,
+  // (lus seulement : c'est le serveur qui les tient, voir …_debt_auto_confirm.sql)
+  pendingSince: row.pending === true && row.pending_since ? iso(row.pending_since) : undefined,
+  autoConfirmed: row.auto_confirmed === true ? true : undefined,
+  refusedAt: row.pending === true && row.refused_at ? iso(row.refused_at) : undefined,
   txId: (iAmOwner ? row.owner_tx_id : row.guest_tx_id) ? String(iAmOwner ? row.owner_tx_id : row.guest_tx_id) : undefined,
 });
 
@@ -430,6 +436,12 @@ export const recurringRow = (r: Recurring): Row => ({
   category_id: r.categoryId ?? null,
   frequency: r.frequency,
   every_days: r.frequency === 'days' ? r.everyDays ?? 1 : null,
+  // seulement quand c'est réglé (1 compris : on revient à « chaque mois ») ; tant que les migrations 20261019 et
+  // 20261020 ne sont pas passées, les anciennes lignes ne changent pas
+  ...(r.frequency !== 'days' && r.every !== undefined ? { every_n: r.every } : {}),
+  ...(r.cancelBy !== undefined ? { cancel_by: r.cancelBy || null } : {}),
+  ...(r.note !== undefined ? { note: r.note || null } : {}), // migration 20261023
+  ...(r.until !== undefined ? { until_date: r.until || null } : {}), // migration 20261027
   next_date: r.nextDate,
   anchor_day: r.anchorDay ?? null,
   mode: r.mode,
@@ -449,6 +461,10 @@ export const recurringFromRow = (r: Row, me: string): Recurring => ({
   categoryId: (r.category_id as string | null) ?? undefined,
   frequency: r.frequency as Recurring['frequency'],
   everyDays: r.every_days != null ? Number(r.every_days) : undefined,
+  every: r.every_n != null && Number(r.every_n) > 1 ? Number(r.every_n) : undefined,
+  cancelBy: r.cancel_by ? String(r.cancel_by).slice(0, 10) : undefined,
+  note: r.note ? String(r.note) : undefined,
+  until: r.until_date ? String(r.until_date).slice(0, 10) : undefined,
   nextDate: String(r.next_date).slice(0, 10),
   anchorDay: r.anchor_day != null ? Number(r.anchor_day) : undefined,
   mode: r.mode === 'auto' ? 'auto' : 'ask',

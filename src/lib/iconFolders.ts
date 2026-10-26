@@ -16,6 +16,7 @@ export const ICON_FOLDERS = [
   { name: 'Éducation', slug: 'education' },
   { name: 'Maison & famille', slug: 'maison' },
   { name: 'Église & dons', slug: 'eglise-dons' },
+  { name: 'Applis & abonnements', slug: 'applis' },
   { name: 'Impôts & État', slug: 'impots-etat' },
   { name: 'Divers', slug: 'divers' },
 ] as const;

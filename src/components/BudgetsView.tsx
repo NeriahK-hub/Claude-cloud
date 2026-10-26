@@ -1,8 +1,11 @@
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { takeJump } from '../lib/jumpTo';
 import { BudgetDraft, clearBudgetDraft, peekBudgetDraft } from '../lib/budgetDraft';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, Layers, Pencil, Trash2, PieChart, Delete, CalendarDays, HelpCircle } from 'lucide-react';
-import { Budget, Settings, Transaction } from '../types';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, X, Layers, Pencil, Trash2, PieChart, Delete, CalendarDays, HelpCircle, Clock } from 'lucide-react';
+import { Budget, Recurring, Settings, Transaction } from '../types';
+import { occurrencesBetween, ymd, parseDay } from '../lib/recurring';
+import { convertBetween } from '../lib/money';
+import { matchesCategory } from '../lib/budgets';
 import { Category } from '../data/categories';
 import { IconBadge } from './AppIcon';
 import { TransactionItem } from './TransactionItem';
@@ -15,11 +18,14 @@ import { DateField } from './DatePicker';
 import { SelCheck } from './SelCheck';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { getPrefs } from '../lib/display';
+import { BudgetHistory, BudgetSuggestions } from './BudgetExtras';
+import type { BudgetSuggestion } from '../lib/budgetInsights';
 
 interface BudgetsViewProps {
   budgets: Budget[];
   transactions: Transaction[];
   categories: Category[];
+  recurrings?: Recurring[]; // ce qui est déjà prévu dans À venir
   settings: Settings;
   onAdd: (b: Omit<Budget, 'id' | 'createdAt'>) => void;
   onUpdate: (id: string, changes: Partial<Budget>) => void;
@@ -35,6 +41,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   budgets,
   transactions,
   categories,
+  recurrings = [],
   settings,
   onAdd,
   onUpdate,
@@ -45,7 +52,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   const desktop = useIsDesktop(); // ordinateur : pas de retour ni de titre en double, contenu sur plusieurs colonnes
   const [offset, setOffset] = useState(0);
   // Arrivée depuis un conseil : la fiche s'ouvre déjà remplie (ou le budget existant de cette catégorie)
-  const [draft] = useState(peekBudgetDraft);
+  const [draft, setDraftOverride] = useState(peekBudgetDraft);
   useEffect(() => clearBudgetDraft(), []);
   // Conseil « … va déborder » : on ouvre ce budget (dans le bon onglet : semaine, mois…)
   useLayoutEffect(() => {
@@ -61,6 +68,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
     return budgets.find((b) => b.categoryId === draft.categoryId && periodOf(b) === 'month') ?? 'new';
   });
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<BudgetSuggestion | null>(null); // détail d'un budget conseillé, pas encore créé
 
   // Budgets dont la catégorie existe encore
   const valid = budgets.filter((b) => b.categoryId === null || categories.some((c) => c.id === b.categoryId));
@@ -186,11 +194,19 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
                 <div className={`${money(Math.abs(total - spent)).length > 14 ? 'text-[20px]' : 'text-[26px]'} leading-tight font-bold tracking-tight tabular-nums break-words ${total - spent < 0 ? 'text-red-600' : 'text-slate-900'}`}>
                   {money(Math.abs(total - spent))}
                 </div>
-                <div className="text-[13px] text-slate-500 mt-0.5">
-                  sur {money(total)}
-                  {isNow && total - spent >= 0 && <> · <span className="whitespace-nowrap">{daysLeft} jour{daysLeft > 1 ? 's' : ''}</span></>}
+                <div className="text-[12px] text-slate-400 mt-0.5">sur {money(total)}</div>
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold text-slate-700 tabular-nums" style={{ background: `${RING_COLOR(spent / (total || 1))}1f` }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: RING_COLOR(spent / (total || 1)) }} />
+                    {money(spent)} dépensés
+                  </span>
+                  {isNow && total - spent >= 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold text-slate-500 bg-slate-100 whitespace-nowrap">
+                      <Clock className="w-3 h-3" />
+                      {daysLeft} jour{daysLeft > 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
-                <div className="text-[12px] text-slate-400 mt-0.5">{money(spent)} dépensés</div>
               </div>
             </div>
             {(range || rows.length === 1) && <PaceRows spent={spent} amount={total} range={range ?? rows[0].st} money={about} />}
@@ -221,14 +237,21 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
               </button>
             ))}
           </div>
+          <BudgetHistory budgets={valid} transactions={transactions} categories={categories} settings={settings} />
         </>
       )}
+
+      {/* Budgets conseillés : aussi quand il n'y a encore aucun budget */}
+      <BudgetSuggestions transactions={transactions} categories={categories} settings={settings} budgets={valid} onCreate={(sug) => onAdd({ categoryId: sug.categoryId, amount: sug.amount, currency: settings.mainCurrency, period: 'month' })} onOpen={setPreview} />
 
       {viewing && (
         <BudgetDetail
           budget={viewing.b}
           cat={viewing.cat}
           status={viewing.st}
+          recurrings={recurrings}
+          categories={categories}
+          settings={settings}
           month={viewing.b.period === 'custom' ? rangeText(viewing.st) : `${PERIODS.find((p) => p.id === periodOf(viewing.b))!.now} · ${rangeText(viewing.st)}`}
           onClose={() => setViewingId(null)}
           onEdit={() => {
@@ -242,6 +265,37 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
           onSelectTransaction={onSelectTransaction}
         />
       )}
+
+      {preview && (() => {
+        const b: Budget = { id: 'suggestion', categoryId: preview.categoryId, amount: preview.amount, currency: settings.mainCurrency, createdAt: '', period: 'month' };
+        const st = budgetStatus(b, transactions, categories, settings);
+        return (
+          <BudgetDetail
+            budget={b}
+            cat={categories.find((c) => c.id === b.categoryId)}
+            status={st}
+            recurrings={recurrings}
+            categories={categories}
+            settings={settings}
+            month={`Ce mois-ci · ${rangeText(st)}`}
+            suggested
+            transactions={transactions}
+            onClose={() => setPreview(null)}
+            onEdit={() => {
+              setPreview(null);
+              setEditing('new');
+              setDraftOverride({ categoryId: b.categoryId ?? '', amount: b.amount });
+            }}
+            onCreate={() => {
+              haptic('success');
+              onAdd({ categoryId: b.categoryId, amount: b.amount, currency: b.currency, period: 'month' });
+              setPreview(null);
+            }}
+            onDelete={() => {}}
+            onSelectTransaction={onSelectTransaction}
+          />
+        );
+      })()}
 
       {editing && (
         <BudgetSheet
@@ -302,12 +356,17 @@ const PaceRows: React.FC<{ spent: number; amount: number; range: { start: Date; 
   return (
     <>
       <div className={`grid gap-2 mt-4 ${p.current ? 'grid-cols-3' : 'grid-cols-1'}`}>
-        {p.current && tile(['Tu peux', 'par jour'], spent >= amount ? 'Épuisé' : p.perDayAllowed, spent >= amount ? 'text-red-600' : 'text-slate-900')}
-        {p.current && tile(['Prévu', 'à la fin'], p.projected, over ? 'text-red-600' : 'text-slate-900')}
-        {tile(['Dépensé', 'par jour'], p.perDay)}
+        {p.current && tile(['Tu peux', 'par jour'], spent >= amount ? 'Épuisé' : p.perDayAllowed, spent >= amount ? 'text-red-600' : 'text-emerald-600')}
+        {p.current && tile(['Prévu', 'à la fin'], p.projected, over ? 'text-red-600' : p.projected >= amount * 0.8 ? 'text-amber-600' : 'text-emerald-600')}
+        {tile(['Dépensé', 'par jour'], p.perDay, 'text-sky-500')}
       </div>
       {p.current && over && (
         <p className="text-[12px] text-red-600 mt-2">À ce rythme, tu dépasseras de {money(p.projected - amount)}.</p>
+      )}
+      {p.current && !over && spent > 0 && (
+        p.projected >= amount * 0.8
+          ? <p className="text-[12px] text-amber-600 mt-2">Tu y arrives de justesse : à ce train-là, il ne te restera que {money(amount - p.projected)}.</p>
+          : <p className="text-[12px] text-emerald-600 mt-2">Tu es dans le bon rythme : à ce train-là, il te restera environ {money(amount - p.projected)}.</p>
       )}
       {/* Petite explication des trois cases, ouverte à la demande */}
       {p.current && (
@@ -403,14 +462,31 @@ const BudgetDetail: React.FC<{
   budget: Budget;
   cat?: Category;
   status: BudgetStatus;
+  recurrings: Recurring[];
+  categories: Category[];
+  settings: Settings;
   month: string;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  suggested?: boolean; // budget conseillé : se crée d'un toucher
+  transactions?: Transaction[];
+  onCreate?: () => void;
   onSelectTransaction: (tx: Transaction) => void;
-}> = ({ budget: b, cat, status: st, month, onClose, onEdit, onDelete, onSelectTransaction }) => {
+}> = ({ budget: b, cat, status: st, recurrings, categories, settings, month, suggested, transactions = [], onCreate, onClose, onEdit, onDelete, onSelectTransaction }) => {
   const [confirm, setConfirm] = useState(false);
   const money = (v: number) => formatMoney(v, b.currency);
+  // Déjà prévu dans À venir, d'ici la fin de la période (dépenses de cette catégorie, quelle que soit la devise)
+  const planned = useMemo(() => {
+    const today = ymd(new Date());
+    const last = ymd(new Date(st.end.getTime() - 86400000));
+    if (today > last) return [];
+    return recurrings
+      .filter((r) => r.active && r.direction === 'out' && matchesCategory(b.categoryId, r.categoryId, categories))
+      .flatMap((r) => occurrencesBetween(r, today, last).map((day) => ({ r, day })))
+      .sort((a, c) => a.day.localeCompare(c.day));
+  }, [recurrings, categories, b.categoryId, st.end]);
+  const plannedTotal = planned.reduce((sum, { r }) => sum + (r.amount ? convertBetween(r.amount, r.currency, b.currency, settings) ?? 0 : 0), 0);
   return (
     <Sheet title={cat?.name ?? 'Toutes les dépenses'} onClose={onClose}>
       <div className="flex items-center gap-3 mb-2">
@@ -429,7 +505,16 @@ const BudgetDetail: React.FC<{
       <div className="mb-3">
         <PaceRows spent={st.spent} amount={b.amount} range={st} money={(v) => formatMoney(Math.round(v), b.currency, { ...getPrefs(), decimals: 'never' })} />
       </div>
-      {confirm ? (
+      {suggested ? (
+        <div className="flex gap-2 mb-3">
+          <button onClick={onCreate} className="flex-1 py-3 rounded-2xl bg-accent hover:bg-accent-hover text-slate-900 text-sm font-bold cursor-pointer active:scale-[0.98] transition">
+            Créer ce budget
+          </button>
+          <button onClick={onEdit} className="px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold flex items-center gap-1.5 cursor-pointer">
+            <Pencil className="w-4 h-4" /> Ajuster
+          </button>
+        </div>
+      ) : confirm ? (
         <div className="p-3 rounded-2xl bg-red-50 mb-3">
           <p className="text-sm text-slate-700 mb-2">Supprimer ce budget ? Tes dépenses ne changent pas.</p>
           <div className="flex gap-2">
@@ -449,6 +534,41 @@ const BudgetDetail: React.FC<{
           <button onClick={() => setConfirm(true)} className="flex-1 py-2.5 rounded-2xl bg-slate-100 hover:bg-red-50 text-red-600 text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer">
             <Trash2 className="w-4 h-4" /> Supprimer
           </button>
+        </div>
+      )}
+      {suggested && (
+        <div className="mb-3 rounded-2xl bg-slate-100 p-3">
+          <div className="text-xs font-bold text-slate-500 mb-1.5">Ce que tu dépensais avant</div>
+          {[1, 2, 3].map((i) => {
+            const past = budgetStatus(b, transactions, categories, settings, -i);
+            return (
+              <div key={i} className="flex items-center justify-between py-1 text-[14px]">
+                <span className="capitalize text-slate-600">{monthTitle(-i).replace(/ \d{4}$/, '')}</span>
+                <span className="font-semibold tabular-nums text-slate-900">{money(past.spent)}</span>
+              </div>
+            );
+          })}
+          <p className="text-[12px] text-slate-400 mt-1">Le budget proposé est un peu en dessous de ta moyenne.</p>
+        </div>
+      )}
+      {planned.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs font-bold text-slate-500 mb-1">
+            Déjà prévu d'ici la fin{plannedTotal > 0 ? ` · ${money(plannedTotal)}` : ''}
+          </div>
+          {planned.map(({ r, day }) => (
+            <div key={`${r.id}-${day}`} className="flex items-center gap-3 py-2">
+              <span className="w-11 shrink-0 text-center text-[11px] font-semibold uppercase text-slate-400 leading-tight">
+                <span className="block text-[16px] font-bold text-slate-900 normal-case">{parseDay(day).getDate()}</span>
+                {parseDay(day).toLocaleDateString('fr-FR', { month: 'short' })}
+              </span>
+              <span className="flex-1 min-w-0 text-[14px] font-semibold text-slate-900 truncate">{r.title}</span>
+              <span className="text-[14px] font-bold tabular-nums text-slate-500 shrink-0">
+                {r.amount ? `−${formatMoney(r.amount, r.currency)}` : 'à saisir'}
+              </span>
+            </div>
+          ))}
+          <p className="text-[12px] text-slate-400">Pas encore compté dans les dépenses ci-dessus.</p>
         </div>
       )}
       <div className="text-xs font-bold text-slate-500 mb-1">

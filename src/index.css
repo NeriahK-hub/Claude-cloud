@@ -122,6 +122,8 @@ button {
 .chart-inc { --series: #059669; --ref: #475569; }
 html.dark .chart-exp { --series: #f43f5e; --ref: #8b95a5; }
 html.dark .chart-inc { --series: #059669; --ref: #8b95a5; }
+.chart-bal { --series: #6366f1; --ref: #64748b; } /* évolution du solde */
+html.dark .chart-bal { --series: #818cf8; --ref: #8b95a5; }
 .chart-series { stroke: var(--series); }
 .chart-ref { stroke: var(--ref); }
 .chart-area { fill: var(--series); fill-opacity: 0.1; }
@@ -346,6 +348,66 @@ select:focus-visible {
 .stagger > :nth-child(4) { animation-delay: 120ms; }
 .stagger > :nth-child(n + 5) { animation-delay: 160ms; }
 
+/* Curseur (simulateur « Et si je dépensais moins ? ») : une piste fine qui se remplit, une pastille blanche */
+input[type='range'].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 32px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range'].slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent-deep) var(--fill, 0%), var(--color-slate-200) var(--fill, 0%));
+}
+input[type='range'].slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent-deep) var(--fill, 0%), var(--color-slate-200) var(--fill, 0%));
+}
+input[type='range'].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent-deep);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+input[type='range'].slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent-deep);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+
+/* Squelette de chargement : des formes grises qui brillent doucement à la place de l'écran qui arrive */
+.skeleton {
+  background: linear-gradient(90deg, var(--color-slate-100) 25%, var(--color-slate-200) 40%, var(--color-slate-100) 55%);
+  background-size: 300% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* Taille du texte (Paramètres › Apparence) : toute l'interface grossit d'un cran */
+html[data-text='large'] #root { zoom: 1.1; }
+html[data-text='xlarge'] #root { zoom: 1.2; }
+
+/* Réglage « Moins d'animations » de l'app : même effet que celui du téléphone */
+html[data-calm] *, html[data-calm] *::before, html[data-calm] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0ms !important;
+  transition-duration: 0.01ms !important;
+}
+
 /* Réglage « Réduire les animations » du téléphone : on coupe tout */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -391,6 +453,12 @@ html.dark {
   --color-blue-50: rgb(59 130 246 / 0.14);
 }
 html.dark body { background: #07090c; }
+/* Ordinateur : l'app remplit toute la fenêtre. Le fond derrière a sa couleur (pas du noir) quand la page rebondit en bas (Mac) */
+html { overscroll-behavior: none; }
+@media (min-width: 1024px) {
+  body { background: var(--color-slate-100); }
+  html.dark body { background: var(--color-slate-100); }
+}
 
 /* Blanc sur fond coloré : reste blanc (y compris les variantes translucides) */
 html.dark .text-white { color: #fff; }
@@ -627,7 +695,7 @@ html:not(.dark) .status-bar {
 /* ---------- Ordinateur : fenêtres (ajout, modification, réglages…) ----------
    Sur téléphone ce sont des fenêtres du bas ; sur ordinateur (même seuil que useIsDesktop),
    une vraie fenêtre centrée : plus large, jamais coupée en haut ou en bas, qui apparaît en fondu,
-   avec une barre de défilement fine qui ne déborde pas sur les coins arrondis. */
+   avec une barre de défilement fine qui ne déborde pas sur les coins arrondis (plus bas). */
 @media (min-width: 1024px) {
   .fixed.inset-0.z-50.items-end {
     padding: 2rem;
@@ -642,9 +710,7 @@ html:not(.dark) .status-bar {
   .fixed.inset-0.z-50.items-end > .animate-slide-up:is(.overflow-y-auto, .flex-col) {
     max-width: 520px;
     max-height: calc(100dvh - 4rem);
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-slate-300) transparent;
-    scrollbar-gutter: stable;
+    scrollbar-gutter: stable; /* (la barre elle-même : voir « Barre de défilement des fenêtres ») */
   }
   .fixed.inset-0.z-50.items-end > .animate-slide-up.overflow-y-auto {
     padding-left: 1.75rem;
@@ -656,6 +722,30 @@ html:not(.dark) .status-bar {
     margin-right: calc(-1.75rem + 6px);
     padding-left: 1.75rem;
     padding-right: calc(1.75rem - 6px);
+  }
+}
+/* Barre de défilement des fenêtres : elle s'arrête avant les coins arrondis (sinon elle part tout en
+   haut, dans l'arrondi). La marge du rail n'existe qu'avec ::-webkit-scrollbar (Chrome, Safari, Edge),
+   qui n'est pris en compte que si scrollbar-width / scrollbar-color restent à « auto ». */
+@supports selector(::-webkit-scrollbar) {
+  .fixed.inset-0.z-50 > .animate-slide-up.overflow-y-auto {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  .fixed.inset-0.z-50 > .animate-slide-up.overflow-y-auto::-webkit-scrollbar {
+    width: 12px;
+  }
+  .fixed.inset-0.z-50 > .animate-slide-up.overflow-y-auto::-webkit-scrollbar-track {
+    background: transparent;
+    margin-block: 24px;
+  }
+  .fixed.inset-0.z-50 > .animate-slide-up.overflow-y-auto::-webkit-scrollbar-thumb {
+    background: rgb(148 163 184 / 0.45) padding-box;
+    border: 4px solid transparent;
+    border-radius: 999px;
+  }
+  html.dark .fixed.inset-0.z-50 > .animate-slide-up.overflow-y-auto::-webkit-scrollbar-thumb {
+    background-color: rgb(148 163 184 / 0.3);
   }
 }
 @keyframes dialog-in {
@@ -900,3 +990,9 @@ html[data-festive="newyear"] .fab-add { background: linear-gradient(135deg, #FDE
 @media (prefers-reduced-motion: reduce) {
   .wrap-float, .wrap-ring, .wrap-eq, .wrap-grid { animation: none; }
 }
+
+/* Page de bienvenue : les deux pièces flottent doucement */
+.welcome-coin { animation: splash-float 3.4s ease-in-out infinite alternate; }
+.welcome-coin-2 { animation-duration: 4.1s; animation-delay: -1.2s; }
+@media (prefers-reduced-motion: reduce) { .welcome-coin { animation: none; } }
+html[data-calm] .welcome-coin { animation: none; }

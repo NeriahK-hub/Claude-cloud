@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
-import { ArrowLeft, Search, X, Loader2, Layers, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Search, X, Loader2, Layers, ChevronDown, ChevronRight, BarChart2 } from 'lucide-react';
 import { Settings, Transaction, Wallet } from '../types';
 import { IconBadge, WalletChipIcon } from './AppIcon';
 import { TransactionItem } from './TransactionItem';
+import { SecretAmount, SecretMoney } from './MatrixSwap';
 import { PeriodBar } from './PeriodBar';
 import { countsInReport, dayLabel, fitAmount, formatMoney, toMain } from '../lib/money';
 import { inPeriod, Period, periodRange } from '../lib/periods';
@@ -113,39 +114,50 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
 
   // Morceaux communs aux mises en page téléphone et ordinateur
   const balanceBox = balances && (
-      <div className="mt-3 px-4 py-3 rounded-2xl bg-white border border-slate-100 text-sm">
-        <div className="flex justify-between">
-          <span className="text-slate-500">Solde à l'ouverture</span>
-          <span className="font-semibold tabular-nums text-slate-900">{formatMoney(balances.opening, main)}</span>
+      <div className="mt-3 rounded-2xl bg-white border border-slate-100 overflow-hidden">
+        <div className="px-4 pt-3.5 pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[13px] font-semibold text-slate-500">Solde de fin</span>
+            {onOpenReport && (
+              <button
+                onClick={() => onOpenReport(period)}
+                aria-label="Voir le rapport de cette période"
+                className="h-8 pl-2.5 pr-2 rounded-full bg-emerald-500/10 flex items-center gap-1 text-[13px] font-bold text-emerald-600 cursor-pointer active:scale-95 transition"
+              >
+                <BarChart2 className="w-3.5 h-3.5" /> Voir le rapport <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 mt-0.5">
+            <span className="text-[24px] font-extrabold tabular-nums tracking-tight text-slate-900 whitespace-nowrap"><SecretMoney text={formatMoney(balances.closing, main)} /></span>
+            <span className={`text-[15px] font-bold tabular-nums whitespace-nowrap ${balances.closing - balances.opening >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              <SecretMoney text={signed(balances.closing - balances.opening)} />
+            </span>
+          </div>
+          <div className="text-[12px] text-slate-400 mt-0.5 tabular-nums">Ouverture : <SecretMoney text={formatMoney(balances.opening, main)} /></div>
         </div>
-        <div className="flex justify-between mt-1.5">
-          <span className="text-slate-500">Solde de fin</span>
-          <span className="font-semibold tabular-nums text-slate-900">{formatMoney(balances.closing, main)}</span>
+        {/* Entrées et sorties dans la même carte */}
+        <div className="grid grid-cols-2 border-t border-slate-100 divide-x divide-slate-100">
+          <div className="min-w-0 px-4 py-2.5">
+            <div className="text-[12px] font-semibold text-slate-500">Entrées</div>
+            <div className="text-[15px] font-bold tabular-nums whitespace-nowrap text-emerald-600"><SecretAmount text={`+${formatMoney(totalIn, main)}`} /></div>
+          </div>
+          <div className="min-w-0 px-4 py-2.5">
+            <div className="text-[12px] font-semibold text-slate-500">Sorties</div>
+            <div className="text-[15px] font-bold tabular-nums whitespace-nowrap text-red-500"><SecretAmount text={`−${formatMoney(totalOut, main)}`} /></div>
+          </div>
         </div>
-        <div className="ml-auto w-1/2 border-t border-slate-200 mt-2.5 pt-2.5 text-right">
-          <span className={`font-extrabold tabular-nums ${balances.closing - balances.opening >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-            {signed(balances.closing - balances.opening)}
-          </span>
-        </div>
-        {onOpenReport && (
-          <button
-            onClick={() => onOpenReport(period)}
-            className="w-full mt-2 pt-2.5 border-t border-slate-100 flex items-center justify-center gap-1 text-sm font-bold text-emerald-600 cursor-pointer"
-          >
-            Afficher le rapport pour cette période <ChevronRight className="w-4 h-4" />
-          </button>
-        )}
       </div>
     );
   const totalsRow = (
       <div className="flex gap-2 mt-3">
         <div className="flex-1 min-w-0 px-3 py-2 rounded-2xl bg-white border border-slate-100">
           <div className="text-[12px] font-semibold text-slate-500">Entrées</div>
-          <div className={`${fitAmount(`+${formatMoney(totalIn, main)}`)} font-bold tabular-nums whitespace-nowrap text-emerald-600`}>+{formatMoney(totalIn, main)}</div>
+          <div className={`${fitAmount(`+${formatMoney(totalIn, main)}`)} font-bold tabular-nums whitespace-nowrap text-emerald-600`}><SecretAmount text={`+${formatMoney(totalIn, main)}`} /></div>
         </div>
         <div className="flex-1 min-w-0 px-3 py-2 rounded-2xl bg-white border border-slate-100">
           <div className="text-[12px] font-semibold text-slate-500">Sorties</div>
-          <div className={`${fitAmount(`−${formatMoney(totalOut, main)}`)} font-bold tabular-nums whitespace-nowrap text-red-500`}>−{formatMoney(totalOut, main)}</div>
+          <div className={`${fitAmount(`−${formatMoney(totalOut, main)}`)} font-bold tabular-nums whitespace-nowrap text-red-500`}><SecretAmount text={`−${formatMoney(totalOut, main)}`} /></div>
         </div>
       </div>
   );
@@ -173,7 +185,7 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
           {/* Date Group Heading */}
           <div className="flex items-baseline justify-between gap-2 mb-2 px-1">
             <span className="text-[12px] font-bold text-slate-400 tracking-wider uppercase">{dateGroup}</span>
-            <span className={`text-xs font-bold tabular-nums ${dayTotal(items) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{signed(dayTotal(items))}</span>
+            <span className={`text-xs font-bold tabular-nums ${dayTotal(items) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}><SecretAmount text={signed(dayTotal(items))} /></span>
           </div>
 
           {/* Transactions in this date group */}
@@ -268,8 +280,7 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
             )}
             <div>
               <PeriodBar value={period} onChange={setPeriod} />
-              {balanceBox}
-              {totalsRow}
+              {balanceBox ?? totalsRow}
             </div>
             <div className="flex gap-2">
               {filters.map((filter) => (
@@ -418,8 +429,7 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
       <div className="px-5 pt-3">
         <PeriodBar value={period} onChange={setPeriod} />
         {/* Ouverture, fin, différence + lien vers le Rapport de la même période (comme Money Lover) */}
-        {balanceBox}
-        {totalsRow}
+        {balanceBox ?? totalsRow}
       </div>
 
       {/* Filter Tabs */}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronDown, ChevronRight, Sun, Moon, SmartphoneIcon, Check, Palette, Type, Bell, Lock, Coins, ArrowLeftRight, Database, Shapes } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Sun, Moon, SmartphoneIcon, Check, Palette, Bell, Lock, Coins, Database } from 'lucide-react';
 import { useNotifyState } from '../lib/notify';
 import { useLockConfig } from '../lib/lock';
 import { useCustomIcons } from '../lib/customIcons';
@@ -22,7 +22,11 @@ import { hapticsEnabled, setHapticsEnabled } from '../lib/haptics';
 import { ACCENTS, accentVars, setAccent, useAccent } from '../lib/accent';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { InterfacePicker } from './InterfacePicker';
-import { useDisplayPrefs } from '../lib/display';
+import { setPrefs, useDisplayPrefs } from '../lib/display';
+import { HomeSettings } from './HomeSettings';
+import { TrashSettings } from './TrashSettings';
+import { useTrash } from '../lib/trash';
+import { HOME_CARDS } from '../lib/homeLayout';
 
 interface SettingsViewProps {
   settings: Settings;
@@ -33,6 +37,7 @@ interface SettingsViewProps {
   ristournes: Ristourne[];
   onImport: (plan: ImportPlan, replace: boolean) => void;
   onRestore: (backup: Backup) => void;
+  onRestoreTrash: (id: string) => void;
   onChange: (s: Settings) => void;
   onBack: () => void;
 }
@@ -46,7 +51,7 @@ const Block: React.FC<{ title?: string; hint?: string; children: React.ReactNode
   </div>
 );
 
-type PanelId = 'appearance' | 'display' | 'notifications' | 'lock' | 'currencies' | 'rates' | 'data' | 'icons';
+type PanelId = 'appearance' | 'notifications' | 'lock' | 'currencies' | 'data';
 
 // Bouton qui déplie la liste de devises (évite deux longues listes à l'écran)
 const Collapsible: React.FC<{ label: string; children: (close: () => void) => React.ReactNode }> = ({ label, children }) => {
@@ -77,13 +82,15 @@ const THEMES: { id: ThemePref; label: string; Icon: typeof Sun }[] = [
   { id: 'dark', label: 'Sombre', Icon: Moon },
 ];
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, budgets, ristournes, onImport, onRestore, onChange, onBack }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, transactions, categories, budgets, ristournes, onImport, onRestore, onRestoreTrash, onChange, onBack }) => {
+  const trashCount = useTrash().length;
   const desktop = useIsDesktop(); // ordinateur : pas de retour ni de titre en double, contenu sur plusieurs colonnes
   const [theme, setTheme] = useState(getThemePref);
   const [haptics, setHaptics] = useState(hapticsEnabled);
   const accent = useAccent();
   // Mode simple : les réglages techniques sont rangés sous « Réglages avancés »
-  const { simpleMode } = useDisplayPrefs();
+  const prefs = useDisplayPrefs();
+  const { simpleMode } = prefs;
   const [advanced, setAdvanced] = useState(false);
   const showAll = !simpleMode || advanced;
   const [panel, setPanel] = useState<PanelId | null>(null); // écran de réglage ouvert (null = la liste)
@@ -128,7 +135,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
   };
 
   // ---------- Contenu de chaque écran de réglage (réutilisé tel quel) ----------
-  const panels: Record<PanelId, React.ReactNode> = {
+  const panels: Record<string, React.ReactNode> = {
     appearance: (
       <>
         <Block title="Interface">
@@ -196,31 +203,53 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
             })}
           </div>
         </Block>
-        <Block>
-          <label className="flex items-center justify-between gap-3 cursor-pointer">
-            <span>
-              <span className="block text-sm font-semibold text-slate-800">Retour haptique</span>
-              <span className="block text-xs text-slate-400">Petite vibration au toucher (iPhone avec iOS 18 ou plus récent, Android).</span>
-            </span>
-            <input
-              type="checkbox"
-              role="switch"
-              checked={haptics}
-              onChange={(e) => {
-                setHaptics(e.target.checked);
-                setHapticsEnabled(e.target.checked);
-              }}
-              className="toggle shrink-0"
-            />
-          </label>
+        <Block title="Confort">
+          <div className="mb-3">
+            <div className="text-sm font-semibold text-slate-800 mb-2">Taille du texte</div>
+            <div role="radiogroup" aria-label="Taille du texte" className="flex gap-1 p-1 rounded-full bg-slate-100">
+              {([
+                ['normal', 'Normal', 'text-[13px]'],
+                ['large', 'Grand', 'text-[15px]'],
+                ['xlarge', 'Très grand', 'text-[17px]'],
+              ] as const).map(([id, label, size]) => (
+                <button
+                  key={id}
+                  role="radio"
+                  aria-checked={prefs.textSize === id}
+                  onClick={() => setPrefs({ textSize: id })}
+                  className={`flex-1 min-w-0 h-10 rounded-full font-semibold cursor-pointer transition ${size} ${prefs.textSize === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                >
+                  <span className="truncate">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="divide-y divide-slate-100 -mx-1">
+            {([
+              ['Moins d\u2019animations', 'Les écrans s’ouvrent sans mouvement.', prefs.reduceMotion, (v: boolean) => setPrefs({ reduceMotion: v })],
+              ['Masquer aussi les montants des opérations', 'Quand l’œil est fermé, la liste des opérations est masquée elle aussi.', prefs.hideAmounts, (v: boolean) => setPrefs({ hideAmounts: v })],
+              ['Retour haptique', 'Petite vibration au toucher (iPhone avec iOS 18 ou plus récent, Android).', haptics, (v: boolean) => { setHaptics(v); setHapticsEnabled(v); }],
+            ] as const).map(([title, hint, checked, set]) => (
+              <label key={title} className="flex items-center justify-between gap-3 px-1 py-3 cursor-pointer">
+                <span>
+                  <span className="block text-sm font-semibold text-slate-800">{title}</span>
+                  <span className="block text-xs text-slate-400">{hint}</span>
+                </span>
+                <input type="checkbox" role="switch" checked={checked} onChange={(e) => set(e.target.checked)} className="toggle shrink-0" />
+              </label>
+            ))}
+          </div>
+        </Block>
+        <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 px-4 mb-1.5">Accueil</h3>
+        <div className="mb-4">
+          <HomeSettings />
+        </div>
+        <Block title="Formats" hint="Comment s’écrivent les montants, les dates et les mois.">
+          <DisplaySettings currency={settings.mainCurrency} />
         </Block>
       </>
     ),
-    display: (
-      <Block>
-        <DisplaySettings currency={settings.mainCurrency} />
-      </Block>
-    ),
+    _trash: <TrashSettings onRestore={onRestoreTrash} />,
     notifications: (
       <Block hint="Budget dépassé, tour de ristourne, remboursement à confirmer, invitation… Avec un compte connecté, elles arrivent même quand Wallo est fermé.">
         <NotificationsSettings />
@@ -233,6 +262,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
     ),
     currencies: (
       <>
+        {/* Réglage rapide : les deux cas les plus courants, en un toucher */}
+        <Block title="Réglage rapide" hint="Tu pourras toujours tout changer en dessous.">
+          <div className="grid grid-cols-2 gap-2">
+            {([['USD', 'CDF', 'Dollar d’abord', 'Solde en dollars, avec les francs en petit'], ['CDF', 'USD', 'Franc d’abord', 'Solde en francs, avec les dollars en petit']] as const).map(([m, sec, title, sub]) => {
+              const on = settings.mainCurrency === m && settings.secondCurrency === sec;
+              return (
+                <button
+                  key={m}
+                  aria-pressed={on}
+                  onClick={() => {
+                    setDraft({});
+                    onChange({ mainCurrency: m, secondCurrency: sec, rates: m === settings.mainCurrency ? settings.rates : {} });
+                  }}
+                  className={`rounded-2xl px-3 py-3 text-left cursor-pointer transition active:scale-[0.97] ${on ? 'is-selected' : 'bg-slate-100 hover:bg-slate-200/70'}`}
+                >
+                  <span className="block text-[14px] font-bold text-slate-900">{title}</span>
+                  <span className="block text-[12px] text-slate-500 leading-snug mt-0.5">{sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Block>
         <Block title="Devise principale" hint="Le solde de l'accueil est affiché dans cette devise. La changer remet les taux à zéro.">
           <Collapsible label={label(settings.mainCurrency)}>
             {(close) => (
@@ -265,7 +316,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
         </Block>
       </>
     ),
-    rates: (
+    _rates: (
       <Block hint={`Combien vaut 1 unité de chaque devise en ${settings.mainCurrency}.`}>
         {needed.length > 0 && (
           <label className="flex items-center justify-between gap-3 mb-4 cursor-pointer">
@@ -317,12 +368,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
         <DataSection wallets={wallets} transactions={transactions} categories={categories} budgets={budgets} ristournes={ristournes} settings={settings} onImport={onImport} onRestore={onRestore} />
       </Block>
     ),
-    icons: (
+    _icons: (
       <Block hint="Ajoute tes propres icônes (SVG, PNG ou JPG) pour tes catégories et portefeuilles.">
         <CustomIconsSection />
       </Block>
     ),
   };
+
+  // Réglages regroupés : « Devises et taux », « Mes données » (sauvegarde, corbeille, icônes)
+  const sectionTitle = (t: string) => <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 px-4 mb-1.5 mt-2">{t}</h3>;
+  panels.currencies = (
+    <>
+      {panels.currencies}
+      {sectionTitle('Taux de change')}
+      {panels._rates}
+    </>
+  );
+  panels.data = (
+    <>
+      {sectionTitle('Importer et sauvegarder')}
+      {panels.data}
+      {sectionTitle('Corbeille')}
+      {panels._trash}
+      <div className="mt-4">{sectionTitle('Mes icônes')}</div>
+      {panels._icons}
+    </>
+  );
 
   // ---------- Les lignes de la page principale, avec leur valeur actuelle ----------
   const themeName = THEMES.find((t) => t.id === theme)?.label ?? '';
@@ -338,20 +409,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
           : `1 ${settings.mainCurrency} = ${Math.round(1 / settings.rates[firstRate]).toLocaleString('fr-FR')} ${firstRate}`
         : 'Taux à ajouter';
   const rows: { id: PanelId; title: string; value: string; Icon: typeof Sun; color: string; advanced?: boolean; alert?: boolean }[] = [
-    { id: 'appearance', title: 'Apparence', value: `${themeName} · ${accent.name}`, Icon: Palette, color: '#A855F7' },
-    { id: 'display', title: 'Affichage', value: `${formatMoney(1234.56, settings.mainCurrency)} · ${formatDate(new Date())}`, Icon: Type, color: '#3B82F6', advanced: true },
+    { id: 'appearance', title: 'Apparence', value: `${themeName} · ${accent.name} · ${HOME_CARDS.length - prefs.homeHidden.length} cartes à l’accueil`, Icon: Palette, color: '#A855F7' },
     { id: 'notifications', title: 'Notifications', value: notify === 'on' ? 'Activées' : notify === 'denied' ? 'Bloquées' : notify === 'off' ? 'Coupées' : 'À activer', Icon: Bell, color: '#EF4444' },
     { id: 'lock', title: 'Verrouillage', value: lock ? 'Code activé' : 'Désactivé', Icon: Lock, color: '#10B981' },
-    { id: 'currencies', title: 'Devises', value: settings.secondCurrency ? `${settings.mainCurrency} · ${settings.secondCurrency}` : settings.mainCurrency, Icon: Coins, color: '#F59E0B', advanced: true },
-    { id: 'rates', title: 'Taux de change', value: rateText, Icon: ArrowLeftRight, color: '#14B8A6', alert: needed.some((c) => !settings.rates[c]) },
-    { id: 'data', title: 'Mes données', value: 'Importer, exporter, sauvegarder', Icon: Database, color: '#0EA5E9', advanced: true },
-    { id: 'icons', title: 'Mes icônes', value: customIcons.length ? `${customIcons.length} icône${customIcons.length > 1 ? 's' : ''}` : 'Ajouter les tiennes', Icon: Shapes, color: '#EC4899', advanced: true },
+    // Devises et taux : l'alerte reste visible (même en interface simple) tant qu'un taux manque
+    { id: 'currencies', title: 'Devises et taux', value: `${settings.secondCurrency ? `${settings.mainCurrency} · ${settings.secondCurrency}` : settings.mainCurrency} · ${rateText}`, Icon: Coins, color: '#F59E0B', alert: needed.some((c) => !settings.rates[c]) },
+    { id: 'data', title: 'Mes données', value: trashCount ? `Sauvegarde, icônes · ${trashCount} dans la corbeille` : customIcons.length ? `Sauvegarde, corbeille · ${customIcons.length} icône${customIcons.length > 1 ? 's' : ''}` : 'Importer, exporter, corbeille, icônes', Icon: Database, color: '#0EA5E9', advanced: true },
   ];
   const visible = rows.filter((r) => showAll || !r.advanced);
   const groups: { title: string; ids: PanelId[] }[] = [
-    { title: 'Général', ids: ['appearance', 'display', 'notifications', 'lock'] },
-    { title: 'Argent', ids: ['currencies', 'rates'] },
-    { title: 'Données', ids: ['data', 'icons'] },
+    { title: 'Général', ids: ['appearance', 'notifications', 'lock'] },
+    { title: 'Argent et données', ids: ['currencies', 'data'] },
   ];
   const current = rows.find((r) => r.id === (desktop ? (panel ?? 'appearance') : panel));
 
@@ -414,6 +482,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
         </button>
       )}
       <p className="text-center text-[12px] text-slate-400 mt-5">Wallo · Ton argent, en clair</p>
+      <p className="text-center text-[11px] text-slate-400 mt-1 tabular-nums">
+        Version {__APP_VERSION__.version} · {formatDate(new Date(__APP_VERSION__.builtAt))}
+        {__APP_VERSION__.commit && ` · ${__APP_VERSION__.commit}${__APP_VERSION__.dirty ? '+' : ''}`}
+      </p>
     </div>
   );
 

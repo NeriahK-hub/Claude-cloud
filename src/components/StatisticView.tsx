@@ -140,11 +140,11 @@ export const StatisticView: React.FC<StatisticViewProps> = ({
   })();
   const tools = (
     <ReportTools
-      recurrings={recurrings}
       txs={report.scoped}
       allTransactions={allTransactions}
       wallets={wallets}
       budgets={budgets}
+      recurrings={recurrings}
       categories={categories}
       settings={settings}
       onSelectTransaction={onSelectTransaction}

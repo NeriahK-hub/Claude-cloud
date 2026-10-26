@@ -57,6 +57,8 @@ export interface Remote {
   // Facultatif (fonction sync_check de la base) : en un appel, les invitations acceptées, les tables qui ont
   // changé depuis `since`, et ce que la personne voit encore. null = pas disponible -> synchro complète.
   check?(since: Partial<Record<TableName, string | null>>): Promise<SyncCheck | null>;
+  // Facultatif : nombre d'opérations en ligne que je vois (vérification de cohérence)
+  countTransactions?(): Promise<number>;
 }
 
 export interface SyncCheck {
@@ -75,6 +77,8 @@ export interface SyncMeta {
   foreignWallets: string[]; // portefeuilles partagés dont je ne suis pas propriétaire
   foreignRistournes?: string[]; // ristournes dont je ne suis pas propriétaire
   debtShares?: string[]; // dettes partagées connues à la dernière synchro (les miennes et celles des autres)
+  healStage?: number; // auto-réparation : 0 = tout concorde, 1 = on relit tout, 2 = on renvoie tout, 3 = on a tout essayé
+  checkedAt?: number; // dernière vérification du nombre d'opérations (ms)
 }
 
 export const emptyMeta = (userId: string): SyncMeta => ({ userId, cursors: {}, snap: {}, foreignWallets: [], foreignRistournes: [] });
@@ -101,7 +105,7 @@ export interface SyncPatch {
 
 export type SyncResult =
   | { status: 'needs-decision'; remoteWallets: number }
-  | { status: 'done'; patch: SyncPatch; meta: SyncMeta; pushed: number; pulled: number };
+  | { status: 'done'; patch: SyncPatch; meta: SyncMeta; pushed: number; pulled: number; heal?: boolean };
 
 export function applyList<T extends { id: string }>(list: T[], p?: ListPatch<T>, replace = false): T[] {
   if (!p) return list;
@@ -595,6 +599,33 @@ export function keepLocalEdits(patch: SyncPatch, meta: SyncMeta, before: SyncDat
   return dirtyAny;
 }
 
+// ---------- Vérification de cohérence ----------
+// Après chaque synchro (au plus toutes les 2 minutes) : le nombre d'opérations ici doit être celui de la base.
+// Sinon une opération s'est perdue en route (jamais envoyée, ou jamais reçue). On répare en deux temps :
+// 1) tout relire depuis la base, 2) si ça ne suffit pas, tout renvoyer. Rien n'est supprimé : les envois
+// et les lectures ne font qu'ajouter ou mettre à jour. Retourne true s'il faut refaire un tour tout de suite.
+async function selfCheck(local: SyncData, patch: SyncPatch, meta: SyncMeta, remote: Remote): Promise<boolean> {
+  if (!remote.countTransactions || patch.replaceAll) return false;
+  const stage = meta.healStage ?? 0;
+  if (stage < 1 && Date.now() - (meta.checkedAt ?? 0) < 2 * 60_000) return false;
+  try {
+    const online = await remote.countTransactions();
+    meta.checkedAt = Date.now();
+    const here = applyList(local.transactions, patch.transactions).length;
+    if (online === here) {
+      meta.healStage = 0;
+      return false;
+    }
+    if (stage >= 3) return false; // déjà tout essayé : on ne boucle pas
+    meta.healStage = stage + 1;
+    if (stage === 0) delete meta.cursors.transactions; // 1) tout relire
+    else delete meta.snap.transactions; // 2) tout renvoyer
+    return true;
+  } catch {
+    return false; // la vérification ne doit jamais bloquer la synchro
+  }
+}
+
 // ---------- Une synchro complète ----------
 // getLocal() est rappelé au moment de l'envoi pour prendre les données les plus récentes.
 // refetchShared : on vient de rejoindre un portefeuille avec un code -> tout est relu, anciennes opérations comprises.
@@ -652,5 +683,6 @@ export async function runSync(
   const pushed = await push(getLocal(), meta, remote, known);
   // Ce qu'on vient d'envoyer change les tables : on relit en entier pour garder les curseurs justes
   const { patch, count } = await pull(getLocal(), meta, remote, pushed ? null : hint);
-  return { status: 'done', patch, meta, pushed, pulled: count };
+  const heal = await selfCheck(getLocal(), patch, meta, remote);
+  return { status: 'done', patch, meta, pushed, pulled: count, heal };
 }

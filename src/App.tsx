@@ -23,8 +23,10 @@ import { QrScanner, TypeCodeSheet } from './components/QrInvite';
 import { debtKindOf, DebtEntry, debtsSummary, dueLevel, samePerson } from './lib/debts';
 import { debtCategoryOf, debtMoneyOut, isLive, shareTotals } from './lib/debtShares';
 import type { DebtPreset } from './components/DebtsView';
-import { budgetStatus, periodOf } from './lib/budgets';
+import { budgetPace, budgetStatus, periodOf } from './lib/budgets';
+import { unusualExpenses } from './lib/unusual';
 import { uuid } from './lib/ids';
+import { getTrash, trashAdd, trashClear, trashRemove } from './lib/trash';
 import type { DuplicatePlan } from './lib/dedupe';
 import type { Period } from './lib/periods';
 
@@ -34,9 +36,12 @@ import { DesktopApp } from './components/DesktopApp';
 
 // Fenêtres partagées par les deux interfaces
 import { AddTransactionModal, AddMode, SplitBill } from './components/AddTransactionModal';
-import { buildNoteHistory } from './lib/noteSuggestions';
+import { buildAmountHistory, buildNoteHistory } from './lib/noteSuggestions';
+import { localDay as localDayOf } from './components/DatePicker';
+import { findSubscriptions } from './lib/review';
 import { canConfirm as canConfirmRistourne } from './lib/ristourne';
-import { shouldShowSplash, Splash } from './components/Splash';
+import { shouldShowSplash, signedIn, Splash } from './components/Splash';
+import { resetWelcome, shouldShowWelcome, Welcome } from './components/Welcome';
 import { shouldShowNews, shouldShowTutorial, Tutorial } from './components/Tutorial';
 import { InstallGuide } from './components/InstallGuide';
 import { shouldOfferInstall } from './lib/install';
@@ -55,7 +60,7 @@ import { GoalCelebration } from './components/pages';
 import { RistourneGoalPrompt } from './components/WalletsView';
 import { checkMilestones, Crossing, requestDeposit, requestNewGoal, requestViewGoal } from './lib/goalMilestones';
 import { reminderDue } from './lib/goals';
-import { dueDates, dueLevel as recurringDue, nextAfter, occurrenceId, ymd } from './lib/recurring';
+import { dueDates, dueLevel as recurringDue, endsAfter, nextAfter, occurrenceId, ymd } from './lib/recurring';
 import { currentMarket, useMarketRates } from './lib/marketRate';
 import { usesUsdAndCdf } from './components/RateCard';
 
@@ -90,6 +95,7 @@ export default function App() {
   const [notifications, setNotifications] = usePersistentState<NotificationItem[]>('ap.notifications', WELCOME);
   const remote = useRemoteConfig(); // fonctionnalités, annonces, icônes (espace admin)
   const [showSplash, setShowSplash] = useState(shouldShowSplash); // écran d'accueil : 1re ouverture seulement
+  const [showWelcome, setShowWelcome] = useState(() => shouldShowWelcome(signedIn())); // connexion ou « sans compte »
   const [showTutorial, setShowTutorial] = useState(shouldShowTutorial);
   // « Installe Wallo sur ton écran d'accueil » : après le tutoriel ; pour qui l'a déjà vu, une fois au lancement
   const [showInstall, setShowInstall] = useState(false);
@@ -115,6 +121,8 @@ export default function App() {
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
   const selectedTransaction = transactions.find((t) => t.id === selectedTxId) ?? null;
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; run: () => void } | null>(null);
+  const toastTimer = useRef(0);
   // Rejoindre un portefeuille partagé : code d'un lien /r/CODE ouvert, '' = code à taper, null = fermé
   const [joinCode, setJoinCode] = useState<string | null>(() => takeInviteFromUrl());
   const closeJoin = () => {
@@ -152,10 +160,16 @@ export default function App() {
     : totalBalance;
 
   // Message de confirmation (+ petit double « tic » : l'action a bien été faite)
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, action?: { label: string; run: () => void }) => {
     haptic('success');
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setToastAction(action ?? null);
+    // Un message avec « Annuler » reste plus longtemps, le temps de le toucher
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => {
+      setToastMessage(null);
+      setToastAction(null);
+    }, action ? 7000 : 3500);
   };
 
   // Page d'une fonctionnalité désactivée depuis l'espace admin : on n'y va pas
@@ -285,6 +299,25 @@ export default function App() {
         ? `${category.name} de ${formatMoney(amount, currency)} enregistré`
         : `${isExpense ? 'Dépense' : 'Revenu'} de ${formatMoney(amount, currency)} enregistré${isExpense ? 'e' : ''}`
     );
+  };
+
+  // « Plusieurs dépenses » : une opération par ligne, un seul message à la fin
+  const handleAddMany = (items: { amount: number; category: Category; note: string }[], walletId: string, day: string) => {
+    const wallet = wallets.find((w) => w.id === walletId);
+    if (!wallet) return;
+    const now = new Date();
+    const [y, m, d] = day.split('-').map(Number);
+    const createdAt = day && day !== localDayOf(now) ? new Date(y, m - 1, d, now.getHours(), now.getMinutes()).toISOString() : undefined;
+    let n = 0;
+    let total = 0;
+    for (const it of [...items].reverse()) {
+      // (on enregistre de la dernière ligne à la première : la liste montre ensuite les lignes dans l'ordre de saisie)
+      if (addOne(it.amount, it.category, it.note, walletId, wallet.currency, true, { createdAt })) {
+        n++;
+        total += it.amount;
+      }
+    }
+    if (n) showToast(`${n} dépense${n > 1 ? 's' : ''} enregistrée${n > 1 ? 's' : ''} · −${formatMoney(total, wallet.currency)}`);
   };
 
   // Partage d'addition : ma part en dépense, et les parts des autres en prêts (j'ai payé)
@@ -459,9 +492,11 @@ export default function App() {
   // Dettes et prêts : supprimer toutes les opérations d'une dette / d'un prêt saisi par erreur
   const handleDeleteDebts = (ids: string[], message: string) => {
     const gone = new Set(ids);
+    const removed = transactions.filter((t) => gone.has(t.id));
+    const trashId = removed.length ? trashAdd({ kind: 'transactions', txs: removed, label: removed.length > 1 ? `${removed.length} opérations de dette` : removed[0].title }) : null;
     setTransactions((prev) => prev.filter((t) => !gone.has(t.id)));
     unlinkDebtTxs(gone);
-    showToast(message);
+    showToast(message, trashId ? { label: 'Annuler', run: () => restoreTrash(trashId) } : undefined);
   };
 
   // Opération supprimée alors qu'elle est reliée à une dette partagée : mon mouvement encore
@@ -478,12 +513,32 @@ export default function App() {
     );
   };
 
+  // Rétablir ce qui est dans la corbeille (nouveaux identifiants : le compte en ligne a déjà reçu la suppression)
+  const restoreTrash = (id: string) => {
+    const item = getTrash().find((x) => x.id === id);
+    if (!item) return;
+    const walletOk = (wid: string) => wallets.some((w) => w.id === wid);
+    if (item.kind === 'transactions') {
+      if (!item.txs.every((t) => walletOk(t.walletId))) return showToast('Le portefeuille n\u2019existe plus : impossible de rétablir');
+      setTransactions((prev) => [...item.txs.map((t) => ({ ...t, id: uuid() })), ...prev]);
+    } else if (item.kind === 'budget') {
+      setBudgets((prev) => [{ ...item.budget, id: uuid() }, ...prev]);
+    } else {
+      if (!walletOk(item.recurring.walletId)) return showToast('Le portefeuille n\u2019existe plus : impossible de rétablir');
+      setRecurrings((prev) => [{ ...item.recurring, id: uuid() }, ...prev]);
+    }
+    trashRemove(id);
+    showToast('Rétabli');
+  };
+
   const handleDeleteTransaction = (tx: Transaction) => {
-    const ids = new Set(groupOf(tx).map((t) => t.id));
+    const group = groupOf(tx);
+    const ids = new Set(group.map((t) => t.id));
+    const trashId = trashAdd({ kind: 'transactions', txs: group, label: group.length > 1 ? `Transfert · ${tx.title}` : tx.title });
     setTransactions((prev) => prev.filter((t) => !ids.has(t.id)));
     unlinkDebtTxs(ids);
     setSelectedTxId(null);
-    showToast(ids.size > 1 ? 'Transfert supprimé' : 'Transaction supprimée');
+    showToast(ids.size > 1 ? 'Transfert supprimé' : 'Transaction supprimée', { label: 'Annuler', run: () => restoreTrash(trashId) });
   };
 
   const handleDuplicateTransaction = (tx: Transaction) => {
@@ -664,6 +719,10 @@ export default function App() {
       removeMoveAndTx(shareId, moveId);
       showToast(message);
     },
+    onRefuse: (shareId: string, moveId: string) => {
+      updateShare(shareId, (x) => ({ ...x, moves: x.moves.map((y) => (y.id === moveId ? { ...y, refusedAt: new Date().toISOString() } : y)) }));
+      showToast(`Refusé : ${shareOf(shareId)?.person ?? "l'autre personne"} sera prévenu`);
+    },
     onRequestDelete: (shareId: string, moveId: string) => {
       updateShare(shareId, (x) => ({ ...x, moves: x.moves.map((y) => (y.id === moveId ? { ...y, deleteRequestedBy: me } : y)) }));
       showToast(`Demande envoyée à ${shareOf(shareId)?.person ?? "l'autre personne"}`);
@@ -698,7 +757,12 @@ export default function App() {
     onEditMove: (shareId: string, moveId: string, changes: { amount: number; note?: string }) => {
       const m = shareOf(shareId)?.moves.find((x) => x.id === moveId);
       if (!m) return;
-      updateShare(shareId, (x) => ({ ...x, moves: x.moves.map((y) => (y.id === moveId ? { ...y, amount: changes.amount, note: changes.note } : y)) }));
+      // Corrigé après un refus : la base en fait une nouvelle demande
+      const changed = changes.amount !== m.amount || (changes.note ?? '') !== (m.note ?? '');
+      updateShare(shareId, (x) => ({
+        ...x,
+        moves: x.moves.map((y) => (y.id === moveId ? { ...y, amount: changes.amount, note: changes.note, refusedAt: changed ? undefined : y.refusedAt } : y)),
+      }));
       // Son opération dans mon portefeuille prend le nouveau montant
       if (m.txId)
         setTransactions((prev) =>
@@ -805,8 +869,10 @@ export default function App() {
   };
   const handleUpdateRecurring = (id: string, changes: Partial<Recurring>) => setRecurrings((prev) => prev.map((r) => (r.id === id ? { ...r, ...changes } : r)));
   const handleDeleteRecurring = (id: string) => {
-    setRecurrings((prev) => prev.filter((r) => r.id !== id));
-    showToast('Supprimée');
+    const r = recurrings.find((x) => x.id === id);
+    const trashId = r ? trashAdd({ kind: 'recurring', recurring: r, label: r.title }) : null;
+    setRecurrings((prev) => prev.filter((x) => x.id !== id));
+    showToast('Supprimée', trashId ? { label: 'Annuler', run: () => restoreTrash(trashId) } : undefined);
   };
   // L'opération d'une échéance (identifiant fixe : jamais en double, même créée sur deux téléphones)
   const recordOccurrence = (r: Recurring, day: string, amount: number) => {
@@ -823,24 +889,25 @@ export default function App() {
     const value = amount ?? r.amount;
     if (!value || value <= 0) return;
     recordOccurrence(r, r.nextDate, value);
-    handleUpdateRecurring(r.id, { nextDate: nextAfter(r.nextDate, r) });
-    showToast(r.bill ? `${r.title} : payé` : `${r.title} : enregistré`);
+    const last = endsAfter(r, r.nextDate); // dernier paiement prévu : c'est fini
+    handleUpdateRecurring(r.id, { nextDate: nextAfter(r.nextDate, r), ...(last ? { active: false } : {}) });
+    showToast(last ? `${r.title} : dernier paiement, terminé` : r.bill ? `${r.title} : payé` : `${r.title} : enregistré`);
   };
   // « Pas cette fois » : on passe à la date suivante sans rien créer
   const handleSkipRecurring = (r: Recurring) => {
-    handleUpdateRecurring(r.id, { nextDate: nextAfter(r.nextDate, r) });
+    handleUpdateRecurring(r.id, { nextDate: nextAfter(r.nextDate, r), ...(endsAfter(r, r.nextDate) ? { active: false } : {}) });
     showToast('Passé à la prochaine fois');
   };
 
   // Les « automatiques » arrivées à échéance sont créées toutes seules (rattrapage des jours sans ouvrir l'app)
   useEffect(() => {
     const today = ymd(new Date());
-    const updates: { id: string; nextDate: string }[] = [];
+    const updates: { id: string; nextDate: string; active?: boolean }[] = [];
     for (const r of liveRecurrings) {
       if (r.mode !== 'auto' || r.bill || !r.amount || !r.active || r.nextDate > today) continue;
       const days = dueDates(r, today);
       days.forEach((day) => recordOccurrence(r, day, r.amount!));
-      if (days.length) updates.push({ id: r.id, nextDate: nextAfter(days[days.length - 1], r) });
+      if (days.length) updates.push({ id: r.id, nextDate: nextAfter(days[days.length - 1], r), ...(endsAfter(r, days[days.length - 1]) ? { active: false } : {}) });
     }
     if (updates.length) setRecurrings((prev) => prev.map((r) => ({ ...r, ...(updates.find((u) => u.id === r.id) ?? {}) })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -915,6 +982,8 @@ export default function App() {
       navigate('goals');
     } else if (n.id.startsWith('rec-')) navigate('upcoming');
     else if (n.id.startsWith('budget-')) navigate('budgets');
+    else if (n.id.startsWith('sub-')) navigate('upcoming');
+    else if (n.id.startsWith('unusual-')) navigate('history');
     else if (n.id.startsWith('debt-')) navigate('debts');
     else if (n.id.startsWith('rate-')) navigate('home');
     else if (n.id === 'welcome') openAdd('expense');
@@ -930,8 +999,11 @@ export default function App() {
     showToast('Budget modifié');
   };
   const handleDeleteBudget = (id: string) => {
-    setBudgets((prev) => prev.filter((b) => b.id !== id));
-    showToast('Budget supprimé');
+    const b = budgets.find((x) => x.id === id);
+    const cat = b && categories.find((c) => c.id === b.categoryId);
+    const trashId = b ? trashAdd({ kind: 'budget', budget: b, label: `Budget · ${cat?.name ?? 'Toutes les dépenses'}` }) : null;
+    setBudgets((prev) => prev.filter((x) => x.id !== id));
+    showToast('Budget supprimé', trashId ? { label: 'Annuler', run: () => restoreTrash(trashId) } : undefined);
   };
 
   // Annonces publiées depuis l'espace admin : ajoutées une fois aux notifications
@@ -990,6 +1062,98 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [budgets, transactions, categories]);
 
+  // « Tu dépenses plus vite que prévu » : à mi-parcours d'un budget, si le rythme dépasse la limite (une alerte par période)
+  useEffect(() => {
+    const now = new Date();
+    const fresh: NotificationItem[] = [];
+    for (const b of budgets) {
+      const cat = categories.find((c) => c.id === b.categoryId);
+      if (b.categoryId && !cat) continue;
+      const st = budgetStatus(b, transactions, categories, settings);
+      if (now < st.start || now >= st.end || st.ratio >= 1) continue; // en cours, pas déjà dépassé (l'autre alerte s'en charge)
+      const part = (now.getTime() - st.start.getTime()) / (st.end.getTime() - st.start.getTime());
+      const pace = budgetPace(st.spent, b.amount, st, now);
+      if (part < 0.35 || st.ratio < 0.4 || pace.projected < b.amount * 1.1) continue;
+      const id = `budget-pace-${b.id}-${st.start.toISOString().slice(0, 10)}`;
+      if (notifications.some((n) => n.id === id)) continue;
+      fresh.push({
+        id,
+        type: 'budget',
+        read: false,
+        time: now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        title: `Tu dépenses plus vite que prévu : ${cat?.name ?? 'Toutes les dépenses'}`,
+        message: `À ce rythme, tu atteindras ≈ ${formatMoney(Math.round(pace.projected), b.currency)} pour ${formatMoney(b.amount, b.currency)} prévus. Pour tenir : ${formatMoney(Math.round(pace.perDayAllowed), b.currency)} par jour.`,
+      });
+    }
+    if (fresh.length) setNotifications((prev) => [...fresh, ...prev].slice(0, 50));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [budgets, transactions, categories]);
+
+  // Dépense inhabituelle : bien plus chère que d'habitude dans sa catégorie (une alerte par opération)
+  useEffect(() => {
+    const now = new Date();
+    const fresh: NotificationItem[] = [];
+    for (const u of unusualExpenses(transactions, settings, now)) {
+      const id = `unusual-${u.tx.id}`;
+      if (notifications.some((n) => n.id === id)) continue;
+      fresh.push({
+        id,
+        type: 'security',
+        read: false,
+        time: now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        title: 'Dépense inhabituelle',
+        message: `« ${u.tx.title} » : ${formatMoney(Math.abs(u.tx.amount), u.tx.currency)}, environ ${u.times} fois ta dépense habituelle en ${u.tx.category}. C'est normal ? Sinon, corrige-la.`,
+      });
+    }
+    if (fresh.length) setNotifications((prev) => [...fresh, ...prev].slice(0, 50));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions]);
+
+  // Abonnement dont le prix change : une alerte (une seule fois par paiement)
+  useEffect(() => {
+    const now = new Date();
+    const fresh: NotificationItem[] = [];
+    for (const sub of findSubscriptions(transactions, settings, categories, recurrings)) {
+      if (!sub.change || sub.change.to <= sub.change.from) continue; // on n'alerte que pour une hausse
+      const id = `sub-rise-${sub.key}-${sub.change.at.slice(0, 10)}`;
+      if (notifications.some((n) => n.id === id)) continue;
+      // seulement les paiements récents (pas un vieil historique importé)
+      if (now.getTime() - new Date(sub.change.at).getTime() > 20 * 86400000) continue;
+      fresh.push({
+        id,
+        type: 'budget',
+        read: false,
+        time: now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        title: `${sub.name} coûte plus cher`,
+        message: `Ton abonnement est passé de ${formatMoney(Math.round(sub.change.from), settings.mainCurrency)} à ${formatMoney(Math.round(sub.change.to), settings.mainCurrency)} par mois.`,
+      });
+    }
+    if (fresh.length) setNotifications((prev) => [...fresh, ...prev].slice(0, 50));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, recurrings]);
+
+  // Abonnement « à résilier » : le jour du rappel (et après, tant que ce n'est pas fait), une alerte
+  useEffect(() => {
+    const now = new Date();
+    const today = ymd(now);
+    const fresh: NotificationItem[] = [];
+    for (const r of recurrings) {
+      if (!r.active || !r.cancelBy || r.cancelBy > today) continue;
+      const id = `sub-cancel-${r.id}-${r.cancelBy}`;
+      if (notifications.some((n) => n.id === id)) continue;
+      fresh.push({
+        id,
+        type: 'budget',
+        read: false,
+        time: now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        title: `Pense à résilier ${r.title}`,
+        message: `Prochaine échéance le ${new Date(r.nextDate + 'T00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}. Annule avant, ou retire le rappel dans « À venir ».`,
+      });
+    }
+    if (fresh.length) setNotifications((prev) => [...fresh, ...prev].slice(0, 50));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recurrings]);
+
   // Objectifs : 25 / 50 / 75 / 100 % franchis -> alerte (et notification du téléphone) + célébration.
   // Chaque palier n'est fêté qu'une fois (src/lib/goalMilestones.ts).
   // Rappel de la semaine d'un objectif (« C'est vendredi : mets 10 $ dans Moto ») : une alerte par jour.
@@ -1025,13 +1189,24 @@ export default function App() {
         navigate('upcoming');
         return;
       }
+      // Raccourcis de l'icône (appui long sur Android) : « ?action=expense » ouvre l'ajout, « ?page=budgets » cet écran
+      const action = q.get('action');
+      if (action === 'expense' || action === 'income' || action === 'debt') {
+        openAdd(action);
+        return;
+      }
+      const page = q.get('page');
+      if (page && ['home', 'transactions', 'wallets', 'profile', 'upcoming', 'budgets', 'history', 'debts', 'statistic', 'goals', 'settings', 'categories', 'help', 'places', 'ristourne'].includes(page)) {
+        navigate(page as Page);
+        return;
+      }
       const goal = q.get('goal');
       if (!goal) return;
       const amount = Number(q.get('deposit'));
       requestDeposit(goal, amount > 0 ? amount : undefined);
       navigate('goals');
     };
-    if (/[?&](goal|upcoming)=/.test(window.location.search)) {
+    if (/[?&](goal|upcoming|action|page)=/.test(window.location.search)) {
       open(window.location.href);
       window.history.replaceState(null, '', window.location.pathname);
     }
@@ -1184,10 +1359,13 @@ export default function App() {
       if (all) setActiveWalletId('all');
     },
     clearLocal: () => {
+      resetWelcome();
+      setShowWelcome(true);
       setShowSplash(true); // déconnecté : on repart de l'écran d'accueil, puis de l'Accueil
       setPage('home');
       setWallets(DEFAULT_WALLETS);
       setTransactions([]);
+      trashClear(); // la corbeille appartient à ce compte
       setCategories(DEFAULT_CATEGORIES);
       setBudgets([]);
       setRecurrings([]);
@@ -1204,6 +1382,7 @@ export default function App() {
 
   // Compte connecté (dettes partagées : qui a noté quoi)
   const me = cloud.user?.id ?? '';
+  const welcomeOn = showWelcome && !cloud.user;
 
   // Notifications du téléphone : chaque nouvelle alerte de l'app (budget, annonce…) devient aussi
   // une notification système ; celles déjà là à l'ouverture ne sont pas renvoyées
@@ -1233,6 +1412,7 @@ export default function App() {
 
   // Notes déjà écrites (suggestions dans la fenêtre d'ajout)
   const noteHistory = useMemo(() => buildNoteHistory(transactions), [transactions]);
+  const usualAmounts = useMemo(() => buildAmountHistory(transactions), [transactions]);
 
   // Ce qui est commun aux deux interfaces
   const shared: SharedProps = {
@@ -1273,6 +1453,7 @@ export default function App() {
     onAddBudget: handleAddBudget,
     onUpdateBudget: handleUpdateBudget,
     onDeleteBudget: handleDeleteBudget,
+    onRestoreTrash: restoreTrash,
     cloud,
     onOpenJoin: () => setJoinCode(''),
     onOpenJoinRistourne: () => setRistourneCode(''),
@@ -1307,7 +1488,8 @@ export default function App() {
         <MobileApp {...shared} onOpenDrawer={() => setIsDrawerOpen(true)} />
       )}
       {/* Sous l'écran d'accueil (z-100), qui s'efface dessus */}
-      {showTutorial && (
+      {welcomeOn && <Welcome cloud={cloud} onDone={() => setShowWelcome(false)} />}
+      {showTutorial && !welcomeOn && (
         <Tutorial
           onDone={() => {
             setShowTutorial(false);
@@ -1317,7 +1499,7 @@ export default function App() {
         />
       )}
       {showInstall && <InstallGuide onClose={() => setShowInstall(false)} />}
-      {!showTutorial && showNews && (
+      {!showTutorial && !welcomeOn && showNews && (
         <Tutorial
           news
           onDone={() => {
@@ -1339,6 +1521,17 @@ export default function App() {
               <Check className="w-[18px] h-[18px]" strokeWidth={3.5} />
             </span>
             <span>{toastMessage}</span>
+            {toastAction && (
+              <button
+                onClick={() => {
+                  toastAction.run();
+                  setToastAction(null);
+                }}
+                className="pointer-events-auto ml-1 h-8 px-3 rounded-full bg-slate-100 text-[13px] font-bold text-slate-900 cursor-pointer active:scale-95 transition"
+              >
+                {toastAction.label}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1357,6 +1550,8 @@ export default function App() {
         preset={addPreset}
         people={people}
         noteHistory={noteHistory}
+        usualAmounts={usualAmounts}
+        onSaveMany={handleAddMany}
         onManageCategories={() => {
           setAddMode(null);
           navigate('categories');

@@ -4,6 +4,8 @@ import { BadgesCard } from './BadgesCard';
 import { ReviewCards } from './ReviewCards';
 import { FestiveCard, FestiveLayer } from './Festive';
 import { useFestive } from '../lib/festive';
+import { BudgetsHomeCard, GoalsHomeCard } from './HomeExtraCards';
+import { StartCard } from './StartCard';
 import { CoachTour, GOAL_TIPS, HOME_TIPS, REPORT_TIPS, SIMPLE_TIPS, WALLET_TIPS } from './CoachTour';
 import { NetworkCloud } from './NetworkCloud';
 import { Home, BarChart2, Users, Wallet, User, Bell, Plus, ChevronRight, History, Tags, Settings as SettingsIcon, PieChart, HandCoins, Target, CalendarClock } from 'lucide-react';
@@ -21,9 +23,12 @@ import { TransactionItem } from './TransactionItem';
 import { MonthReportCard } from './MonthReportCard';
 import { AdBanner } from './AdBanner';
 import { inThisMonth } from '../lib/periods';
-import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView, PlacesView, UpcomingView } from './pages';
+import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView, PlacesView, UpcomingView, HelpView } from './pages';
 import { DueCard } from './DueCard';
 import { RateCard } from './RateCard';
+import { PageSkeleton } from './Skeleton';
+import { SubsHomeCard } from './SubsHomeCard';
+import { useHomeLayout } from '../lib/homeLayout';
 import { SimpleMonth } from './SimpleHome';
 
 // Interface ORDINATEUR : menu à gauche, contenu en grille à droite
@@ -51,7 +56,9 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
     onSelectTransaction, categories, onAddCategory, onDeleteCategory,
   } = p;
   const main = settings.mainCurrency;
-  const { hideBalance, homeWalletCard: showWalletCard, simpleMode } = useDisplayPrefs();
+  const { hideBalance, simpleMode } = useDisplayPrefs();
+  const firstTime = p.allTransactions.length === 0; // rien noté encore
+  const layout = useHomeLayout(); // accueil au choix (Paramètres › Accueil) : sur ordinateur, on cache ce qui est décoché
   const festive = useFestive(); // design des fêtes (espace admin)
   useEffect(() => {
     if (festive) document.documentElement.dataset.festive = festive;
@@ -106,7 +113,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
 
       {/* Contenu */}
       <main className="flex-1 min-w-0 px-8 py-6">
-        <Suspense fallback={null}>
+        <Suspense fallback={page === 'home' ? null : <PageSkeleton />}>
         {page === 'home' && festive && <FestiveLayer kind={festive} />}
         {/* Bulles d'aide des premières fois (une seule fois chacune) */}
         {page === 'home' && <CoachTour key={simpleMode ? 'simple' : 'full'} steps={simpleMode ? SIMPLE_TIPS : HOME_TIPS} />}
@@ -132,8 +139,8 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-accent text-[11px] font-bold flex items-center justify-center border-2 border-white">
-                  {unreadCount}
+                <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1.5 rounded-full bg-accent text-slate-950 text-[11px] leading-none font-extrabold tabular-nums flex items-center justify-center border-2 border-white">
+                  {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
             </button>
@@ -171,7 +178,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                   ))}
                 </div>
               </div>
-              {showWalletCard && p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
+              {layout.show('wallet') && p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               )}
 
@@ -179,22 +186,42 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
               <div className="empty:hidden">
                 <ReviewCards transactions={p.transactions} settings={settings} categories={categories} />
               </div>
-              <div className="empty:hidden">
-                <RateCard settings={settings} wallets={wallets} onChangeSettings={p.onChangeSettings} />
-              </div>
-              <div className="empty:hidden">
-                <DueCard recurrings={p.recurrings} categories={categories} onConfirm={p.onConfirmRecurring} onSkip={p.onSkipRecurring} onOpen={() => onNavigate('upcoming')} />
-              </div>
+              {layout.show('rates') && (
+                <div className="empty:hidden">
+                  <RateCard settings={settings} wallets={wallets} onChangeSettings={p.onChangeSettings} />
+                </div>
+              )}
+              {layout.show('due') && (
+                <div className="empty:hidden">
+                  <DueCard recurrings={p.recurrings} categories={categories} onConfirm={p.onConfirmRecurring} onSkip={p.onSkipRecurring} onOpen={() => onNavigate('upcoming')} />
+                </div>
+              )}
+              {layout.show('subs') && (
+                <div className="empty:hidden">
+                  <SubsHomeCard transactions={allTransactions} settings={settings} categories={categories} recurrings={p.recurrings} onOpen={() => onNavigate('upcoming')} />
+                </div>
+              )}
+              {firstTime && <StartCard onExpense={() => onQuickAction('expense')} onIncome={() => onQuickAction('income')} />}
+              {layout.show('budgets') && (
+                <div className="empty:hidden">
+                  <BudgetsHomeCard budgets={p.budgets} transactions={allTransactions} categories={categories} settings={settings} onOpen={() => onNavigate('budgets')} />
+                </div>
+              )}
+              {layout.show('goals') && (
+                <div className="empty:hidden">
+                  <GoalsHomeCard wallets={wallets} transactions={allTransactions} onOpen={() => onNavigate('goals')} />
+                </div>
+              )}
               <AdBanner />
               {/* Mode simple : un résumé du mois à la place des cartes santé, badges et rapport */}
               {simpleMode ? (
-                <SimpleMonth transactions={p.transactions} settings={settings} hidden={hideBalance} />
+                layout.show('month') && <SimpleMonth transactions={p.transactions} settings={settings} hidden={hideBalance} />
               ) : (
                 <>
-                  <HealthCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} onSelectTransaction={onSelectTransaction} />
-                  <BadgesCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} />
+                  {layout.show('health') && <HealthCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} onSelectTransaction={onSelectTransaction} />}
+                  {layout.show('badges') && <BadgesCard transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} />}
 
-                  <MonthReportCard
+                  {layout.show('month') && !firstTime && <MonthReportCard
                     allTransactions={allTransactions}
                     wallets={wallets}
                     activeWallet={p.activeWallet}
@@ -202,10 +229,11 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                     onOpenReports={() => onNavigate('statistic')}
                     onOpenGoals={() => onNavigate('goals')}
                 recurrings={p.recurrings}
-                  />
+                  />}
                 </>
               )}
 
+              {layout.show('list') && !firstTime && (
               <div className="bg-white rounded-3xl p-6 border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-base font-bold">Dernières transactions</h2>
@@ -222,6 +250,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                   ))}
                 </div>
               </div>
+              )}
             </div>
 
             {/* Colonne droite (1/3) */}
@@ -324,6 +353,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             {page === 'upcoming' && (
               <UpcomingView
                 recurrings={p.recurrings}
+                transactions={allTransactions}
                 wallets={wallets}
                 categories={categories}
                 settings={settings}
@@ -338,6 +368,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             {page === 'budgets' && (
               <BudgetsView
                 budgets={p.budgets}
+                recurrings={p.recurrings}
                 transactions={allTransactions}
                 categories={categories}
                 settings={settings}
@@ -375,6 +406,7 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
             {page === 'statistic' && (
               <StatisticView
                 allTransactions={allTransactions}
+                recurrings={p.recurrings}
                 wallets={wallets}
                 activeWallet={p.activeWallet}
                 activeWalletLabel={activeWalletLabel}
@@ -383,15 +415,15 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 onSelectTransaction={onSelectTransaction}
                 onOpenAccountPicker={onOpenAccountPicker}
                 budgets={p.budgets}
-                recurrings={p.recurrings}
                 onNavigate={onNavigate}
               />
             )}
             {page === 'settings' && (
-              <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
+              <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onRestoreTrash={p.onRestoreTrash} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('home')} />
             )}
-            {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} onOpenTutorial={p.onOpenTutorial} />}
+            {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} />}
         {page === 'places' && <PlacesView onBack={() => onNavigate('profile')} />}
+        {page === 'help' && <HelpView onBack={() => onNavigate('profile')} onOpenTutorial={p.onOpenTutorial} />}
           </div>
         )}
         </Suspense>

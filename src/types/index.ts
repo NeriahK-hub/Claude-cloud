@@ -99,6 +99,10 @@ export interface Recurring {
   categoryId?: string;
   frequency: 'week' | 'month' | 'year' | 'days';
   everyDays?: number; // seulement 'days' : tous les N jours
+  cancelBy?: string; // abonnement « à résilier » : rappel à cette date (AAAA-MM-JJ) ; '' = rappel retiré
+  every?: number; // semaine / mois / année : tous les N (absent = 1 : « toutes les 2 semaines », « tous les 3 mois »)
+  until?: string; // dernier paiement (AAAA-MM-JJ, inclus) : ensuite c'est fini ; absent = sans fin ; '' = fin retirée
+  note?: string; // mémo libre (« code client », « résilier avant… ») ; '' = retiré
   nextDate: string; // AAAA-MM-JJ : prochaine fois (facture : date limite)
   anchorDay?: number; // chaque mois / année : le jour voulu (31 -> 28 février puis de nouveau 31 mars)
   mode: 'ask' | 'auto'; // me demander / créer toute seule
@@ -168,6 +172,9 @@ export interface DebtMove {
   pending: boolean; // à confirmer par celui qui ne l'a pas noté
   recordedBy: string; // compte qui l'a noté
   deleteRequestedBy?: string; // compte qui demande sa suppression
+  pendingSince?: string; // ISO : en attente depuis (confirmé tout seul AUTO_CONFIRM_DAYS jours plus tard)
+  autoConfirmed?: boolean; // confirmé sans réponse de l'autre
+  refusedAt?: string; // ISO : refusé par l'autre (ne compte pas ; celui qui l'a noté corrige, renvoie ou retire)
   txId?: string; // MON opération liée dans un portefeuille
 }
 

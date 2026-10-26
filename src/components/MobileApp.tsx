@@ -4,6 +4,8 @@ import { BadgesCard } from './BadgesCard';
 import { ReviewCards } from './ReviewCards';
 import { FestiveCard, FestiveLayer, FestiveMark } from './Festive';
 import { useFestive } from '../lib/festive';
+import { BudgetsHomeCard, GoalsHomeCard } from './HomeExtraCards';
+import { StartCard } from './StartCard';
 import { CoachTour, GOAL_TIPS, HOME_TIPS, REPORT_TIPS, SIMPLE_TIPS, WALLET_TIPS } from './CoachTour';
 import { SharedProps } from './appProps';
 import { Header } from './Header';
@@ -14,9 +16,12 @@ import { WalletsView, HomeWalletCard } from './WalletsView';
 import { isShared } from './Members';
 import { useDisplayPrefs } from '../lib/display';
 import { MonthReportCard } from './MonthReportCard';
+import { PageSkeleton } from './Skeleton';
+import { SubsHomeCard } from './SubsHomeCard';
+import { HomeCardId, useHomeLayout } from '../lib/homeLayout';
 import { AdBanner } from './AdBanner';
 import { NetworkCloud } from './NetworkCloud';
-import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView, PlacesView, UpcomingView } from './pages';
+import { TransactionHistoryView, StatisticView, SettingsView, ProfileView, RistourneView, CategoriesView, BudgetsView, DebtsView, PlacesView, UpcomingView, HelpView } from './pages';
 import { DueCard } from './DueCard';
 import { RateCard } from './RateCard';
 import { SimpleActions, SimpleModeFooter, SimpleMonth } from './SimpleHome';
@@ -29,7 +34,8 @@ interface MobileAppProps extends SharedProps {
 const TABS: TabType[] = ['home', 'transactions', 'wallets', 'profile'];
 
 export const MobileApp: React.FC<MobileAppProps> = (p) => {
-  const { homeWalletCard: showWalletCard, simpleMode, hideBalance } = useDisplayPrefs(); // carte désactivée par défaut (Paramètres › Affichage)
+  const { simpleMode, hideBalance } = useDisplayPrefs(); // carte désactivée par défaut (Paramètres › Affichage)
+  const layout = useHomeLayout(); // accueil au choix : cartes montrées et leur ordre (Paramètres › Accueil)
   const {
     page, onNavigate, settings, wallets, balance, activeWalletLabel, transactions, allTransactions,
     unreadCount, onQuickAction, onAddExpense, onOpenAccountPicker, onOpenDrawer, onOpenNotifications,
@@ -45,12 +51,106 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
   }, [festive]);
   const isTab = TABS.includes(tab as TabType);
 
+  // Carte par carte, dans l'ordre choisi. Santé et série côte à côte quand elles se suivent.
+  const firstTime = allTransactions.length === 0; // personne qui n'a encore rien noté
+  const homeCards = () => {
+    const out: React.ReactNode[] = [];
+    const ids = layout.shown;
+    const card = (id: HomeCardId): React.ReactNode => {
+      switch (id) {
+        case 'rates':
+          return (
+            <div key={id} className="px-5 mb-3 empty:hidden">
+              <RateCard settings={settings} wallets={wallets} onChangeSettings={p.onChangeSettings} />
+            </div>
+          );
+        case 'due':
+          return (
+            <div key={id} className="px-5 mb-3 empty:hidden">
+              <DueCard recurrings={p.recurrings} categories={categories} onConfirm={p.onConfirmRecurring} onSkip={p.onSkipRecurring} onOpen={() => onNavigate('upcoming')} />
+            </div>
+          );
+        case 'month':
+          if (firstTime) return null; // rien à comparer : la carte « Note ta première opération » le remplace
+          return (
+            <div key={id} className="px-5 mb-3">
+              <MonthReportCard
+                allTransactions={allTransactions}
+                wallets={wallets}
+                activeWallet={p.activeWallet}
+                settings={settings}
+                onOpenReports={() => onNavigate('statistic')}
+                onOpenGoals={() => onNavigate('goals')}
+                recurrings={p.recurrings}
+              />
+            </div>
+          );
+        case 'subs':
+          return (
+            <div key={id} className="px-5 mb-3 empty:hidden">
+              <SubsHomeCard transactions={allTransactions} settings={settings} categories={categories} recurrings={p.recurrings} onOpen={() => onNavigate('upcoming')} />
+            </div>
+          );
+        case 'budgets':
+          return (
+            <div key={id} className="px-5 mb-3 empty:hidden">
+              <BudgetsHomeCard budgets={p.budgets} transactions={allTransactions} categories={categories} settings={settings} onOpen={() => onNavigate('budgets')} />
+            </div>
+          );
+        case 'goals':
+          return (
+            <div key={id} className="px-5 mb-3 empty:hidden">
+              <GoalsHomeCard wallets={wallets} transactions={allTransactions} onOpen={() => onNavigate('goals')} />
+            </div>
+          );
+        case 'list':
+          if (firstTime) return null;
+          return (
+            <React.Fragment key={id}>
+              <AdBanner className="px-5 mb-3" />
+              <TransactionList transactions={transactions} onSelectTransaction={onSelectTransaction} onViewAll={() => onNavigate('history')} />
+            </React.Fragment>
+          );
+        default:
+          return null;
+      }
+    };
+    const health = (compact: boolean) => (
+      <HealthCard key="health" compact={compact} transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} onSelectTransaction={onSelectTransaction} />
+    );
+    const badges = (compact: boolean) => (
+      <BadgesCard key="badges" compact={compact} transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} />
+    );
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const next = ids[i + 1];
+      if ((id === 'health' && next === 'badges') || (id === 'badges' && next === 'health')) {
+        // les deux se suivent : deux petites tuiles côte à côte
+        out.push(
+          <div key="tiles" className="px-5 mb-3 grid grid-cols-2 gap-3">
+            {id === 'health' ? health(true) : badges(true)}
+            {id === 'health' ? badges(true) : health(true)}
+          </div>
+        );
+        i++;
+      } else if (id === 'health' || id === 'badges') {
+        // seule : une carte pleine largeur
+        out.push(
+          <div key={id} className="px-5 mb-3">
+            {id === 'health' ? health(false) : badges(false)}
+          </div>
+        );
+      } else out.push(card(id));
+    }
+    return out;
+  };
+
   return (
     // pt : laisse la place à l'encoche et à l'heure du vrai téléphone
     <div className="min-h-dvh w-full max-w-md mx-auto bg-slate-50 pt-[env(safe-area-inset-top)]">
       <div className="status-bar" aria-hidden />
       <div className={isTab ? 'pb-28' : 'pb-6'}>
-        <Suspense fallback={null}>
+        <Suspense fallback={page === 'home' ? null : <PageSkeleton />}>
         {page === 'home' && festive && <FestiveLayer kind={festive} />}
         {/* Bulles d'aide des premières fois (une seule fois chacune) */}
         {page === 'home' && <CoachTour key={simpleMode ? 'simple' : 'full'} steps={simpleMode ? SIMPLE_TIPS : HOME_TIPS} />}
@@ -75,6 +175,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         {page === 'upcoming' && (
           <UpcomingView
             recurrings={p.recurrings}
+            transactions={allTransactions}
             wallets={wallets}
             categories={categories}
             settings={settings}
@@ -89,6 +190,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         {page === 'budgets' && (
           <BudgetsView
             budgets={p.budgets}
+            recurrings={p.recurrings}
             transactions={allTransactions}
             categories={categories}
             settings={settings}
@@ -169,25 +271,36 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
                     <FestiveCard kind={festive} onNavigate={onNavigate} />
                   </div>
                 )}
-                <div className="px-5 mb-3 empty:hidden">
-                  <ReviewCards transactions={transactions} settings={settings} categories={categories} />
-                </div>
+                {(
+                  <div className="px-5 mb-3 empty:hidden">
+                    <ReviewCards transactions={transactions} settings={settings} categories={categories} />
+                  </div>
+                )}
                 <div className="px-5 mb-3">
                   <SimpleActions onExpense={() => onQuickAction('expense')} onIncome={() => onQuickAction('income')} />
                 </div>
-                <div className="px-5 mb-3 empty:hidden">
-                  <DueCard recurrings={p.recurrings} categories={categories} onConfirm={p.onConfirmRecurring} onSkip={p.onSkipRecurring} onOpen={() => onNavigate('upcoming')} />
-                </div>
-                <div className="px-5 mb-3">
-                  <SimpleMonth transactions={transactions} settings={settings} hidden={hideBalance} />
-                </div>
+                {layout.show('due') && (
+                  <div className="px-5 mb-3 empty:hidden">
+                    <DueCard recurrings={p.recurrings} categories={categories} onConfirm={p.onConfirmRecurring} onSkip={p.onSkipRecurring} onOpen={() => onNavigate('upcoming')} />
+                  </div>
+                )}
+                {layout.show('month') && (
+                  <div className="px-5 mb-3">
+                    <SimpleMonth transactions={transactions} settings={settings} hidden={hideBalance} />
+                  </div>
+                )}
+                {layout.show('subs') && (
+                  <div className="px-5 mb-3 empty:hidden">
+                    <SubsHomeCard transactions={allTransactions} settings={settings} categories={categories} recurrings={p.recurrings} onOpen={() => onNavigate('upcoming')} />
+                  </div>
+                )}
                 <AdBanner className="px-5 mb-3" />
-                <TransactionList transactions={transactions} onSelectTransaction={onSelectTransaction} onViewAll={() => onNavigate('history')} />
+                {layout.show('list') && <TransactionList transactions={transactions} onSelectTransaction={onSelectTransaction} onViewAll={() => onNavigate('history')} />}
                 <SimpleModeFooter />
               </>
             ) : (
             <>
-            {showWalletCard && p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
+            {layout.show('wallet') && p.activeWallet && (p.activeWallet.kind === 'goal' || p.activeWallet.kind === 'credit' || isShared(p.activeWallet)) && (
               <div className="px-5 mb-3">
                 <HomeWalletCard wallet={p.activeWallet} transactions={allTransactions} />
               </div>
@@ -197,38 +310,17 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
                 <FestiveCard kind={festive} onNavigate={onNavigate} />
               </div>
             )}
-            {/* Bilans (semaine, Wrapped) : ils n'apparaissent que quelques jours, donc tout en haut */}
+            {/* Les cartes, dans l'ordre choisi (Paramètres › Accueil) */}
+            {/* Bilans (semaine, Wrapped) : automatiques, ou quand l'admin les allume */}
             <div className="px-5 mb-3 empty:hidden">
               <ReviewCards transactions={transactions} settings={settings} categories={categories} />
             </div>
-            <div className="px-5 mb-3 empty:hidden">
-              <RateCard settings={settings} wallets={wallets} onChangeSettings={p.onChangeSettings} />
-            </div>
-            <div className="px-5 mb-3 empty:hidden">
-              <DueCard recurrings={p.recurrings} categories={categories} onConfirm={p.onConfirmRecurring} onSkip={p.onSkipRecurring} onOpen={() => onNavigate('upcoming')} />
-            </div>
-            <AdBanner className="px-5 mb-3" />
-            {/* Santé et série côte à côte : deux petites tuiles plutôt que deux grandes cartes */}
-            <div className="px-5 mb-3 grid grid-cols-2 gap-3">
-              <HealthCard compact transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} onNavigate={onNavigate} onSelectTransaction={onSelectTransaction} />
-              <BadgesCard compact transactions={allTransactions} wallets={wallets} budgets={p.budgets} categories={categories} settings={settings} shared={p.sharedDebts} />
-            </div>
-            <div className="px-5 mb-3">
-              <MonthReportCard
-                allTransactions={allTransactions}
-                wallets={wallets}
-                activeWallet={p.activeWallet}
-            settings={settings}
-                onOpenReports={() => onNavigate('statistic')}
-                onOpenGoals={() => onNavigate('goals')}
-                recurrings={p.recurrings}
-              />
-            </div>
-            <TransactionList
-              transactions={transactions}
-              onSelectTransaction={onSelectTransaction}
-              onViewAll={() => onNavigate('history')}
-            />
+            {firstTime && (
+              <div className="px-5 mb-3">
+                <StartCard onExpense={() => onQuickAction('expense')} onIncome={() => onQuickAction('income')} />
+              </div>
+            )}
+            {homeCards()}
             </>
             )}
           </div>
@@ -237,6 +329,7 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
         {page === 'statistic' && (
           <StatisticView
             allTransactions={allTransactions}
+            recurrings={p.recurrings}
             wallets={wallets}
             activeWallet={p.activeWallet}
             activeWalletLabel={activeWalletLabel}
@@ -245,7 +338,6 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
             onSelectTransaction={onSelectTransaction}
             onOpenAccountPicker={onOpenAccountPicker}
             budgets={p.budgets}
-                recurrings={p.recurrings}
             onNavigate={onNavigate}
             onBack={() => onNavigate('transactions')}
             initialPeriod={p.reportPeriod ?? undefined}
@@ -288,10 +380,11 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
           />
         )}
         {page === 'settings' && (
-          <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
+          <SettingsView settings={settings} wallets={wallets} transactions={p.allTransactions} categories={p.categories} budgets={p.budgets} ristournes={p.ristournes} onRestoreTrash={p.onRestoreTrash} onImport={p.onImport} onRestore={p.onRestore} onChange={p.onChangeSettings} onBack={() => onNavigate('profile')} />
         )}
-        {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} onOpenTutorial={p.onOpenTutorial} />}
+        {page === 'profile' && <ProfileView onNavigate={onNavigate} cloud={p.cloud} />}
         {page === 'places' && <PlacesView onBack={() => onNavigate('profile')} />}
+        {page === 'help' && <HelpView onBack={() => onNavigate('profile')} onOpenTutorial={p.onOpenTutorial} />}
         </Suspense>
       </div>
 

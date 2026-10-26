@@ -30,6 +30,7 @@ export interface SharedDebts {
   onAddMove: (shareId: string, m: { kind: DebtMove['kind']; amount: number; currency: string; note?: string; walletId: string | null }) => void;
   onConfirm: (shareId: string, moveId: string, walletId: string | null) => void;
   onRemove: (shareId: string, moveId: string, message: string) => void;
+  onRefuse: (shareId: string, moveId: string) => void; // pas d'accord : il reste chez l'autre, qui corrige, renvoie ou retire
   onRequestDelete: (shareId: string, moveId: string) => void;
   onAnswerDelete: (shareId: string, moveId: string, accept: boolean) => void;
   onLinkWallet: (shareId: string, moveId: string, walletId: string) => void;

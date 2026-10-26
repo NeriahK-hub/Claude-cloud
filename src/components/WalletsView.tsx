@@ -1,8 +1,9 @@
 import React, { Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { takeJump } from '../lib/jumpTo';
 import { DuplicatePlan, findDuplicateWallets } from '../lib/dedupe';
-import { Plus, Target, Pencil, ChevronRight, CalendarPlus, Flag, Flame, Quote, BellRing, Coins, Sofa, Trophy, Lightbulb, PartyPopper, TrendingUp, CircleCheck, Clock, CalendarClock, CalendarX, Pause, Sprout, ArrowRight, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowUpDown, GripVertical, ChevronUp, ChevronDown, History, Users, CopyX, Lock, Sparkles } from 'lucide-react';
+import { Plus, Target, Pencil, ChevronRight, CalendarPlus, Flag, Flame, Quote, BellRing, Coins, Sofa, Trophy, Lightbulb, PartyPopper, TrendingUp, CircleCheck, Clock, CalendarClock, CalendarX, Pause, Sprout, ArrowRight, Trash2, X, ArchiveRestore, Archive, ChevronLeft, CircleHelp, ArrowLeftRight, SlidersHorizontal, ArrowUpDown, GripVertical, ChevronUp, ChevronDown, History, Users, CopyX, Lock, Sparkles, Eye, EyeOff, Search, Check } from 'lucide-react';
 import { SortableList } from './SortableList';
+import { SecretMoney } from './MatrixSwap';
 import { Settings, Transaction, Wallet, WalletKind } from '../types';
 import { TransactionItem } from './TransactionItem';
 import { AppIcon, IconBadge, WALLET_ICON_CHOICES } from './AppIcon';
@@ -15,7 +16,7 @@ import { TransactionHistoryView } from './pages';
 import { inThisMonth } from '../lib/periods';
 import { challengeDay, challengeWeek, goalEquivalence, goalInsight, GoalInsight, goalSeries, goalStreak, niceAmount, reminderDue, timeLeftLabel, weekendSaving, weekKey, weekRoundUps } from '../lib/goals';
 import { GoalDraft, consumeDepositRequest, consumeNewGoalRequest, consumeViewGoal, markRoundUpPaid, roundUpAlreadyPaid } from '../lib/goalMilestones';
-import { getPrefs, useDisplayPrefs } from '../lib/display';
+import { getPrefs, setPrefs, useDisplayPrefs } from '../lib/display';
 import { isShared, MembersSheet, MemberStack, SharingBlock, activeMembers, memberOf, MemberAvatar, ME_ID } from './Members';
 import { useFeature } from '../lib/remoteConfig';
 import { haptic } from '../lib/haptics';
@@ -46,6 +47,8 @@ interface WalletsViewProps {
 export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions, defaultCurrency, onAdd, onUpdate, onDelete, onSelectTransaction, onTransfer, onAdjustBalance, onReorder, settings, cloud, onJoin, onRemoveDuplicates, goalsOnly, onBack }) => {
   const sharingOn = useFeature('sharedWallets'); // désactivable depuis l'espace admin
   const desktop = useIsDesktop(); // ordinateur : grille de cartes et détail en deux colonnes
+  const { hideBalance } = useDisplayPrefs(); // œil : masque les soldes (le même réglage que sur l'accueil)
+  const EyeIcon = hideBalance ? EyeOff : Eye;
   const [editing, setEditing] = useState<Wallet | 'new' | null>(null);
   const [goalDraft, setGoalDraft] = useState<GoalDraft | null>(null); // objectif proposé par Wallo, déjà rempli
   const [deleting, setDeleting] = useState<Wallet | null>(null);
@@ -155,7 +158,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
           </div>
         </div>
         <div className={`mt-5 text-2xl font-extrabold tracking-tight tabular-nums truncate ${bal < 0 ? 'text-red-500' : 'text-slate-900'}`}>
-          {formatMoney(bal, w.currency)}
+          <SecretMoney text={formatMoney(bal, w.currency)} />
         </div>
         <WalletProgress wallet={w} balance={bal} />
         {isShared(w) && (
@@ -180,7 +183,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
       <div className="flex-1 min-w-0">
         <div className="text-[15px] font-semibold text-slate-900 truncate">{w.name}</div>
         <div className="text-sm font-bold tabular-nums text-slate-700">
-          {formatMoney(walletBalance(w, transactions), w.currency)}
+          <SecretMoney text={formatMoney(walletBalance(w, transactions), w.currency)} />
         </div>
         <WalletProgress wallet={w} balance={walletBalance(w, transactions)} />
         {isShared(w) && (
@@ -499,19 +502,23 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
               Total · {included.length} portefeuille{included.length > 1 ? 's' : ''}
             </div>
             <div className={`text-[34px] leading-tight font-extrabold tracking-tight tabular-nums ${total < 0 ? 'text-red-500' : 'text-slate-900'}`}>
-              {formatMoney(total, main)}
+              <SecretMoney text={formatMoney(total, main)} />
             </div>
             {byCurrency.size > 1 && (
               <div className="flex flex-wrap gap-2 mt-3">
                 {[...byCurrency].map(([cur, v]) => (
                   <span key={cur} className="px-3 py-1.5 rounded-full bg-slate-100 text-xs font-bold tabular-nums text-slate-700">
-                    {formatMoney(v, cur)}
+                    <SecretMoney text={formatMoney(v, cur)} />
                   </span>
                 ))}
               </div>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => setPrefs({ hideBalance: !hideBalance })} aria-pressed={hideBalance} className={toolBtn}>
+              <EyeIcon className="w-4 h-4" />
+              {hideBalance ? 'Afficher les soldes' : 'Masquer les soldes'}
+            </button>
             {archived.length > 0 && (
               <button onClick={() => setShowArchives(true)} className={toolBtn}>
                 <Archive className="w-4 h-4" />
@@ -598,6 +605,17 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
       <div className={`${desktop ? '' : 'page-head '}flex items-center justify-between mb-5`}>
         <h1 className="text-xl font-bold text-slate-900">{desktop ? 'Réorganiser' : 'Portefeuilles'}</h1>
         <div className="flex items-center gap-2">
+        {!reordering && (
+          <button
+            onClick={() => setPrefs({ hideBalance: !hideBalance })}
+            aria-pressed={hideBalance}
+            aria-label={hideBalance ? 'Afficher les soldes' : 'Masquer les soldes'}
+            title={hideBalance ? 'Afficher les soldes' : 'Masquer les soldes'}
+            className="w-10 h-10 rounded-full bg-white border border-slate-100 text-slate-700 flex items-center justify-center cursor-pointer hover:bg-slate-50 active:scale-95 transition"
+          >
+            <EyeIcon key={String(hideBalance)} className="w-4 h-4 animate-fade-in" />
+          </button>
+        )}
         {archived.length > 0 && !reordering && (
           <button
             onClick={() => setShowArchives(true)}
@@ -647,7 +665,7 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
                 <IconBadge icon={w.icon} image={w.image} color={w.color} size="sm" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-slate-900 truncate">{w.name}</div>
-                  <div className="text-xs font-semibold tabular-nums text-slate-500">{formatMoney(walletBalance(w, transactions), w.currency)}</div>
+                  <div className="text-xs font-semibold tabular-nums text-slate-500"><SecretMoney text={formatMoney(walletBalance(w, transactions), w.currency)} /></div>
                 </div>
                 <button
                   onClick={() => move(-1)}
@@ -749,13 +767,14 @@ export const WalletsView: React.FC<WalletsViewProps> = ({ wallets, transactions,
 
 // ---------- Barre de progression (crédit utilisé / objectif atteint) ----------
 const WalletProgress: React.FC<{ wallet: Wallet; balance: number }> = ({ wallet: w, balance }) => {
+  const { hideBalance } = useDisplayPrefs();
   let ratio: number;
   let label: string;
   let bar: string;
   if (w.kind === 'credit' && w.creditLimit) {
     const used = Math.max(0, -balance);
     ratio = used / w.creditLimit;
-    label = `Disponible ${formatMoney(Math.max(0, w.creditLimit - used), w.currency)} sur ${formatMoney(w.creditLimit, w.currency)}`;
+    label = hideBalance ? 'Disponible •••••• sur ••••••' : `Disponible ${formatMoney(Math.max(0, w.creditLimit - used), w.currency)} sur ${formatMoney(w.creditLimit, w.currency)}`;
     bar = ratio >= 0.9 ? 'bg-red-500' : ratio >= 0.7 ? 'bg-amber-500' : 'bg-pink-500';
   } else if (w.kind === 'goal' && w.goalAmount) {
     ratio = Math.max(0, balance) / w.goalAmount;
@@ -883,14 +902,16 @@ const KindPicker: React.FC<{ onPick: (k: WalletKind) => void; onClose: () => voi
         </button>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        {KINDS.map((k) => {
-          const disabled = k.id === 'linked';
+        {/* « Portefeuille lié » n'existe pas encore : on ne le montre pas (une case qui ne fait rien déroute) */}
+        {KINDS.filter((k) => k.id !== 'linked').map((k, i, all) => {
+          const disabled = false;
+          const wide = all.length % 2 === 1 && i === all.length - 1; // dernier seul : sur toute la largeur
           return (
-            <div key={k.id} className="relative">
+            <div key={k.id} className={`relative ${wide ? 'col-span-2' : ''}`}>
               <button
                 disabled={disabled}
                 onClick={() => onPick(k.id as WalletKind)}
-                className={`relative w-full aspect-square overflow-hidden rounded-3xl p-4 text-left text-white ${k.bg} ${
+                className={`relative w-full ${wide ? 'aspect-[2.6/1]' : 'aspect-square'} overflow-hidden rounded-3xl p-4 text-left text-white ${k.bg} ${
                   disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:scale-[0.97] transition-transform'
                 }`}
               >
@@ -1021,8 +1042,8 @@ const WalletSheet: React.FC<{
                   <span />
                 )}
                 <div className="min-w-0 text-center">
-                  <h2 className="text-[17px] font-bold truncate">{wallet ? 'Modifier' : 'Nouveau portefeuille'}</h2>
-                  <p className="text-[12px] text-slate-500 truncate">{kindInfo?.title}</p>
+                  <h2 className="text-[17px] font-bold truncate">{wallet ? 'Modifier' : kind === 'goal' ? 'Nouvel objectif' : 'Nouveau portefeuille'}</h2>
+                  <p className="text-[12px] text-slate-500 truncate">{kind === 'goal' ? "Mets de l'argent de côté pour un projet" : kindInfo?.title}</p>
                 </div>
                 <button onClick={onClose} aria-label="Fermer" className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
                   <X className="w-4 h-4" />
@@ -1060,15 +1081,15 @@ const WalletSheet: React.FC<{
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   aria-label="Nom"
-                  placeholder={kind === 'goal' ? 'Nouvelle moto' : kind === 'credit' ? 'Carte Visa' : 'Airtel Money'}
+                  placeholder={kind === 'goal' ? 'Ex. : Nouvelle moto' : kind === 'credit' ? 'Carte Visa' : 'Airtel Money'}
                   className="field-plain mt-3 w-full bg-transparent text-center text-[22px] font-bold tracking-tight text-slate-900 outline-none placeholder:text-slate-300 placeholder:font-semibold"
                 />
-                <span className="text-[12px] text-slate-400">{name.trim() ? 'Nom du portefeuille' : 'Donne-lui un nom'}</span>
+                <span className="text-[12px] text-slate-400">{name.trim() ? (kind === 'goal' ? 'Nom de l\'objectif' : 'Nom du portefeuille') : kind === 'goal' ? 'Que veux-tu t\'offrir ou payer ?' : 'Donne-lui un nom'}</span>
               </div>
 
               {showLook && (
                 <div className="mb-5 p-3 rounded-2xl bg-slate-100 animate-fade-in">
-                  <IconPicker choices={WALLET_ICON_CHOICES} icon={icon} image={image} color={color} onIcon={setIcon} onImage={setImage} />
+                  <IconPicker logosFirst choices={WALLET_ICON_CHOICES} icon={icon} image={image} color={color} onIcon={setIcon} onImage={setImage} />
                   <div className="text-xs font-semibold text-slate-500 mb-1">Couleur</div>
                   <ColorPicker value={color} onChange={setColor} />
                   <button type="button" onClick={() => setShowLook(false)} className="w-full py-2 rounded-xl text-[13px] font-bold text-blue-600 cursor-pointer">
@@ -1080,7 +1101,7 @@ const WalletSheet: React.FC<{
               {/* Objectif : le montant à atteindre en grand */}
               {kind === 'goal' && (
                 <div className="text-center mb-5">
-                  <div className="text-[13px] font-medium text-slate-500 mb-1">Montant à atteindre</div>
+                  <div className="text-[13px] font-medium text-slate-500 mb-1">Combien il te faut ?</div>
                   <label className="inline-flex items-baseline justify-center gap-1.5 cursor-text">
                     <input
                       inputMode="decimal"
@@ -1112,11 +1133,11 @@ const WalletSheet: React.FC<{
                     <InputRow label="Déjà utilisé" value={balance} onChange={setBalance} placeholder="0" suffix={currency} numeric />
                   </>
                 )}
-                {kind === 'goal' && <InputRow label="Déjà épargné" value={balance} onChange={setBalance} placeholder="0" suffix={currency} numeric />}
+                {kind === 'goal' && <InputRow label="Déjà mis de côté" value={balance} onChange={setBalance} placeholder="0" suffix={currency} numeric />}
                 {kind === 'basic' && <InputRow label="Solde de départ" value={balance} onChange={setBalance} placeholder="0" suffix={currency} numeric />}
                 {kind === 'goal' && (
                   <div className="px-3 py-2">
-                    <div className="text-[13px] text-slate-500 px-1 mb-1">Date visée (facultatif)</div>
+                    <div className="text-[13px] text-slate-500 px-1 mb-1">Pour quand ? (facultatif)</div>
                     <DateField value={goalDate} onChange={setGoalDate} placeholder="Pas de date" shortcuts="future" min={localDay(new Date())} label="Date visée" />
                   </div>
                 )}
@@ -1125,14 +1146,17 @@ const WalletSheet: React.FC<{
 
               {kind === 'goal' && (
                 <>
-                  <Group title="Pourquoi cet objectif ?" hint="Facultatif. Il s'affiche sur ton objectif pour te motiver.">
+                  <Group
+                    title="Pourquoi cet objectif ?"
+                    hint={why.length > 250 ? `${why.length} / 300 caractères` : "Facultatif. Il s'affiche sur ton objectif pour te motiver."}
+                  >
                     <label className="flex items-center px-4 py-3 min-h-[48px] cursor-text transition-colors focus-within:bg-slate-200/50">
                       {/* Plusieurs lignes si besoin : la phrase reste lisible en entier */}
                       <textarea
                         ref={growWhy}
                         value={why}
                         onChange={(e) => setWhy(e.target.value.replace(/\n/g, ' '))}
-                        maxLength={120}
+                        maxLength={300}
                         rows={1}
                         placeholder="Pour aller au travail sans taxi-moto"
                         className="field-plain flex-1 min-w-0 resize-none overflow-hidden bg-transparent text-[15px] leading-snug text-slate-900 outline-none placeholder:text-slate-400"
@@ -1141,14 +1165,18 @@ const WalletSheet: React.FC<{
                   </Group>
 
                   <Group
-                    title="Pour t'aider"
+                    title="Pour y arriver plus facilement"
                     hint={
-                      remindOn
-                        ? "Une notification ce jour-là, si tu n'as pas encore mis ce montant dans la semaine."
-                        : 'Petite monnaie : chaque dépense est arrondie (4 300 FC → 5 000 FC) et Wallo te propose chaque semaine de verser la différence ici.'
+                      remindOn && roundUp
+                        ? "Tu reçois un rappel le jour choisi, et Wallo te propose chaque semaine de mettre ici la différence des arrondis."
+                        : remindOn
+                          ? "Tu reçois un rappel le jour choisi, si tu n'as pas encore mis ce montant dans la semaine."
+                          : roundUp
+                            ? 'Chaque dépense est arrondie (4 300 FC → 5 000 FC) et Wallo te propose chaque semaine de mettre la différence ici.'
+                            : "Facultatif : un rappel chaque semaine, ou l'arrondi de tes dépenses mis de côté."
                     }
                   >
-                    <SwitchRow label="Rappel chaque semaine" checked={remindOn} onChange={setRemindOn} />
+                    <SwitchRow label="Me rappeler chaque semaine" checked={remindOn} onChange={setRemindOn} />
                     {remindOn && (
                       <>
                         <div className="grid grid-cols-7 gap-1 px-3 py-2.5 animate-fade-in">
@@ -1165,16 +1193,16 @@ const WalletSheet: React.FC<{
                             </button>
                           ))}
                         </div>
-                        <InputRow label="Montant à mettre" value={remindAmount} onChange={setRemindAmount} placeholder="10" suffix={currency} numeric />
+                        <InputRow label="Combien mettre" value={remindAmount} onChange={setRemindAmount} placeholder="10" suffix={currency} numeric />
                       </>
                     )}
-                    <SwitchRow label="Épargner la petite monnaie" checked={roundUp} onChange={setRoundUp} />
+                    <SwitchRow label="Arrondir mes dépenses" checked={roundUp} onChange={setRoundUp} />
                   </Group>
                 </>
               )}
 
               <Group hint={include ? 'Son argent compte dans « Ton solde » sur l\'accueil.' : 'Son argent ne compte pas dans « Ton solde » sur l\'accueil.'}>
-                <SwitchRow label="Inclure dans le total" checked={include} onChange={setInclude} />
+                <SwitchRow label="Compter dans mon solde" checked={include} onChange={setInclude} />
               </Group>
             </div>
 
@@ -1209,7 +1237,7 @@ const WalletSheet: React.FC<{
                 }
                 className="w-full py-3.5 rounded-2xl bg-accent hover:bg-accent-hover disabled:opacity-40 font-bold text-[15px] cursor-pointer transition active:scale-[0.98]"
               >
-                {wallet ? 'Enregistrer' : 'Créer le portefeuille'}
+                {wallet ? 'Enregistrer' : kind === 'goal' ? "Créer l'objectif" : 'Créer le portefeuille'}
               </button>
             </div>
           </>
@@ -1325,7 +1353,7 @@ const ChallengeLine: React.FC<{ wallet: Wallet; className?: string }> = ({ walle
 // « Pourquoi cet objectif ? » : rappelé en citation
 const GoalWhy: React.FC<{ wallet: Wallet; className?: string }> = ({ wallet: w, className = '' }) =>
   w.goalWhy?.trim() ? (
-    <p className={`flex items-start gap-2 text-[13px] italic text-slate-600 ${className}`}>
+    <p className={`flex items-start gap-2 text-[12.5px] leading-snug italic text-slate-500 ${className}`}>
       <Quote className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400 not-italic" />
       <span className="min-w-0">{w.goalWhy.trim()}</span>
     </p>
@@ -1879,26 +1907,29 @@ const GoalCard: React.FC<{
           >
             {savedText}
           </div>
-          <div className="mt-1.5 text-[13px] text-slate-500 tabular-nums">
-            sur {roundMoney(w.goalAmount, w.currency)}
-            {g.left > 0 && <> · <span className="whitespace-nowrap">reste {roundMoney(g.left, w.currency)}</span></>}
+          <div className="mt-1.5 text-[12px] text-slate-400 tabular-nums">sur {roundMoney(w.goalAmount, w.currency)}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 empty:hidden">
+            {g.left > 0 && (
+              <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[12px] font-semibold whitespace-nowrap tabular-nums bg-sky-500/10 text-sky-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                reste {roundMoney(g.left, w.currency)}
+              </span>
+            )}
+            <GoalStatusPill wallet={w} insight={g} />
+            <GoalStreakPill wallet={w} transactions={transactions} />
           </div>
           <GoalBalanceNote wallet={w} transactions={transactions} className="mt-1.5" />
         </div>
         <GoalRing ratio={g.ratio} />
       </div>
       <ChallengeLine wallet={w} className="mt-3" />
-      <GoalWhy wallet={w} className="mt-3" />
+      <GoalWhy wallet={w} className="mt-3 [&>span]:line-clamp-2" />
       {equivalence && (
-        <p className="mt-3 flex items-start gap-2 text-[13px] text-slate-600">
-          <Lightbulb className="w-4 h-4 shrink-0 mt-px text-amber-500" />
+        <p className="mt-3 flex items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-slate-600">
+          <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-px text-amber-500" />
           <span className="min-w-0">Tu as déjà épargné {equivalence}.</span>
         </p>
       )}
-      <div className="mt-4 flex flex-wrap gap-1.5 empty:hidden">
-        <GoalStatusPill wallet={w} insight={g} />
-        <GoalStreakPill wallet={w} transactions={transactions} />
-      </div>
       <GoalActions wallet={w} wallets={wallets} transactions={transactions} spending={spending} settings={settings} onDeposit={onDeposit} />
       {!fixedPace(w) && <GoalPace wallet={w} insight={g} />}
       {g.left > 0 && (
@@ -2123,7 +2154,7 @@ const WalletDetail: React.FC<{
               {w.archived && <span className="px-2 py-0.5 rounded-full bg-black/20">Archivé</span>}
               {!w.includeInTotal && <span className="px-2 py-0.5 rounded-full bg-black/20">Exclu du total</span>}
             </div>
-            <div className="text-[32px] font-extrabold tabular-nums tracking-tight mt-2">{money(balance)}</div>
+            <div className="text-[32px] font-extrabold tabular-nums tracking-tight mt-2"><SecretMoney text={money(balance)} /></div>
             <div className="text-xs opacity-90">{kind === 'credit' ? 'Solde (négatif = ce que tu dois)' : 'Solde actuel'}</div>
           </div>
 
@@ -2462,6 +2493,9 @@ const WalletPicker: React.FC<{
   balanceOf: (w: Wallet) => number;
 }> = ({ label, wallets, value, open, onToggle, onChange, balanceOf }) => {
   const w = wallets.find((x) => x.id === value);
+  const [q, setQ] = useState('');
+  const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const list = q.trim() ? wallets.filter((x) => norm(`${x.name} ${x.currency}`).includes(norm(q.trim()))) : wallets;
   return (
     <div>
       <button
@@ -2475,26 +2509,53 @@ const WalletPicker: React.FC<{
           <span className="block text-[12px] font-semibold text-slate-500">{label}</span>
           <span className="block text-sm font-bold text-slate-900 truncate">{w?.name ?? 'Choisir un portefeuille'}</span>
         </span>
-        {w && <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-500">{formatMoney(balanceOf(w), w.currency)}</span>}
+        {w && <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-500"><SecretMoney text={formatMoney(balanceOf(w), w.currency)} /></span>}
         <ChevronDown className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="mt-1.5 max-h-64 overflow-y-auto rounded-2xl border border-slate-100 divide-y divide-slate-100 animate-fade-in">
-          {wallets.map((x) => (
-            <button
-              key={x.id}
-              type="button"
-              onClick={() => {
-                haptic();
-                onChange(x.id);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left cursor-pointer ${x.id === value ? 'is-selected' : 'hover:bg-slate-50'}`}
-            >
-              <IconBadge icon={x.icon} image={x.image} color={x.color} size="sm" />
-              <span className="flex-1 min-w-0 text-sm font-semibold text-slate-900 truncate">{x.name}</span>
-              <span className="shrink-0 text-xs tabular-nums text-slate-500">{formatMoney(balanceOf(x), x.currency)}</span>
-            </button>
-          ))}
+        <div className="mt-2 rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden animate-fade-in">
+          {/* Beaucoup de portefeuilles : une recherche en haut */}
+          {wallets.length > 5 && (
+            <label className="flex items-center gap-2 px-3.5 h-11 border-b border-slate-100">
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Chercher"
+                aria-label="Chercher un portefeuille"
+                className="flex-1 min-w-0 bg-transparent text-[15px] text-slate-900 placeholder:text-slate-400 outline-none field-plain"
+              />
+            </label>
+          )}
+          <div className="relative">
+            <div className="max-h-[17.5rem] overflow-y-auto divide-y divide-slate-100 pb-2">
+              {list.map((x) => {
+                const bal = balanceOf(x);
+                const on = x.id === value;
+                return (
+                  <button
+                    key={x.id}
+                    type="button"
+                    onClick={() => {
+                      haptic();
+                      onChange(x.id);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left cursor-pointer transition-colors ${on ? 'bg-slate-100' : 'hover:bg-slate-50 active:bg-slate-100'}`}
+                  >
+                    <IconBadge icon={x.icon} image={x.image} color={x.color} size="sm" />
+                    <span className={`flex-1 min-w-0 text-[15px] truncate text-slate-900 ${on ? 'font-bold' : 'font-semibold'}`}>{x.name}</span>
+                    <span className={`shrink-0 text-[13px] font-semibold tabular-nums ${bal < 0 ? 'text-red-500' : 'text-slate-500'}`}>
+                      <SecretMoney text={formatMoney(bal, x.currency)} />
+                    </span>
+                    <span className="w-4 shrink-0">{on && <Check className="w-4 h-4 text-emerald-600 stroke-[2.8]" />}</span>
+                  </button>
+                );
+              })}
+              {list.length === 0 && <p className="px-4 py-5 text-center text-[14px] text-slate-400">Aucun portefeuille trouvé.</p>}
+            </div>
+            {/* Un léger fondu en bas : la liste continue */}
+            {list.length > 5 && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-white to-transparent" />}
+          </div>
         </div>
       )}
     </div>
@@ -2590,60 +2651,90 @@ const TransferSheet: React.FC<{
         balanceOf={balanceOf}
       />
 
-      <label className="block mt-3 text-xs font-semibold text-slate-500">Montant envoyé {from && `(${from.currency})`}</label>
-      {/* Curseur direct dans le montant seulement avec souris/clavier : sur téléphone, le clavier ferait
-          défiler la fenêtre jusqu'ici et cacherait « Depuis » (on doit arriver en haut) */}
-      <input autoFocus={FINE_POINTER} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className={amountCls} />
+      {/* Le montant en grand : c'est la seule chose à taper */}
+      <div className="mt-5 mb-4 flex items-baseline justify-center gap-2">
+        {/* Curseur direct dans le montant seulement avec souris/clavier : sur téléphone, le clavier ferait
+            défiler la fenêtre jusqu'ici et cacherait « Depuis » (on doit arriver en haut) */}
+        <input
+          autoFocus={FINE_POINTER}
+          inputMode="decimal"
+          aria-label={`Montant envoyé${from ? ` en ${from.currency}` : ''}`}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="0"
+          style={{ width: `${Math.max(1, amount.length) + 0.5}ch` }}
+          className="max-w-[70%] bg-transparent text-center text-[44px] leading-none font-extrabold tracking-tight tabular-nums text-slate-900 placeholder:text-slate-300 outline-none field-plain"
+        />
+        {from && <span className="text-[15px] font-bold text-slate-400">{from.currency}</span>}
+      </div>
 
-      {from && to && !sameCurrency && (
-        <>
-          <label className="block mt-3 text-xs font-semibold text-slate-500">Montant reçu ({to.currency})</label>
+      {/* Le reste, en lignes courtes */}
+      <div className="rounded-2xl bg-slate-100 divide-y divide-slate-200/70 overflow-hidden">
+        {from && to && !sameCurrency && (
+          <label className="flex items-center gap-3 px-4 min-h-[50px] cursor-text focus-within:bg-slate-200/50 transition-colors">
+            <span className="text-[15px] text-slate-900 shrink-0">Reçu</span>
+            <input
+              inputMode="decimal"
+              aria-label={`Montant reçu en ${to.currency}`}
+              value={received}
+              onChange={(e) => setReceived(e.target.value)}
+              placeholder={auto !== null ? String(Math.round(auto * 100) / 100) : '—'}
+              className="flex-1 min-w-0 bg-transparent text-right text-[15px] font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 outline-none field-plain"
+            />
+            <span className="text-[13px] font-semibold text-slate-400 w-9 shrink-0">{to.currency}</span>
+          </label>
+        )}
+        <label className="flex items-center gap-3 px-4 min-h-[50px] cursor-text focus-within:bg-slate-200/50 transition-colors">
+          <span className="text-[15px] text-slate-900 shrink-0">Frais de transfert</span>
           <input
             inputMode="decimal"
-            value={received}
-            onChange={(e) => setReceived(e.target.value)}
-            placeholder={auto !== null ? String(Math.round(auto * 100) / 100) : 'Taux manquant : saisis le montant reçu'}
-            className={amountCls}
+            aria-label="Frais de transfert"
+            value={feeText}
+            onChange={(e) => setFeeText(e.target.value)}
+            placeholder="0"
+            className="flex-1 min-w-0 bg-transparent text-right text-[15px] font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 outline-none field-plain"
           />
-          <p className="text-xs text-slate-400 mt-1">Rempli automatiquement avec ton taux. Corrige-le si le taux réel est différent.</p>
-        </>
-      )}
-
-      <label className="block mt-3 text-xs font-semibold text-slate-500">Frais de transaction {from && `(${from.currency})`} — facultatif</label>
-      <input
-        inputMode="decimal"
-        value={feeText}
-        onChange={(e) => setFeeText(e.target.value)}
-        placeholder="0 (ex. frais Mobile Money)"
-        className="w-full mt-1 px-4 py-2.5 rounded-2xl bg-slate-100 text-sm font-semibold outline-none focus:ring-2 focus:ring-accent tabular-nums"
-      />
-      {from && value > 0 && fee > 0 && feeOk && (
-        <p className="text-xs text-slate-500 mt-1">
-          Total retiré de {from.name} : <b>{formatMoney(value + fee, from.currency)}</b> ({formatMoney(value, from.currency)} + {formatMoney(fee, from.currency)} de
-          frais, comptés comme une dépense).
+          <span className="text-[13px] font-semibold text-slate-400 w-9 shrink-0">{from?.currency}</span>
+        </label>
+        <label className="flex items-center gap-3 px-4 min-h-[50px] cursor-text focus-within:bg-slate-200/50 transition-colors">
+          <span className="text-[15px] text-slate-900 shrink-0">Note</span>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            aria-label="Note"
+            placeholder="Facultatif"
+            className="flex-1 min-w-0 bg-transparent text-right text-[15px] text-slate-900 placeholder:text-slate-400 outline-none field-plain"
+          />
+        </label>
+      </div>
+      {/* Taux : une courte ligne seulement quand elle sert */}
+      {from && to && !sameCurrency && value > 0 && (
+        <p className={`text-[12px] mt-1.5 px-4 ${auto === null && !received ? 'text-amber-600' : 'text-slate-400'}`}>
+          {auto === null && !received ? 'Taux manquant : tape le montant reçu.' : received ? (
+            <button type="button" onClick={() => setReceived('')} className="font-semibold text-slate-500 underline underline-offset-2 cursor-pointer">
+              Revenir au taux automatique
+            </button>
+          ) : (
+            'Au taux de tes Paramètres'
+          )}
         </p>
       )}
 
-      <input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Note (facultatif)"
-        className="w-full mt-3 px-4 py-2.5 rounded-2xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent"
-      />
+      <DateField value={day} onChange={(d) => setDay(d || localDay(new Date()))} shortcuts="past" label="Date du transfert" className="mt-3" />
 
-      <label className="block mt-3 text-xs font-semibold text-slate-500">Date du transfert</label>
-      <DateField value={day} onChange={(d) => setDay(d || localDay(new Date()))} shortcuts="past" label="Date du transfert" className="mt-1" />
-
-      {from && value + (feeOk ? fee : 0) > balanceOf(from) && from.kind !== 'credit' && (
-        <p className="text-xs text-amber-600 mt-2">Attention : c'est plus que le solde de {from.name}.</p>
+      {from && fee > 0 && feeOk && value > 0 && (
+        <p className="text-[13px] text-slate-500 mt-3 px-1">
+          Total retiré : <b className="text-slate-700">{formatMoney(value + fee, from.currency)}</b>
+        </p>
       )}
+      {from && value + (feeOk ? fee : 0) > balanceOf(from) && from.kind !== 'credit' && <p className="text-[13px] text-amber-600 mt-2 px-1">Plus que le solde disponible.</p>}
 
       <button
         disabled={!valid}
         onClick={() => onConfirm(fromId, toId, value, Math.round(toValue * 100) / 100, note.trim(), fee, dayToIso(day))}
-        className="w-full mt-4 py-3.5 rounded-2xl bg-accent disabled:bg-slate-100 disabled:text-slate-400 text-slate-900 font-bold text-sm cursor-pointer disabled:cursor-default"
+        className="w-full mt-4 h-12 rounded-2xl bg-accent hover:bg-accent-hover disabled:bg-slate-100 disabled:text-slate-400 text-slate-900 font-bold text-[15px] cursor-pointer disabled:cursor-default active:scale-[0.98] transition"
       >
-        {valid && from && to ? `Transférer ${formatMoney(value, from.currency)} vers ${to.name}` : 'Choisis les portefeuilles et le montant'}
+        {valid && from ? `Transférer ${formatMoney(value, from.currency)}` : from && to ? 'Saisis un montant' : 'Choisis les portefeuilles'}
       </button>
     </Sheet>
   );

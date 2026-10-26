@@ -128,7 +128,7 @@ export function smartTips(args: {
     if (bal >= -0.004) continue;
     tips.push({
       title: `« ${w.name} » est en négatif`,
-      text: `Le portefeuille « ${w.name} » affiche ${inCur(bal, w.currency)}. Une entrée oubliée ? Ajoute-la, ou corrige le solde.`,
+      text: `« ${w.name} » affiche ${inCur(bal, w.currency)}. Une entrée oubliée ?`,
       part: 'check',
       why: 'De l’argent liquide ou du Mobile Money ne peut pas descendre sous zéro : un solde négatif veut souvent dire qu’une opération manque, et tous tes chiffres sont faussés.',
       action: { label: 'Corriger le solde', page: 'wallets', jump: { kind: 'wallet', id: w.id, adjust: true } },

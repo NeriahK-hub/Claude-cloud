@@ -33,11 +33,30 @@ export function rangeText(r: { start: Date; end: Date }) {
   return `${formatDate(r.start, true)} – ${formatDate(new Date(r.end.getTime() - 86400000), true)}`;
 }
 
-// La dépense compte pour le budget si sa catégorie est celle du budget ou une de ses sous-catégories
+// Nom « nu » d'une catégorie : « Facture d'Internet », « Factures › Internet » et « Internet » désignent la même chose
+const nameKey = (name: string) =>
+  name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/^factures?\s+(d'|de la |de l'|du |des |de )?/, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+// Une dépense compte pour le budget si sa catégorie est celle du budget, une de ses sous-catégories,
+// ou une catégorie qui porte le même nom (doublon : « Facture d'Internet » et « Internet »)
+export function matchesCategory(budgetCategoryId: string | null, categoryId: string | undefined, categories: Category[]) {
+  if (budgetCategoryId === null) return true;
+  if (categoryId === budgetCategoryId) return true;
+  const c = categories.find((x) => x.id === categoryId);
+  if (!c) return false;
+  if (c.parentId === budgetCategoryId) return true;
+  const b = categories.find((x) => x.id === budgetCategoryId);
+  return !!b && c.type === b.type && nameKey(c.name) !== '' && nameKey(c.name) === nameKey(b.name);
+}
+
 function matches(b: Budget, t: Transaction, categories: Category[]) {
-  if (b.categoryId === null) return true;
-  if (t.categoryId === b.categoryId) return true;
-  return categories.find((c) => c.id === t.categoryId)?.parentId === b.categoryId;
+  return matchesCategory(b.categoryId, t.categoryId, categories);
 }
 
 export interface BudgetStatus {

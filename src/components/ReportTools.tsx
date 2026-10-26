@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, ArrowLeftRight, Search, FileText, ChevronRight, ChevronLeft, X, Check, TrendingUp, TrendingDown, Loader2, Lightbulb, Flame, Coins, Equal, ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, PiggyBank, CalendarRange, Sparkles, Clock, Repeat } from 'lucide-react';
+import { CalendarDays, ArrowLeftRight, Search, FileText, ChevronRight, ChevronLeft, X, Check, TrendingUp, TrendingDown, Loader2, Lightbulb, Flame, Coins, Equal, ArrowUp, ArrowDown, ArrowDownLeft, ArrowUpRight, PiggyBank, Target, CalendarRange, Sparkles, Clock, FileSpreadsheet } from 'lucide-react';
 import { Budget, Recurring, Settings, Transaction, Wallet } from '../types';
-import { SmallTool, SubsTool, WeekTool, WhenTool, YearTool } from './MoneyReviews';
+import { SmallTool, WeekTool, WhenTool, YearTool } from './MoneyReviews';
+import { LivingTool } from './LivingTool';
+import { BalanceCurveTool, WhatIfTool } from './BalanceTools';
+import { exportExcel } from '../lib/importExport';
 import { track } from '../lib/usage';
 import { Category } from '../data/categories';
 import { formatMoney, toMain } from '../lib/money';
@@ -15,10 +18,12 @@ import { TransactionItem } from './TransactionItem';
 import { Amount, splitMoney } from './MoneyText';
 import type { Page } from './BottomNav';
 
-// Outils du Rapport : bilans, « Mes habitudes » (ce qui revient, quand, petites dépenses),
+// Outils du Rapport : « Mes bilans » (semaine, année, habitudes au même endroit),
 // calendrier des dépenses, comparer deux mois, rapport PDF.
+// (Les abonnements repérés sont dans « À venir ».)
 
-type Tool = 'calendar' | 'compare' | 'habits' | 'pdf' | 'week' | 'year' | 'subs';
+type Tool = 'understand' | 'evolution' | 'share';
+type UnderstandTab = 'week' | 'year' | 'habits' | 'compare' | 'calendar';
 type HabitTab = 'what' | 'when' | 'small';
 
 export interface ReportPdfData {
@@ -43,27 +48,20 @@ export const ReportTools: React.FC<{
   pdf: ReportPdfData;
   onSelectTransaction: (tx: Transaction) => void;
   onNavigate?: (page: Page) => void;
-  recurrings?: Recurring[]; // pour reconnaître les abonnements déjà dans « À venir »
+  recurrings?: Recurring[];
 }> = (props) => {
   const [tool, setTool] = useState<Tool | null>(null);
   type Row = { id: Tool; title: string; sub: string; Icon: typeof CalendarDays; color: string };
-  // Comprendre son argent : bilans et analyses
-  const understand: Row[] = [
-    { id: 'week', title: 'Bilan de la semaine', sub: 'Ta semaine en chiffres, ton jour le plus cher', Icon: CalendarRange, color: '#10B981' },
-    { id: 'year', title: 'Bilan de l\u2019année', sub: 'Ton année en résumé, à partager', Icon: Sparkles, color: '#EC4899' },
-    { id: 'habits', title: 'Mes habitudes', sub: 'Ce qui revient, quand, et les petites dépenses', Icon: Search, color: '#F59E0B' },
-    { id: 'subs', title: 'Abonnements repérés', sub: 'Ce qui revient chaque mois', Icon: Repeat, color: '#14B8A6' },
-  ];
+  // Trois entrées seulement : on comprend, on regarde l'évolution, on partage
   const rows: Row[] = [
-    { id: 'calendar', title: 'Calendrier des dépenses', sub: 'Jour par jour, les jours qui coûtent cher', Icon: CalendarDays, color: '#0EA5E9' },
-    { id: 'compare', title: 'Comparer deux mois', sub: 'Ce qui a augmenté, ce qui a baissé', Icon: ArrowLeftRight, color: '#8B5CF6' },
-    { id: 'pdf', title: 'Rapport PDF', sub: 'À imprimer ou à envoyer', Icon: FileText, color: '#EF4444' },
+    { id: 'understand', title: 'Comprendre', sub: 'Bilans, habitudes, comparer deux mois, calendrier', Icon: Sparkles, color: '#EC4899' },
+    { id: 'evolution', title: 'Évolution', sub: 'Ton solde sur 12 mois, et si tu dépensais moins', Icon: TrendingUp, color: '#6366F1' },
+    { id: 'share', title: 'Partager', sub: 'Rapport PDF, export Excel', Icon: FileText, color: '#EF4444' },
   ];
-  const all = [...understand, ...rows];
   const list = (title: string, items: Row[]) => (
     <>
       <h3 className="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-2 mt-1 px-1">{title}</h3>
-      <div data-coach={title === 'Comprendre mon argent' ? 'insights' : undefined} className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100 mb-4">
+      <div data-coach="insights" className="bg-white rounded-3xl border border-slate-100 overflow-hidden divide-y divide-slate-100 mb-4">
         {items.map((r) => (
           <button key={r.id} onClick={() => { track(`tool.${r.id}`); setTool(r.id); }} className="w-full flex items-center gap-3 px-4 py-3.5 text-left cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors">
             <span className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0" style={{ background: `${r.color}1f`, color: r.color }}>
@@ -81,42 +79,146 @@ export const ReportTools: React.FC<{
   );
   return (
     <>
-      {list('Comprendre mon argent', understand)}
-      {list('Outils', rows)}
+      {list('Mon argent en clair', rows)}
       {tool && (
-        <ToolSheet onClose={() => setTool(null)} title={all.find((r) => r.id === tool)!.title}>
-          {tool === 'week' && <WeekTool txs={props.txs} settings={props.settings} categories={props.categories} />}
-          {tool === 'year' && <YearTool txs={props.txs} settings={props.settings} categories={props.categories} />}
-          {tool === 'subs' && (
-            <SubsTool
-              txs={props.txs}
-              settings={props.settings}
-              categories={props.categories}
-              recurrings={props.recurrings ?? []}
-              onNavigate={props.onNavigate ? (p) => { setTool(null); props.onNavigate!(p); } : undefined}
-            />
-          )}
-          {tool === 'calendar' && <CalendarTool {...props} />}
-          {tool === 'compare' && <CompareTool {...props} />}
-          {tool === 'habits' && <HabitsHub {...props} onClose={() => setTool(null)} />}
-          {tool === 'pdf' && <PdfTool {...props} />}
+        <ToolSheet onClose={() => setTool(null)} title={rows.find((r) => r.id === tool)!.title}>
+          {tool === 'understand' && <UnderstandHub {...props} onClose={() => setTool(null)} />}
+          {tool === 'evolution' && <EvolutionHub {...props} />}
+          {tool === 'share' && <ShareHub {...props} />}
         </ToolSheet>
       )}
     </>
   );
 };
 
-// « Mes habitudes » : trois façons de voir où part l'argent, au même endroit
-const HABIT_TABS: { id: HabitTab; label: string; Icon: typeof Search }[] = [
-  { id: 'what', label: 'Souvent', Icon: Search },
-  { id: 'when', label: 'Quand', Icon: Clock },
-  { id: 'small', label: 'Petites', Icon: Coins },
+// Une rangée d'onglets : pastilles qui défilent quand il y en a beaucoup, contrôle segmenté sinon
+function Tabs<T extends string>({ items, value, onChange }: { items: { id: T; label: string; Icon: typeof Search }[]; value: T; onChange: (id: T) => void }) {
+  const scroll = items.length > 3;
+  return (
+    <div role="tablist" className={scroll ? 'flex gap-1.5 overflow-x-auto no-scrollbar -mx-5 px-5 mb-4' : 'flex gap-1 p-1 rounded-full bg-slate-100 mb-4'}>
+      {items.map(({ id, label, Icon }) => (
+        <button
+          key={id}
+          role="tab"
+          aria-selected={value === id}
+          onClick={() => {
+            track(`tool.${id}`);
+            onChange(id);
+          }}
+          className={
+            scroll
+              ? `shrink-0 h-9 px-3.5 rounded-full flex items-center gap-1.5 text-[13px] font-semibold cursor-pointer transition ${value === id ? 'is-selected' : 'bg-slate-100 text-slate-600'}`
+              : `flex-1 min-w-0 h-9 rounded-full flex items-center justify-center gap-1.5 text-[13px] font-semibold cursor-pointer transition ${value === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`
+          }
+        >
+          <Icon className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// « Comprendre » : la semaine, l'année, les habitudes, comparer deux mois et le calendrier, au même endroit
+const UNDERSTAND_TABS: { id: UnderstandTab; label: string; Icon: typeof Search }[] = [
+  { id: 'week', label: 'Semaine', Icon: CalendarRange },
+  { id: 'year', label: 'Année', Icon: Sparkles },
+  { id: 'habits', label: 'Habitudes', Icon: Search },
+  { id: 'compare', label: 'Comparer', Icon: ArrowLeftRight },
+  { id: 'calendar', label: 'Calendrier', Icon: CalendarDays },
+];
+const UnderstandHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClose: () => void }> = (props) => {
+  const [tab, setTab] = useState<UnderstandTab>('week');
+  return (
+    <>
+      <Tabs items={UNDERSTAND_TABS} value={tab} onChange={setTab} />
+      <div key={tab} className="animate-fade-in">
+        {tab === 'week' && <WeekTool txs={props.txs} settings={props.settings} categories={props.categories} />}
+        {tab === 'year' && <YearTool txs={props.txs} settings={props.settings} categories={props.categories} />}
+        {tab === 'habits' && <HabitsHub {...props} />}
+        {tab === 'compare' && <CompareTool {...props} />}
+        {tab === 'calendar' && <CalendarTool {...props} />}
+      </div>
+    </>
+  );
+};
+
+// « Évolution » : le solde sur 12 mois, et ce que donnerait une dépense en moins
+const EVOLUTION_TABS: { id: 'balance' | 'whatif' | 'living'; label: string; Icon: typeof Search }[] = [
+  { id: 'balance', label: 'Mon solde', Icon: TrendingUp },
+  { id: 'whatif', label: 'Et si…', Icon: PiggyBank },
+  { id: 'living', label: 'Pour vivre', Icon: Target },
+];
+const EvolutionHub: React.FC<React.ComponentProps<typeof ReportTools>> = (props) => {
+  const [tab, setTab] = useState<'balance' | 'whatif' | 'living'>('balance');
+  return (
+    <>
+      <Tabs items={EVOLUTION_TABS} value={tab} onChange={setTab} />
+      <div key={tab} className="animate-fade-in">
+        {tab === 'balance' && <BalanceCurveTool wallets={props.wallets} allTransactions={props.allTransactions} settings={props.settings} />}
+        {tab === 'whatif' && <WhatIfTool allTransactions={props.allTransactions} categories={props.categories} settings={props.settings} />}
+        {tab === 'living' && <LivingTool allTransactions={props.allTransactions} categories={props.categories} settings={props.settings} recurrings={props.recurrings} />}
+      </div>
+    </>
+  );
+};
+
+// « Partager » : le rapport en PDF, ou toutes les opérations en Excel
+const SHARE_TABS: { id: 'pdf' | 'excel'; label: string; Icon: typeof Search }[] = [
+  { id: 'pdf', label: 'PDF', Icon: FileText },
+  { id: 'excel', label: 'Excel', Icon: FileSpreadsheet },
+];
+const ExcelTool: React.FC<React.ComponentProps<typeof ReportTools>> = ({ wallets, allTransactions, settings }) => {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div>
+      <div className="rounded-3xl bg-slate-100 p-5 text-center">
+        <span className="w-14 h-14 mx-auto rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-3">
+          <FileSpreadsheet className="w-7 h-7 text-emerald-600" />
+        </span>
+        <p className="text-[15px] font-semibold text-slate-900">Toutes tes opérations dans un fichier Excel</p>
+        <p className="text-[13px] text-slate-500 mt-1 max-w-[290px] mx-auto">{allTransactions.length} opération{allTransactions.length > 1 ? 's' : ''}, au format Money Lover : tu peux le rouvrir ici ou ailleurs.</p>
+      </div>
+      <button
+        disabled={busy || allTransactions.length === 0}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await exportExcel({ wallets, transactions: allTransactions, settings });
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="mt-4 w-full h-12 rounded-2xl bg-accent hover:bg-accent-hover disabled:opacity-40 text-[15px] font-bold flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition"
+      >
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Exporter en Excel
+      </button>
+    </div>
+  );
+};
+const ShareHub: React.FC<React.ComponentProps<typeof ReportTools>> = (props) => {
+  const [tab, setTab] = useState<'pdf' | 'excel'>('pdf');
+  return (
+    <>
+      <Tabs items={SHARE_TABS} value={tab} onChange={setTab} />
+      <div key={tab} className="animate-fade-in">
+        {tab === 'pdf' ? <PdfTool {...props} /> : <ExcelTool {...props} />}
+      </div>
+    </>
+  );
+};
+
+// « Habitudes » : trois façons de voir où part l'argent, chacune avec une phrase qui dit à quoi elle sert
+const HABIT_TABS: { id: HabitTab; label: string; hint: string; Icon: typeof Search }[] = [
+  { id: 'what', label: 'Fréquents', hint: 'Tes achats les plus répétés ces 30 derniers jours.', Icon: Search },
+  { id: 'when', label: 'Jour / heure', hint: 'Quand tu dépenses le plus (3 derniers mois).', Icon: Clock },
+  { id: 'small', label: 'Petits achats', hint: 'Les petits achats du quotidien (30 derniers jours).', Icon: Coins },
 ];
 const HabitsHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClose: () => void }> = (props) => {
   const [tab, setTab] = useState<HabitTab>('what');
   return (
     <>
-      <div role="tablist" className="flex gap-1 p-1 rounded-full bg-slate-100 mb-4">
+      <div role="tablist" className="flex gap-1 p-1 rounded-full bg-slate-100 mb-2">
         {HABIT_TABS.map(({ id, label, Icon }) => (
           <button
             key={id}
@@ -135,6 +237,7 @@ const HabitsHub: React.FC<React.ComponentProps<typeof ReportTools> & { onClose: 
           </button>
         ))}
       </div>
+      <p className="text-[13px] text-slate-500 mb-4 px-1 leading-snug">{HABIT_TABS.find((t) => t.id === tab)!.hint}</p>
       <div key={tab} className="animate-fade-in">
         {tab === 'what' && <HabitsTool {...props} />}
         {tab === 'when' && <WhenTool txs={props.txs} settings={props.settings} />}
@@ -527,8 +630,6 @@ const HabitsTool: React.FC<React.ComponentProps<typeof ReportTools> & { onClose:
   const medal = ['#F59E0B', '#94A3B8', '#B45309'];
   return (
     <div>
-      <p className="text-[14px] text-slate-500 mb-4 leading-snug">Sur les 30 derniers jours, les dépenses qui reviennent le plus souvent, et ce qu'elles coûtent sur une année.</p>
-
       {h.top.length === 0 ? (
         <div className="rounded-2xl bg-slate-100 p-5 text-center">
           <Coins className="w-8 h-8 text-slate-400 mx-auto mb-2" />
@@ -565,10 +666,15 @@ const HabitsTool: React.FC<React.ComponentProps<typeof ReportTools> & { onClose:
                   <Amount text={round(x.yearly)} size="lg" prefix="≈" tone="#EF4444" />
                 </div>
               </div>
-              <p className="mt-3 text-[13px] text-slate-600 leading-snug flex gap-2 [text-wrap:pretty]">
-                <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                En dépensant 25 % de moins ici, tu garderais ≈ {round(x.yearly * 0.25)} par an.
+              <p className="mt-2 text-[12px] text-slate-500 text-center tabular-nums">
+                Sur 5 ans : <b className="text-slate-700">≈ {round(x.yearly * 5)}</b>
               </p>
+              {i === 0 && (
+                <p className="mt-3 text-[13px] text-slate-600 leading-snug flex gap-2 [text-wrap:pretty]">
+                  <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  25 % de moins ici = ≈ {round(x.yearly * 0.25)} gardés par an.
+                </p>
+              )}
             </div>
           ))}
         </div>

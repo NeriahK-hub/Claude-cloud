@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { deviceKey, deviceName, DeviceRow } from '../devices';
 import { cloudConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from '../config';
 import { idsOf, keepLocalEdits, migrateIds, runSync, SyncMeta, SyncPatch } from './engine';
 import type { SyncData } from './mapping';
@@ -186,6 +187,7 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
       p.wallets?.upsert.forEach((w) => w.members?.forEach((m) => known.current!.add(m.id)));
       p.ristournes?.upsert.forEach((r) => [...r.members, ...r.payments].forEach((x) => known.current!.add(x.id)));
       p.debtShares?.upsert.forEach((s) => s.moves.forEach((m) => known.current!.add(m.id)));
+      if (res.heal) again.current = true; // une opération manquait d'un côté : on répare tout de suite
       writeMeta(res.meta);
       if (refetch) refetchShared.current = false;
       // Réglages de l'appareil (thème, couleur, affichage…) : gardés aussi dans le compte
@@ -394,6 +396,46 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
     setStatus('signed-out');
   };
 
+  // ---------- Appareils connectés ----------
+  // Cet appareil se déclare (au plus une fois par 20 minutes) ; la liste vient du compte.
+  const registerDevice = async () => {
+    try {
+      const last = Number(localStorage.getItem('ap.deviceSeen') ?? 0);
+      const name = deviceName();
+      // Le nom change tout de suite si l'appareil n'est plus décrit pareil (ex. mode mobile des outils du navigateur coupé)
+      if (Date.now() - last < 20 * 60_000 && localStorage.getItem('ap.deviceName') === name) return;
+      const sb = await getClient();
+      await sb.rpc('register_device', { p_key: deviceKey(), p_name: name });
+      localStorage.setItem('ap.deviceSeen', String(Date.now()));
+      localStorage.setItem('ap.deviceName', name);
+    } catch {
+      // pas grave : la liste d'appareils est un confort (migration pas encore passée, hors ligne…)
+    }
+  };
+  // Connecté : cet appareil apparaît dans la liste des appareils du compte
+  useEffect(() => {
+    if (user) void registerDevice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+  const listDevices = async (): Promise<DeviceRow[]> => {
+    await registerDevice();
+    const sb = await getClient();
+    const { data, error: e } = await sb.rpc('my_devices');
+    if (e) throw new Error(e.message);
+    return (data ?? []) as DeviceRow[];
+  };
+  const forgetDevice = async (id: string) => {
+    const sb = await getClient();
+    const { error: e } = await sb.rpc('forget_device', { p_id: id });
+    if (e) throw new Error(e.message);
+  };
+  // Tous les autres appareils sont déconnectés (celui-ci reste connecté)
+  const signOutOthers = async () => {
+    const sb = await getClient();
+    const { error: e } = await sb.auth.signOut({ scope: 'others' });
+    if (e) throw new Error(e.message);
+  };
+
   // ---------- Invitation par lien ----------
   const rpc = async <T>(fn: string, args: Record<string, unknown>): Promise<T> => {
     const sb = await getClient();
@@ -455,6 +497,11 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
     return info;
   };
   const declineDebt = (code: string) => rpc<DebtInviteInfo>('decline_debt', { invite_code: code });
+  // Renvoyer tel quel un mouvement refusé par l'autre (puis relire : la ligne a changé)
+  const resendDebtMove = async (moveId: string) => {
+    await rpc<void>('resend_debt_move', { p_move: moveId });
+    await sync();
+  };
   const joinWallet = async (code: string, name: string) => {
     const info = await rpc<InviteInfo>('join_wallet', { invite_code: code, member_name: name });
     if (info.status === 'joined') {
@@ -482,6 +529,9 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
     signInWithGoogle,
     signOut,
     deleteAccount,
+    listDevices,
+    forgetDevice,
+    signOutOthers,
     createInvite,
     revokeInvites,
     checkInvite,
@@ -495,6 +545,7 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
     checkDebtInvite,
     joinDebt,
     declineDebt,
+    resendDebtMove,
   };
 }
 

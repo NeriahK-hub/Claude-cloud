@@ -8,6 +8,8 @@ PWA de finances personnelles (ex-AetherPay) pour la RDC : portefeuilles, opérat
 - `npm run lint` : vérification TypeScript (`tsc --noEmit`) — à lancer avant chaque commit
 - `npm run build` / `npm run deploy` : construit puis publie sur Firebase Hosting (https://wallo-b13b0.web.app)
 - `npm run dev:admin` / `npm run deploy:admin` : espace admin (site séparé, dossier `admin/`, port 3001), voir `supabase/README.md`
+- `npm run assistant` : assistant « Demande à Wallo » (Profil) sur ton ordinateur : serveur local 127.0.0.1:8787 qui relaie les questions à Claude Code (`claude -p`) avec un code affiché au lancement (`scripts/assistant-bridge.mjs`, `src/lib/assistant.ts`). Usage personnel uniquement (abonnement Claude).
+- Version : `version` de `package.json`, plus le commit et la date du build, affichés en bas de Paramètres (`__APP_VERSION__`, rempli par `vite.config.ts` ; un « + » après le commit = construit avec des modifications non commitées). Monter la version à chaque mise en ligne notable et publier depuis `main`.
 - `npm run test:db` et `npm run test:sync` : tests de la base et de la synchro sur un PostgreSQL local (base `wallo_test`, voir `supabase/README.md`)
 
 ## Architecture
@@ -21,6 +23,9 @@ PWA de finances personnelles (ex-AetherPay) pour la RDC : portefeuilles, opérat
 - Retour haptique : automatique sur tout bouton / lien / `role="button"` (`installTapHaptics` dans `src/lib/haptics.ts`) ; `haptic()` seulement pour les gestes sans bouton ou un retour `'success'` / `'warning'`. Affichage des montants et dates : `formatMoney` / `formatDate` (préférences de `src/lib/display.ts`).
 
 - Notifications : `src/lib/notify.ts` (A : alertes de l'app montrées en notification système ; B : abonnement push). Push serveur : triggers de `supabase/migrations/20261009000000_push.sql` -> file `push_queue` -> Edge Function `supabase/functions/send-push` (pg_cron, `supabase/push_cron.sql`). Gestionnaires `push` / `notificationclick` dans `scripts/serviceWorker.ts`.
+- Accueil au choix : `src/lib/homeLayout.ts` (cartes, ordre, cachées ; Paramètres › Apparence › Accueil). Corbeille 30 jours + « Annuler » : `src/lib/trash.ts` (local, éléments rétablis avec un nouvel identifiant). Aide : `src/data/help.ts` + articles de l'admin via `app_config()` (`help`). Appareils connectés : `src/lib/devices.ts` + migration `20261021`.
+- Migrations récentes à exécuter à la main (dans l'ordre) : `20261019` (fréquence « toutes les N »), `20261020` (« à résilier »), `20261021` (appareils), `20261022` (aide admin), `20261023` (note d'une opération qui revient), `20261024` (accents des fonctionnalités de l'admin), `20261025` + `20261026` (Wallo Pro), `20261027` (fin d'une opération qui revient), `20261028` (dettes partagées : relances, confirmation après 7 jours, + étape 8 de `push_cron.sql`), `20261029` (dettes partagées : refuser sans effacer). L'app marche sans elles : les champs concernés ne sont envoyés que s'ils sont réglés.
+- Wallo Pro : offre cachée tant que l'admin n'allume pas la fonctionnalité `pro` ; liste gratuit/Pro (`pro_features`), accès donné par l'admin (`pro_access`, `my_pro()`), carte dans Profil (`src/components/ProOffer.tsx`, `src/lib/pro.ts`) ; aperçu local avec `?pro=apercu`. Rien n'est encore verrouillé ni payant. Écrire les textes français des migrations avec des codes `U&'\00E9'` : les copier-coller depuis un Mac abîment les accents.
 - Espace admin : fonctions `admin_*` et table fermée `admins` (`supabase/migrations/20261002000000_admin.sql`). L'app lit fonctionnalités / annonces / icônes via `app_config()` (`src/lib/remoteConfig.ts`, `useFeature('debts')`…), gardées pour le hors ligne.
 
 ## Règles

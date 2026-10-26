@@ -190,6 +190,12 @@ export interface Subscription {
   next: Date;
   yearly: number;
   known: boolean; // déjà dans « À venir »
+  change?: { from: number; to: number; at: string }; // le dernier paiement n'a pas le même prix que les précédents (devise principale)
+  // De quoi pré-remplir une opération qui revient (dernier paiement, dans sa devise d'origine)
+  walletId: string;
+  currency: string;
+  lastAmount: number;
+  categoryId?: string;
 }
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -202,20 +208,32 @@ export function findSubscriptions(txs: Transaction[], settings: Settings, catego
     // Il faut un vrai nom (« Canal+ », « Loyer ») : pas juste le nom de la catégorie
     const k = norm(t.title);
     if (!k || k === norm(t.category)) continue;
-    const g = groups.get(k) ?? [];
+    // Un groupe par portefeuille : le même nom noté dans un autre portefeuille ne doit pas casser le rythme
+    const gk = `${t.walletId}|${k}`;
+    const g = groups.get(gk) ?? [];
     g.push(t);
-    groups.set(k, g);
+    groups.set(gk, g);
   }
   const knownNames = new Set(recurrings.map((r) => norm(r.title)));
   const out: Subscription[] = [];
-  for (const [k, list] of groups) {
+  for (const [gk, list] of groups) {
+    const k = gk.slice(gk.indexOf('|') + 1);
     if (list.length < 3) continue;
     const sorted = [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const months = new Set(sorted.map((t) => t.createdAt.slice(0, 7)));
     if (months.size < 3) continue;
     const amounts = sorted.map((t) => -toMain(t.amount, t.currency, settings));
-    const avg = amounts.reduce((s, v) => s + v, 0) / amounts.length;
-    if (amounts.some((v) => Math.abs(v - avg) > avg * 0.15)) continue; // montant qui varie trop
+    const avgOf = (xs: number[]) => xs.reduce((s, v) => s + v, 0) / xs.length;
+    const stable = (xs: number[]) => xs.every((v) => Math.abs(v - avgOf(xs)) <= avgOf(xs) * 0.15);
+    // Montant stable ; ou stable jusqu'à l'avant-dernier paiement, puis un autre prix (hausse ou baisse)
+    const before = amounts.slice(0, -1);
+    const priceChanged = !stable(amounts) && before.length >= 3 && stable(before) && Math.abs(amounts[amounts.length - 1] - avgOf(before)) > avgOf(before) * 0.05;
+    if (!stable(amounts) && !priceChanged) continue; // montant qui varie trop
+    const avg = priceChanged ? amounts[amounts.length - 1] : avgOf(amounts);
+    // Le dernier paiement n'a pas le prix des précédents (au moins 3 paiements stables avant)
+    const prevAvg = avgOf(before.length ? before : amounts);
+    const lastAmount = amounts[amounts.length - 1];
+    const change = before.length >= 3 && stable(before) && Math.abs(lastAmount - prevAvg) > prevAvg * 0.05 ? { from: prevAvg, to: lastAmount, at: sorted[sorted.length - 1].createdAt } : undefined;
     const gaps = sorted.slice(1).map((t, i) => (new Date(t.createdAt).getTime() - new Date(sorted[i].createdAt).getTime()) / DAY);
     const median = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)];
     if (median < 24 || median > 38) continue; // pas « une fois par mois »
@@ -234,7 +252,18 @@ export function findSubscriptions(txs: Transaction[], settings: Settings, catego
       next: new Date(last.getTime() + Math.round(median) * DAY),
       yearly: avg * 12,
       known: knownNames.has(k),
+      change,
+      walletId: sorted[sorted.length - 1].walletId,
+      currency: sorted[sorted.length - 1].currency,
+      lastAmount: Math.abs(sorted[sorted.length - 1].amount),
+      categoryId: sorted[sorted.length - 1].categoryId,
     });
   }
-  return out.sort((a, b) => b.yearly - a.yearly);
+  // Le même abonnement noté dans deux portefeuilles : une seule ligne (celle qui a le plus d'historique)
+  const best = new Map<string, Subscription>();
+  for (const x of out) {
+    const cur = best.get(x.key);
+    if (!cur || x.count > cur.count || (x.count === cur.count && x.last > cur.last)) best.set(x.key, x);
+  }
+  return [...best.values()].sort((a, b) => b.yearly - a.yearly);
 }

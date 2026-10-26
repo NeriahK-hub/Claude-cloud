@@ -12,12 +12,13 @@ const DAY = 86400000;
 export const daysBetween = (a: string, b: string) => Math.round((parseDay(b).getTime() - parseDay(a).getTime()) / DAY);
 
 // Date suivante (fin de mois respectée : le 31 janvier -> le 28 ou 29 février)
-export function nextAfter(day: string, r: Pick<Recurring, 'frequency' | 'everyDays' | 'anchorDay'>): string {
+export function nextAfter(day: string, r: Pick<Recurring, 'frequency' | 'everyDays' | 'every' | 'anchorDay'>): string {
   const d = parseDay(day);
-  if (r.frequency === 'week') d.setDate(d.getDate() + 7);
+  const n = Math.max(1, Math.round(r.every ?? 1));
+  if (r.frequency === 'week') d.setDate(d.getDate() + 7 * n);
   else if (r.frequency === 'days') d.setDate(d.getDate() + Math.max(1, r.everyDays ?? 1));
   else {
-    const months = r.frequency === 'year' ? 12 : 1;
+    const months = (r.frequency === 'year' ? 12 : 1) * n;
     const target = new Date(d.getFullYear(), d.getMonth() + months, 1);
     const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
     // Le jour voulu (anchorDay) : un 31 ramené au 28 février revient au 31 en mars
@@ -31,7 +32,7 @@ export function nextAfter(day: string, r: Pick<Recurring, 'frequency' | 'everyDa
 export function dueDates(r: Recurring, today: string, max = 12): string[] {
   const out: string[] = [];
   let d = r.nextDate;
-  while (d <= today && out.length < max) {
+  while (d <= today && out.length < max && (!r.until || d <= r.until)) {
     out.push(d);
     d = nextAfter(d, r);
   }
@@ -42,7 +43,7 @@ export function dueDates(r: Recurring, today: string, max = 12): string[] {
 export function occurrencesBetween(r: Recurring, from: string, to: string, max = 40): string[] {
   const out: string[] = [];
   let d = r.nextDate;
-  for (let i = 0; d <= to && i < 400 && out.length < max; i++) {
+  for (let i = 0; d <= to && i < 400 && out.length < max && (!r.until || d <= r.until); i++) {
     if (d >= from) out.push(d);
     d = nextAfter(d, r);
   }
@@ -99,5 +100,31 @@ export const FREQUENCY_LABEL: Record<Recurring['frequency'], string> = {
   days: 'Tous les X jours',
 };
 
-export const frequencyText = (r: Pick<Recurring, 'frequency' | 'everyDays'>) =>
-  r.frequency === 'days' ? `Tous les ${r.everyDays ?? 1} jours` : FREQUENCY_LABEL[r.frequency];
+// « Chaque mois », « Toutes les 2 semaines », « Tous les 3 mois », « Tous les 10 jours »
+export const frequencyText = (r: Pick<Recurring, 'frequency' | 'everyDays' | 'every'>) => {
+  const n = Math.max(1, Math.round(r.every ?? 1));
+  if (r.frequency === 'days') return `Tous les ${r.everyDays ?? 1} jours`;
+  if (n === 1) return FREQUENCY_LABEL[r.frequency];
+  return r.frequency === 'week' ? `Toutes les ${n} semaines` : r.frequency === 'month' ? `Tous les ${n} mois` : `Tous les ${n} ans`;
+};
+
+// Après cette échéance, ça continue-t-il ? (« jusqu'à » : la prochaine date dépasse le dernier paiement)
+export const endsAfter = (r: Pick<Recurring, 'until' | 'frequency' | 'everyDays' | 'every' | 'anchorDay'>, day: string) => !!r.until && nextAfter(day, r) > r.until;
+
+// Date du Nième paiement (le 1er est `first`) : pour « Après 6 fois »
+export function nthDate(first: string, n: number, r: Pick<Recurring, 'frequency' | 'everyDays' | 'every' | 'anchorDay'>): string {
+  let d = first;
+  for (let i = 1; i < Math.max(1, n); i++) d = nextAfter(d, r);
+  return d;
+}
+
+// Combien de paiements entre deux dates (incluses) : pour « 6 fois » quand on rouvre une fiche
+export function countUntil(first: string, until: string, r: Pick<Recurring, 'frequency' | 'everyDays' | 'every' | 'anchorDay'>): number {
+  let d = first;
+  let n = 0;
+  while (d <= until && n < 1000) {
+    n++;
+    d = nextAfter(d, r);
+  }
+  return n;
+}

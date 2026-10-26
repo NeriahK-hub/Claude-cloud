@@ -92,9 +92,16 @@ export const BalanceSection: React.FC<BalanceSectionProps> = ({
       <BalanceLabel className="text-slate-500 mb-1" />
 
       {/* Solde : police normale (plus de font-mono), chiffres alignés */}
-      <div className="text-[34px] sm:text-[38px] font-extrabold text-slate-900 tracking-tight leading-none mb-3 tabular-nums">
-        <MatrixSwap hidden={hideBalance} text={formatMoney(shownMain, balance.mainCurrency)} />
-      </div>
+      {/* Un très gros solde rétrécit pour rester entier à l'écran (jamais coupé) */}
+      {(() => {
+        const text = formatMoney(shownMain, balance.mainCurrency);
+        const size = text.length <= 13 ? '' : text.length <= 16 ? 'text-[28px] sm:text-[32px]' : text.length <= 19 ? 'text-[23px] sm:text-[27px]' : 'text-[18px] sm:text-[22px]';
+        return (
+          <div className={`${size || 'text-[34px] sm:text-[38px]'} max-w-full px-4 font-extrabold text-slate-900 tracking-tight leading-none mb-3 tabular-nums whitespace-nowrap`}>
+            <MatrixSwap hidden={hideBalance} text={text} />
+          </div>
+        );
+      })()}
       {balance.second !== null && balance.secondCurrency && (
         <div className="text-sm font-semibold text-slate-400 tabular-nums -mt-1 mb-3">
           <MatrixSwap hidden={hideBalance} text={formatMoney(shownSecond, balance.secondCurrency)} />

@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Check, Plus, Layers } from 'lucide-react';
 import { Transaction, Wallet } from '../types';
 import { IconBadge } from './AppIcon';
+import { SecretMoney } from './MatrixSwap';
 import { BalanceInfo, formatMoney, walletBalance } from '../lib/money';
 
 interface AccountSwitcherSheetProps {
@@ -47,7 +48,7 @@ export const AccountSwitcherSheet: React.FC<AccountSwitcherSheetProps> = ({
         <div>
           <div className="text-sm font-bold text-slate-900">{w.name}</div>
           <div className="text-xs font-bold text-slate-700 tabular-nums">
-            {formatMoney(walletBalance(w, transactions), w.currency)}
+            <SecretMoney text={formatMoney(walletBalance(w, transactions), w.currency)} />
           </div>
         </div>
       </div>
@@ -79,7 +80,7 @@ export const AccountSwitcherSheet: React.FC<AccountSwitcherSheetProps> = ({
               <div>
                 <div className="text-sm font-bold text-slate-900">Tous les portefeuilles</div>
                 <div className="text-xs font-bold text-slate-700 tabular-nums">
-                  {formatMoney(totalBalance.main, totalBalance.mainCurrency)}
+                  <SecretMoney text={formatMoney(totalBalance.main, totalBalance.mainCurrency)} />
                 </div>
               </div>
             </div>

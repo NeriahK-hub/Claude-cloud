@@ -48,6 +48,11 @@ export function supabaseRemote(sb: SupabaseClient, me: string): Remote {
       if (error || !data) return null;
       return parseCheck(data);
     },
+    countTransactions: async () => {
+      const { count, error } = await sb.from('transactions').select('id', { count: 'exact', head: true }).is('deleted_at', null);
+      if (error || count == null) throw new Error(error?.message ?? 'count');
+      return count;
+    },
     visibleDebtShareIds: async () => (must(await sb.from('debt_shares').select('id').is('deleted_at', null)) as { id: string }[]).map((r) => r.id),
   };
 }

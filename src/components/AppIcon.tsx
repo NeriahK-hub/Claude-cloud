@@ -8,7 +8,8 @@ import {
   ArrowDownToLine, CircleHelp, CupSoda, Car, HeartPulse, School, Laptop, Headphones, Beer, Tag,
   Sparkles, CircleCheck, Landmark, CreditCard, PiggyBank, Coins, Store, PawPrint, Church,
   Scissors, Dumbbell, Plane, Gamepad2, Baby, Heart, Coffee, Music, Target, ArrowLeftRight, SlidersHorizontal,
-  Layers, Repeat, CalendarDays, Sofa, LucideIcon,
+  Layers, Repeat, CalendarDays, Sofa,
+  Bike, Flame, Cigarette, Wine, Pizza, Hotel, Hammer, Paintbrush, Shield, TrendingUp, Building2, Ticket, Film, Sprout, Fish, Beef, Apple, Bed, Lightbulb, Trash2, Gem, Watch, Glasses, Bath, Plug, Camera, Ambulance, Syringe, Ship, TrainFront, Tractor, Cake, Flower2, HandHeart, Cross, Scale, BatteryCharging, Construction, Umbrella, Dog, Cat, Trophy, ShoppingBasket, Milk, Wheat, Candy, Vault, Backpack, Printer, Bitcoin, Sparkle, Truck, Smile, LucideIcon,
 } from 'lucide-react';
 
 // Table de correspondance explicite : nom (texte sauvegardé) -> icône lucide
@@ -20,6 +21,7 @@ export const ICONS: Record<string, LucideIcon> = {
   Sparkles, CircleCheck, Landmark, CreditCard, PiggyBank, Coins, Store, PawPrint, Church,
   Scissors, Dumbbell, Plane, Gamepad2, Baby, Heart, Coffee, Music, Target, ArrowLeftRight, SlidersHorizontal,
   Repeat, CalendarDays, Sofa,
+  Bike, Flame, Cigarette, Wine, Pizza, Hotel, Hammer, Paintbrush, Shield, TrendingUp, Building2, Ticket, Film, Sprout, Fish, Beef, Apple, Bed, Lightbulb, Trash2, Gem, Watch, Glasses, Bath, Plug, Camera, Ambulance, Syringe, Ship, TrainFront, Tractor, Cake, Flower2, HandHeart, Cross, Scale, BatteryCharging, Construction, Umbrella, Dog, Cat, Trophy, ShoppingBasket, Milk, Wheat, Candy, Vault, Backpack, Printer, Bitcoin, Sparkle, Truck, Smile,
 };
 
 // Icônes proposées dans les grilles de choix
@@ -27,10 +29,17 @@ export const CATEGORY_ICON_CHOICES = [
   'Utensils', 'ShoppingCart', 'Bus', 'Car', 'Fuel', 'House', 'Zap', 'Smartphone', 'Pill', 'GraduationCap',
   'Shirt', 'Gift', 'Briefcase', 'Package', 'PawPrint', 'Church', 'Scissors', 'Dumbbell', 'Plane', 'Gamepad2',
   'Baby', 'Heart', 'Coffee', 'Music', 'Wallet', 'Handshake',
+  // Vie courante en RDC : makala et gaz, générateur, deuil, mariage et dot, église, coiffure…
+  'ShoppingBasket', 'Beef', 'Fish', 'Wheat', 'Milk', 'Pizza', 'Cake', 'Candy', 'Wine', 'Cigarette',
+  'Flame', 'Plug', 'BatteryCharging', 'Lightbulb', 'Bed', 'Bath', 'Hammer', 'Paintbrush', 'Construction', 'Trash2',
+  'Bike', 'Truck', 'TrainFront', 'Ship', 'Hotel', 'Backpack', 'Printer', 'Camera', 'Film', 'Ticket',
+  'Trophy', 'Syringe', 'Ambulance', 'Cross', 'HandHeart', 'Flower2', 'Gem', 'Watch', 'Glasses', 'Smile',
+  'Dog', 'Cat', 'Sprout', 'Tractor', 'Umbrella', 'Shield', 'Scale', 'Building2', 'TrendingUp', 'PiggyBank',
 ];
 export const WALLET_ICON_CHOICES = [
   'Wallet', 'Banknote', 'Smartphone', 'Landmark', 'CreditCard', 'PiggyBank', 'Coins', 'HandCoins',
-  'Briefcase', 'Store', 'Users', 'Heart', 'Target',
+  'Briefcase', 'Store', 'Users', 'Heart', 'Target', 'Vault', 'Building2', 'TrendingUp', 'Bitcoin', 'Shield',
+  'Gem', 'Sparkle',
 ];
 
 export const AppIcon: React.FC<{ name: string; className?: string; style?: React.CSSProperties }> = ({

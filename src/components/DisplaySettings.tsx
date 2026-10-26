@@ -101,22 +101,6 @@ export const DisplaySettings: React.FC<{ currency: string }> = ({ currency }) =>
             className="toggle shrink-0"
           />
         </label>
-        <label className="flex items-center justify-between gap-3 px-1 py-3 cursor-pointer">
-          <span>
-            <span className="block text-sm text-slate-800">Carte du portefeuille sur l'accueil</span>
-            <span className="block text-xs text-slate-400">Progression d'un objectif, limite d'un crédit ou membres d'un partage, sous les boutons.</span>
-          </span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={prefs.homeWalletCard}
-            onChange={(e) => {
-              haptic();
-              setPrefs({ homeWalletCard: e.target.checked });
-            }}
-            className="toggle shrink-0"
-          />
-        </label>
       </div>
       {prefs.monthStart !== 1 && (
         <p className="text-xs text-slate-500 mt-1">

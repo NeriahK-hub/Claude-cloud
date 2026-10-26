@@ -1,7 +1,7 @@
 {
-  "name": "react-example",
+  "name": "wallo",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit",
     "test:db": "psql -v ON_ERROR_STOP=1 -d wallo_test -f supabase/tests/rls_test.sql -f supabase/tests/admin_test.sql -f supabase/tests/ristourne_invite_test.sql",
     "test:sync": "tsx scripts/sync.test.ts",
+    "assistant": "node scripts/assistant-bridge.mjs",
     "deploy": "vite build && npx -y firebase-tools deploy --only hosting:app",
     "dev:admin": "vite --config vite.admin.config.ts",
     "build:admin": "vite build --config vite.admin.config.ts",

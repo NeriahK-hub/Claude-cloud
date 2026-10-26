@@ -4,7 +4,7 @@ import { Recurring, Settings, Transaction } from '../types';
 import { Category } from '../data/categories';
 import { formatMoney, toMain } from '../lib/money';
 import { getPrefs, useDisplayPrefs } from '../lib/display';
-import { DAY_PARTS, findSubscriptions, smallExpenses, weekReview, whenYouSpend, yearReview } from '../lib/review';
+import { DAY_PARTS, findSubscriptions, type Subscription, smallExpenses, weekReview, whenYouSpend, yearReview } from '../lib/review';
 import { IconBadge } from './AppIcon';
 import { Amount } from './MoneyText';
 import { YearWrapped, personaOf } from './YearWrapped';
@@ -385,7 +385,6 @@ export const WhenTool: React.FC<{ txs: Transaction[]; settings: Settings }> = ({
   if (r.count < 5) return <p className="text-center text-[14px] text-slate-500 py-10">Note encore quelques dépenses&nbsp;: il en faut au moins 5 sur les 3 derniers mois.</p>;
   return (
     <div>
-      <p className="text-[14px] text-slate-500 mb-4 leading-snug">D&rsquo;après tes dépenses des 3 derniers mois.</p>
       <div className="rounded-2xl bg-red-500/10 p-4 flex items-center gap-3">
         <span className="w-11 h-11 rounded-full bg-red-500/15 flex items-center justify-center shrink-0">
           <Flame className="w-5 h-5 text-red-500" />
@@ -447,9 +446,7 @@ export const SmallTool: React.FC<{ txs: Transaction[]; settings: Settings; categ
   if (r.count === 0) return <p className="text-center text-[14px] text-slate-500 py-10">Pas de petites dépenses ces 30 derniers jours.</p>;
   return (
     <div>
-      <p className="text-[14px] text-slate-500 mb-4 leading-snug">
-        Les dépenses de moins de <b className="text-slate-700 whitespace-nowrap">{round(r.limit)}</b> (pain, crédit, taxi, sucreries…) sur les 30 derniers jours.
-      </p>
+      <p className="text-[13px] text-slate-500 mb-4 px-1">Moins de <b className="text-slate-700 whitespace-nowrap">{round(r.limit)}</b> chacune.</p>
       <div className="relative overflow-hidden rounded-[28px] p-5 text-center" style={{ background: 'linear-gradient(135deg, #F59E0B, #EF4444)' }}>
         <div className="text-[13px] font-semibold" style={{ color: 'rgb(255 255 255 / 0.85)' }}>
           Sur un an, elles font
@@ -486,10 +483,19 @@ export const SmallTool: React.FC<{ txs: Transaction[]; settings: Settings; categ
 };
 
 // ---------- Abonnements repérés ----------
-export const SubsTool: React.FC<{ txs: Transaction[]; settings: Settings; categories: Category[]; recurrings: Recurring[]; onNavigate?: (p: Page) => void }> = ({ txs, settings, categories, recurrings, onNavigate }) => {
+export const SubsTool: React.FC<{ txs: Transaction[]; settings: Settings; categories: Category[]; recurrings: Recurring[]; onNavigate?: (p: Page) => void; onAdd?: (s: Subscription) => void }> = ({ txs, settings, categories, recurrings, onNavigate, onAdd }) => {
   const round = useRound(settings);
-  const list = useMemo(() => findSubscriptions(txs, settings, categories, recurrings), [txs, settings, categories, recurrings]);
+  const all = useMemo(() => findSubscriptions(txs, settings, categories, recurrings), [txs, settings, categories, recurrings]);
+  // Dans À venir (onAdd) : seulement les propositions, une fois ajoutée une ligne disparaît d'ici
+  const list = onAdd ? all.filter((x) => !x.known) : all;
   const total = list.reduce((s, x) => s + x.amount, 0);
+  if (!list.length && all.length)
+    return (
+      <div className="text-center py-10">
+        <Repeat className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+        <p className="text-[14px] text-slate-500 max-w-[280px] mx-auto">Rien de nouveau : tout ce que Wallo a repéré est déjà dans À venir.</p>
+      </div>
+    );
   if (!list.length)
     return (
       <div className="text-center py-10">
@@ -499,7 +505,7 @@ export const SubsTool: React.FC<{ txs: Transaction[]; settings: Settings; catego
     );
   return (
     <div>
-      <p className="text-[14px] text-slate-500 mb-4 leading-snug">Des dépenses qui reviennent chaque mois avec le même montant. Les oublier coûte cher&nbsp;: vérifie que tu en as encore besoin.</p>
+      <p className="text-[14px] text-slate-500 mb-4 leading-snug">Des dépenses qui reviennent chaque mois avec le même montant. Ajoute-les à À venir pour être prévenu.</p>
       <div className="grid grid-cols-2 gap-2 mb-2">
         <Tile label="Chaque mois" Icon={Repeat} color="#8B5CF6">
           <Amount text={round(total)} size="lg" />
@@ -518,11 +524,22 @@ export const SubsTool: React.FC<{ txs: Transaction[]; settings: Settings; catego
                 Prochaine fois vers le {x.next.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
                 {x.known && <span className="text-emerald-600 font-semibold"> · déjà dans À venir</span>}
               </div>
+              {x.change && (
+                <div className={`text-[12px] font-semibold mt-0.5 flex items-center gap-1 ${x.change.to > x.change.from ? 'text-red-500' : 'text-emerald-600'}`}>
+                  {x.change.to > x.change.from ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {x.change.to > x.change.from ? 'Le prix a augmenté' : 'Le prix a baissé'} : {round(x.change.from)} → {round(x.change.to)}
+                </div>
+              )}
             </div>
             <div className="text-right shrink-0">
               <div className="text-[14px] font-bold tabular-nums text-slate-900 whitespace-nowrap">{round(x.amount)}</div>
               <div className="text-[11px] text-slate-500">par mois</div>
             </div>
+            {onAdd && !x.known && (
+              <button onClick={() => onAdd(x)} aria-label={`Ajouter ${x.name} dans À venir`} className="shrink-0 h-8 px-3 rounded-full bg-accent hover:bg-accent-hover text-[13px] font-bold cursor-pointer active:scale-95 transition">
+                Ajouter
+              </button>
+            )}
           </div>
         ))}
       </div>

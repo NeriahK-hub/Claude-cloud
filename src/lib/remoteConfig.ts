@@ -1,13 +1,14 @@
 import { useSyncExternalStore } from 'react';
 import { cloudConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from './config';
 import { onOtherTabChange } from './crossTab';
+import type { HelpArticle } from '../data/help';
 
 // Réglages décidés depuis l'espace admin (site séparé) : fonctionnalités activées ou non,
 // annonces pour tout le monde, icônes proposées à tous.
 // Lus sans compte (fonction app_config de la base), gardés sur l'appareil pour le mode hors ligne.
 // Base pas encore à jour ou réseau absent : on garde la dernière version connue (tout activé au départ).
 
-export type FeatureKey = 'debts' | 'budgets' | 'ristournes' | 'sharedWallets' | 'importData' | 'accounts' | 'wrapped' | 'wrappedNow' | 'wrappedCountdown' | 'festive';
+export type FeatureKey = 'debts' | 'budgets' | 'ristournes' | 'sharedWallets' | 'importData' | 'accounts' | 'wrapped' | 'wrappedNow' | 'wrappedCountdown' | 'festive' | 'pro';
 
 export interface Announcement {
   id: string;
@@ -34,16 +35,26 @@ export interface Ad {
   sponsored: boolean;
 }
 
+// Wallo Pro : ce qui est gratuit et ce qui est Pro (liste faite depuis l'espace admin)
+export interface ProFeature {
+  id: string;
+  label: string;
+  description: string;
+  tier: 'free' | 'pro';
+}
+
 export interface RemoteConfig {
   features: Partial<Record<FeatureKey, boolean>>;
   announcements: Announcement[];
   icons: GlobalIcon[];
   ads: Ad[];
+  help: HelpArticle[]; // articles d'aide ajoutés depuis l'espace admin
+  pro: ProFeature[];
 }
 
 export const GLOBAL_PREFIX = 'global:';
 const KEY = 'ap.remote';
-const EMPTY: RemoteConfig = { features: {}, announcements: [], icons: [], ads: [] };
+const EMPTY: RemoteConfig = { features: {}, announcements: [], icons: [], ads: [], help: [], pro: [] };
 
 let config: RemoteConfig = read();
 const listeners = new Set<() => void>();
@@ -80,7 +91,19 @@ function parse(raw: Record<string, unknown>): RemoteConfig {
   const ads = (Array.isArray(raw.ads) ? raw.ads : [])
     .filter((a) => a && typeof a.id === 'string' && https(a.image_url))
     .map((a) => ({ id: a.id, title: String(a.title ?? ''), imageUrl: a.image_url, linkUrl: https(a.link_url) ? a.link_url : null, sponsored: a.sponsored !== false }));
-  return { features, announcements, icons, ads };
+  const help = (Array.isArray(raw.help) ? raw.help : [])
+    .filter((h) => h && typeof h.id === 'string' && typeof h.title === 'string' && typeof h.body === 'string')
+    .map((h) => ({
+      id: `admin-${h.id}`,
+      title: String(h.title),
+      body: String(h.body),
+      category: typeof h.category === 'string' && h.category ? h.category : 'Autres',
+      platform: h.platform === 'iphone' || h.platform === 'android' ? h.platform : undefined,
+    })) as HelpArticle[];
+  const pro = (Array.isArray(raw.pro) ? raw.pro : [])
+    .filter((x) => x && typeof x.id === 'string' && typeof x.label === 'string')
+    .map((x) => ({ id: x.id, label: String(x.label), description: String(x.description ?? ''), tier: x.tier === 'free' ? 'free' : 'pro' })) as ProFeature[];
+  return { features, announcements, icons, ads, help, pro };
 }
 
 // Vue / clic sur une bannière (compté par la base, sans savoir qui). Une vue par pub et par jour sur cet appareil.
