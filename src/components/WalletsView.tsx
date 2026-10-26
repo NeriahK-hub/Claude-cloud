@@ -24,6 +24,7 @@ import { DateField, localDay } from './DatePicker';
 import { Group, InputRow, NavRow, SwitchRow } from './FormRows';
 import type { Cloud } from '../lib/sync/useCloud';
 import { ChallengeSheet } from './ChallengeSheet';
+import { CardsGroup } from './BankCards';
 
 interface WalletsViewProps {
   wallets: Wallet[];
@@ -981,6 +982,7 @@ const WalletSheet: React.FC<{
   const [remindAmount, setRemindAmount] = useState(wallet?.goalReminder?.amount ? String(wallet.goalReminder.amount) : draft ? String(draft.weekly) : '');
   const [roundUp, setRoundUp] = useState(!!wallet?.roundUp);
   const [include, setInclude] = useState(wallet?.includeInTotal ?? true);
+  const [cards, setCards] = useState(wallet?.cards ?? []);
   const [showCurrencies, setShowCurrencies] = useState(false);
   const [showLook, setShowLook] = useState(false); // icône et couleur : repliées derrière la pastille
 
@@ -1201,6 +1203,9 @@ const WalletSheet: React.FC<{
                 </>
               )}
 
+              {/* Compte bancaire ou carte de crédit : les cartes qui y sont liées */}
+              {kind !== 'goal' && <CardsGroup cards={cards} onChange={setCards} />}
+
               <Group hint={include ? 'Son argent compte dans « Ton solde » sur l\'accueil.' : 'Son argent ne compte pas dans « Ton solde » sur l\'accueil.'}>
                 <SwitchRow label="Compter dans mon solde" checked={include} onChange={setInclude} />
               </Group>
@@ -1222,6 +1227,8 @@ const WalletSheet: React.FC<{
                     creditLimit: kind === 'credit' ? parsedLimit : undefined,
                     goalAmount: kind === 'goal' ? parsedGoal : undefined,
                     goalDate: kind === 'goal' && goalDate ? goalDate : undefined,
+                    // Envoyées seulement si on s'en sert (ou pour vider celles qu'il y avait)
+                    ...(kind !== 'goal' && (cards.length || wallet?.cards) ? { cards } : {}),
                     ...(kind === 'goal'
                       ? {
                           ...(why.trim() || wallet?.goalWhy ? { goalWhy: why.trim() } : {}),

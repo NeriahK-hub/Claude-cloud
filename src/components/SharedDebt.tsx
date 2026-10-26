@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { QrButton } from './QrInvite';
-import { X, Plus, Undo2, Link2, Share2, Copy, Loader2, Check, Clock, Trash2, Wallet as WalletIcon, LogOut, CircleAlert, Percent, Pencil, ChevronDown, Send, RotateCw, CircleX } from 'lucide-react';
+import { X, Plus, Undo2, Link2, Share2, Copy, Loader2, Check, Clock, Trash2, Wallet as WalletIcon, LogOut, CircleAlert, Percent, Pencil, ChevronDown, Send, RotateCw } from 'lucide-react';
 import { DebtMove, DebtShare, Settings, Wallet } from '../types';
 import type { DebtEntry } from '../lib/debts';
 import type { SharedDebts } from './DebtsView';
 import { convertBetween, formatMoney } from '../lib/money';
-import { AUTO_CONFIRM_DAYS, autoConfirmDate, debtMoneyOut, interestAmount, isLive, moveLabel, movesMoney, shareCurrency, shareTotals } from '../lib/debtShares';
+import { autoConfirmDate, debtMoneyOut, interestAmount, isLive, moveLabel, movesMoney, shareCurrency, shareTotals } from '../lib/debtShares';
 import { copyText, debtInviteUrl, formatCode, shareDebtInvite, shareDebtNudge } from '../lib/invite';
 import { frenchError } from './Account';
 import { MemberAvatar } from './Members';
@@ -16,6 +16,9 @@ const COLORS = ['#F97316', '#3B82F6', '#EC4899', '#14B8A6', '#8B5CF6', '#EAB308'
 const colorOf = (name: string) => COLORS[[...name].reduce((s, c) => s + c.charCodeAt(0), 0) % COLORS.length];
 const day = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 const shortDay = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+// Historique : sans l'année quand c'est cette année
+const rowDay = (iso: string) => (new Date(iso).getFullYear() === new Date().getFullYear() ? shortDay(iso) : day(iso));
+const TONES = { amber: 'bg-amber-500/15 text-amber-700', red: 'bg-red-500/10 text-red-600', grey: 'bg-slate-100 text-slate-500' };
 const what = (m: DebtMove) => `${m.kind === 'more' ? 'un prêt' : m.kind === 'interest' ? 'des intérêts' : 'un remboursement'} de ${formatMoney(m.amount, m.currency)}`;
 
 // Message de relance : mes mouvements qui attendent l'autre, et quand ils seront confirmés tout seuls
@@ -100,6 +103,17 @@ export const SharedDebtDetail: React.FC<{
     setResending(null);
   };
   const by = (m: DebtMove) => (m.recordedBy === me ? 'toi' : e.name);
+  // État d'un mouvement dans l'historique : court, une pastille et un complément
+  const moveState = (m: DebtMove): { label: string; detail?: string; tone: keyof typeof TONES } | null => {
+    if (m.deleteRequestedBy) return { label: 'Suppression demandée', detail: m.deleteRequestedBy === me ? undefined : `par ${e.name}`, tone: 'red' };
+    if (m.pending && m.refusedAt) return { label: 'Refusé', detail: m.recordedBy === me ? `par ${e.name}` : 'par toi', tone: 'red' };
+    if (m.pending) {
+      const auto = autoConfirmDate(m);
+      return { label: m.recordedBy === me ? 'En attente' : 'À confirmer', detail: auto ? `confirmé tout seul le ${shortDay(auto)}` : undefined, tone: 'amber' };
+    }
+    if (m.autoConfirmed) return { label: 'Confirmé sans réponse', tone: 'grey' };
+    return null;
+  };
   const signed = (m: DebtMove) => `${m.kind === 'repay' ? '−' : '+'}${formatMoney(m.amount, m.currency)}`;
   const [showPast, setShowPast] = useState(false);
   const currentIds = new Set(t.current.map((m) => m.id));
@@ -117,34 +131,21 @@ export const SharedDebtDetail: React.FC<{
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-semibold text-slate-900 truncate">{m.note || moveLabel(sh.side, m.kind)}</span>
-                    <span className="block text-[12px] text-slate-500">
-                      {day(m.date)} · noté par {by(m)}
-                      {m.txId && ' · dans ton portefeuille'}
+                    <span className="flex items-center gap-1 text-[12px] text-slate-500">
+                      {rowDay(m.date)} · par {by(m)}
+                      {m.txId && <WalletIcon className="w-3 h-3 shrink-0 text-slate-400" aria-label="Noté dans ton portefeuille" />}
                     </span>
-                    {live && m.pending && m.refusedAt && (
-                      <span className="flex items-center gap-1 mt-0.5 text-[11px] font-bold text-red-600">
-                        <CircleX className="w-3 h-3 shrink-0" /> {m.recordedBy === me ? `Refusé par ${e.name}` : 'Refusé par toi'}
-                      </span>
-                    )}
-                    {live && m.pending && !m.refusedAt && (
-                      <span className="flex items-center gap-1 mt-0.5 text-[11px] font-bold text-amber-700">
-                        <Clock className="w-3 h-3 shrink-0" />
-                        <span className="truncate">
-                          {m.recordedBy === me ? `En attente de ${e.name}` : 'À confirmer'}
-                          {autoConfirmDate(m) && <span className="font-medium text-slate-500"> · auto le {shortDay(autoConfirmDate(m)!)}</span>}
+                    {(() => {
+                      // Une pastille d'état, puis quelques mots (rien quand tout est réglé)
+                      const st = live ? moveState(m) : null;
+                      if (!st) return null;
+                      return (
+                        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1">
+                          <span className={`shrink-0 px-1.5 py-px rounded-md text-[10.5px] font-bold ${TONES[st.tone]}`}>{st.label}</span>
+                          {st.detail && <span className="text-[11.5px] text-slate-500">{st.detail}</span>}
                         </span>
-                      </span>
-                    )}
-                    {live && !m.pending && m.autoConfirmed && (
-                      <span className="flex items-center gap-1 mt-0.5 text-[11px] font-semibold text-slate-500">
-                        <Check className="w-3 h-3 shrink-0" /> Confirmé sans réponse
-                      </span>
-                    )}
-                    {live && m.deleteRequestedBy && (
-                      <span className="inline-flex items-center gap-1 mt-0.5 text-[11px] font-bold text-red-600">
-                        <Trash2 className="w-3 h-3" /> Suppression demandée{m.deleteRequestedBy === me ? '' : ` par ${e.name}`}
-                      </span>
-                    )}
+                      );
+                    })()}
                   </span>
                   <span className={`text-sm font-bold tabular-nums shrink-0 ${live && m.pending ? 'text-slate-400' : out ? 'text-slate-900' : 'text-emerald-600'}`}>{signed(m)}</span>
                 </button>
@@ -199,21 +200,31 @@ export const SharedDebtDetail: React.FC<{
           
           {mineWaiting.length > 0 && (
             <div className="mb-3 rounded-2xl bg-slate-100 p-3">
-              <p className="text-xs text-slate-600 flex gap-1.5">
-                <Clock className="w-3.5 h-3.5 shrink-0 mt-px" />
-                <span>
-                  {mineWaiting.length === 1 ? (
-                    <b className="text-slate-800">{what(mineWaiting[0])[0].toUpperCase() + what(mineWaiting[0]).slice(1)}</b>
-                  ) : (
-                    <b className="text-slate-800">{mineWaiting.length} mouvements</b>
-                  )}{' '}
-                  en attente de {e.name} : pas encore compté{mineWaiting.length > 1 ? 's' : ''} dans le reste. Sans réponse, confirmé{mineWaiting.length > 1 ? 's' : ''} tout seul{mineWaiting.length > 1 ? 's' : ''} après {AUTO_CONFIRM_DAYS} jours.
-                </span>
-              </p>
+              {(() => {
+                // Une phrase forte (quoi), puis quand il comptera
+                const one = mineWaiting.length === 1;
+                const until = mineWaiting.map(autoConfirmDate).filter((d): d is string => !!d).sort()[0];
+                const head = one ? what(mineWaiting[0]) : `${mineWaiting.length} mouvements`;
+                return (
+                  <div className="flex gap-2.5">
+                    <span className="w-8 h-8 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
+                      <Clock className="w-4 h-4 text-amber-700" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-semibold text-slate-900 leading-snug">
+                        {head[0].toUpperCase() + head.slice(1)} en attente
+                      </p>
+                      <p className="text-[12.5px] text-slate-500 leading-snug mt-0.5">
+                        {one ? 'Compté' : 'Comptés'} dès que {e.name} confirme{until ? `, ou tout seul${one ? '' : 's'} le ${shortDay(until)}` : '.'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
               <NudgeButton
                 moves={mineWaiting}
                 person={e.name}
-                className="mt-2 w-full py-2.5 rounded-xl bg-white text-sm font-semibold text-slate-800 flex items-center justify-center gap-1.5 cursor-pointer"
+                className="mt-3 w-full py-2.5 rounded-xl bg-white text-sm font-semibold text-slate-800 flex items-center justify-center gap-1.5 cursor-pointer"
               />
             </div>
           )}
@@ -225,7 +236,7 @@ export const SharedDebtDetail: React.FC<{
               {mineRefused.map((m) => (
                 <div key={m.id}>
                   <p className="text-sm text-slate-800">
-                    {e.name} ne reconnaît pas : <b>{moveLabel(sh.side, m.kind).toLowerCase()} de {formatMoney(m.amount, m.currency)}</b> du {day(m.date)}.
+                    {e.name} ne reconnaît pas : <b>{moveLabel(sh.side, m.kind).toLowerCase()} de {formatMoney(m.amount, m.currency)}</b> du {rowDay(m.date)}
                   </p>
                   <p className="text-[11px] text-slate-500 mt-0.5">Il ne compte pas. Corrige-le, renvoie-le tel quel ou retire-le.</p>
                   <div className="flex gap-2 mt-2">
@@ -262,11 +273,11 @@ export const SharedDebtDetail: React.FC<{
                     <p className="text-sm text-slate-800">
                       {del ? (
                         <>
-                          {e.name} veut supprimer : <b>{moveLabel(sh.side, m.kind).toLowerCase()} de {formatMoney(m.amount, m.currency)}</b> du {day(m.date)}.
+                          {e.name} veut supprimer : <b>{moveLabel(sh.side, m.kind).toLowerCase()} de {formatMoney(m.amount, m.currency)}</b> du {rowDay(m.date)}
                         </>
                       ) : (
                         <>
-                          {e.name} a noté : <b>{moveLabel(sh.side, m.kind).toLowerCase()} de {formatMoney(m.amount, m.currency)}</b> le {day(m.date)}.
+                          {e.name} a noté : <b>{moveLabel(sh.side, m.kind).toLowerCase()} de {formatMoney(m.amount, m.currency)}</b> le {rowDay(m.date)}
                         </>
                       )}
                     </p>

@@ -2,6 +2,8 @@
 
 PWA de finances personnelles (ex-AetherPay) pour la RDC : portefeuilles, opérations multi-devises (USD/CDF), catégories à deux niveaux, budgets, dettes et prêts, ristournes (tontines), portefeuilles partagés, import/export Money Lover. Interface et textes en **français** (tutoiement), code et noms en anglais, commentaires en français.
 
+État actuel (version en ligne, migrations installées dans Supabase, compte Firebase, reste à faire) : `ETAT.md`, à lire en premier et à tenir à jour.
+
 ## Commandes
 
 - `npm run dev` : serveur local sur http://localhost:3000
@@ -24,7 +26,8 @@ PWA de finances personnelles (ex-AetherPay) pour la RDC : portefeuilles, opérat
 
 - Notifications : `src/lib/notify.ts` (A : alertes de l'app montrées en notification système ; B : abonnement push). Push serveur : triggers de `supabase/migrations/20261009000000_push.sql` -> file `push_queue` -> Edge Function `supabase/functions/send-push` (pg_cron, `supabase/push_cron.sql`). Gestionnaires `push` / `notificationclick` dans `scripts/serviceWorker.ts`.
 - Accueil au choix : `src/lib/homeLayout.ts` (cartes, ordre, cachées ; Paramètres › Apparence › Accueil). Corbeille 30 jours + « Annuler » : `src/lib/trash.ts` (local, éléments rétablis avec un nouvel identifiant). Aide : `src/data/help.ts` + articles de l'admin via `app_config()` (`help`). Appareils connectés : `src/lib/devices.ts` + migration `20261021`.
-- Migrations récentes à exécuter à la main (dans l'ordre) : `20261019` (fréquence « toutes les N »), `20261020` (« à résilier »), `20261021` (appareils), `20261022` (aide admin), `20261023` (note d'une opération qui revient), `20261024` (accents des fonctionnalités de l'admin), `20261025` + `20261026` (Wallo Pro), `20261027` (fin d'une opération qui revient), `20261028` (dettes partagées : relances, confirmation après 7 jours, + étape 8 de `push_cron.sql`), `20261029` (dettes partagées : refuser sans effacer). L'app marche sans elles : les champs concernés ne sont envoyés que s'ils sont réglés.
+- Migrations récentes à exécuter à la main (dans l'ordre) : `20261019` (fréquence « toutes les N »), `20261020` (« à résilier »), `20261021` (appareils), `20261022` (aide admin), `20261023` (note d'une opération qui revient), `20261024` (accents des fonctionnalités de l'admin), `20261025` + `20261026` (Wallo Pro), `20261027` (fin d'une opération qui revient), `20261028` (dettes partagées : relances, confirmation après 7 jours, + étape 8 de `push_cron.sql`), `20261029` (dettes partagées : refuser sans effacer), `20261030` (cartes bancaires d'un portefeuille). L'app marche sans elles : les champs concernés ne sont envoyés que s'ils sont réglés.
+- Cartes bancaires : liste `cards` d'un portefeuille (`src/components/BankCards.tsx`, `src/lib/bankCards.ts`) : nom, banque, réseau, 4 derniers chiffres, expiration. Jamais le numéro complet, le CVV ni le PIN : la base jette tout autre champ (`20261030000000_wallet_cards.sql`).
 - Wallo Pro : offre cachée tant que l'admin n'allume pas la fonctionnalité `pro` ; liste gratuit/Pro (`pro_features`), accès donné par l'admin (`pro_access`, `my_pro()`), carte dans Profil (`src/components/ProOffer.tsx`, `src/lib/pro.ts`) ; aperçu local avec `?pro=apercu`. Rien n'est encore verrouillé ni payant. Écrire les textes français des migrations avec des codes `U&'\00E9'` : les copier-coller depuis un Mac abîment les accents.
 - Espace admin : fonctions `admin_*` et table fermée `admins` (`supabase/migrations/20261002000000_admin.sql`). L'app lit fonctionnalités / annonces / icônes via `app_config()` (`src/lib/remoteConfig.ts`, `useFeature('debts')`…), gardées pour le hors ligne.
 

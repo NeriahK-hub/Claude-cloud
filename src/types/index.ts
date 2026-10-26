@@ -49,6 +49,17 @@ export interface Wallet {
   members?: WalletMember[]; // portefeuille partagé : les autres personnes (moi n'y figure pas)
   ownerId?: string; // compte en ligne : propriétaire (absent = moi, portefeuille créé ici)
   myMemberId?: string; // compte en ligne : ma ligne de membre dans ce portefeuille
+  cards?: BankCard[]; // cartes bancaires liées (jamais le numéro complet, le CVV ni le PIN)
+}
+
+// Carte bancaire liée à un portefeuille : de quoi la reconnaître, rien qui permette de payer
+export interface BankCard {
+  id: string;
+  label: string; // « Visa Rawbank »
+  bank?: string;
+  network: 'visa' | 'mastercard' | 'other';
+  last4: string; // les 4 derniers chiffres
+  expires: string; // AAAA-MM
 }
 
 // Une personne avec qui on partage un portefeuille (ex. son conjoint)

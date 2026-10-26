@@ -5,6 +5,7 @@ import { Budget, DebtMove, DebtShare, GoalChallenge, Recurring, Ristourne, Risto
 import { Category } from '../../data/categories';
 import { CustomIcon } from '../customIcons';
 import { isUuid } from '../ids';
+import { cleanCards } from '../bankCards';
 
 export type Row = Record<string, unknown>;
 
@@ -96,6 +97,8 @@ export const walletRow = (w: Wallet, i: number): Row => ({
     : {}),
   ...(w.roundUp !== undefined ? { round_up: w.roundUp } : {}),
   ...(w.challenge !== undefined ? { challenge: w.challenge ?? null } : {}),
+  // Colonne de 20261030000000_wallet_cards.sql : même règle
+  ...(w.cards !== undefined ? { cards: cleanCards(w.cards) } : {}),
   sort_order: i,
 });
 
@@ -208,6 +211,7 @@ export function walletFromRow(r: Row, me: string, existing?: Wallet): Wallet {
       r.reminder_day != null && r.reminder_amount != null ? { day: Number(r.reminder_day), amount: Number(r.reminder_amount) } : undefined,
     roundUp: r.round_up ? true : undefined,
     challenge: r.challenge ? (r.challenge as GoalChallenge) : undefined,
+    cards: Array.isArray(r.cards) ? cleanCards(r.cards) : undefined,
     ownerId: r.owner_id === me ? undefined : String(r.owner_id),
     members: existing?.members,
     myMemberId: existing?.myMemberId,
