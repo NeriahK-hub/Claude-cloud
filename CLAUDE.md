@@ -2,6 +2,8 @@
 
 PWA de finances personnelles (ex-AetherPay) pour la RDC : portefeuilles, opérations multi-devises (USD/CDF), catégories à deux niveaux, budgets, dettes et prêts, ristournes (tontines), portefeuilles partagés, import/export Money Lover. Interface et textes en **français** (tutoiement), code et noms en anglais, commentaires en français.
 
+État actuel (version en ligne, migrations installées dans Supabase, compte Firebase, reste à faire) : `ETAT.md`, à lire en premier et à tenir à jour.
+
 ## Commandes
 
 - `npm run dev` : serveur local sur http://localhost:3000
