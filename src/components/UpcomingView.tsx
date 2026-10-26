@@ -43,15 +43,21 @@ const DueRow: React.FC<{
         ? `Facture ${r.title} en retard (depuis ${dayText(r.nextDate)})`
         : `Facture ${r.title} à payer aujourd'hui`
     : isIn
-      ? `${r.title}${howMuch} : l'as-tu reçu ?`
-      : `${r.title}${howMuch} : c'est payé ?`;
+      ? `${r.title}${howMuch}\u00a0: l'as-tu reçu\u00a0?`
+      : `${r.title}${howMuch}\u00a0: c'est payé\u00a0?`;
   const yes = isIn ? 'Oui, reçu' : "Oui, c'est payé";
   return (
     <div className="py-3.5">
       <div className="flex items-start gap-3">
         <IconBadge icon={category?.icon ?? (r.bill ? 'Receipt' : 'Repeat')} image={category?.image} color={category?.color ?? '#64748B'} size="sm" />
         <div className="flex-1 min-w-0">
-          <p className={`text-[14px] font-semibold leading-snug ${late ? 'text-red-600' : 'text-slate-900'}`}>{question}</p>
+          <p className={`text-[14px] font-semibold leading-snug ${late && r.bill ? 'text-red-600' : 'text-slate-900'}`}>{question}</p>
+          {/* Quand : la date prévue, et le retard en rouge (« lun. 6 oct. · en retard de 20 jours ») */}
+          {!r.bill && (
+            <p className={`text-[12px] mt-0.5 ${late ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>
+              Prévu le {dayText(r.nextDate)} · {whenText(r.nextDate, today).toLowerCase()}
+            </p>
+          )}
           {r.bill && r.amount && <p className="text-[12px] text-slate-500 mt-0.5">Montant habituel : {money(r.amount, r.currency)}</p>}
         </div>
         {onEdit && (
