@@ -14,11 +14,11 @@ export const countedMoves = (s: DebtShare) => s.moves.filter((m) => !isLive(s) |
 // deux relances avant : voir supabase/migrations/…_debt_auto_confirm.sql)
 export const AUTO_CONFIRM_DAYS = 7;
 export const autoConfirmDate = (m: DebtMove) =>
-  m.pending && m.pendingSince ? new Date(new Date(m.pendingSince).getTime() + AUTO_CONFIRM_DAYS * 86400000).toISOString() : null;
+  m.pending && !m.refusedAt && m.pendingSince ? new Date(new Date(m.pendingSince).getTime() + AUTO_CONFIRM_DAYS * 86400000).toISOString() : null;
 
 // Mouvements notés par l'autre qui attendent ma réponse (confirmer, ou accepter une suppression)
 export const waitingForMe = (s: DebtShare, me: string) =>
-  isLive(s) ? s.moves.filter((m) => (m.pending && m.recordedBy !== me) || (!!m.deleteRequestedBy && m.deleteRequestedBy !== me)).length : 0;
+  isLive(s) ? s.moves.filter((m) => (m.pending && !m.refusedAt && m.recordedBy !== me) || (!!m.deleteRequestedBy && m.deleteRequestedBy !== me)).length : 0;
 
 // Devise de la dette partagée : celle du premier prêt. Les deux personnes voient les montants dans
 // cette devise, sans passer par leur taux (sinon chacun voyait un chiffre différent)

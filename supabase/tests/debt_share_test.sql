@@ -10,6 +10,7 @@
 \set m4   'eeeeeeee-0000-0000-0000-000000000004'
 \set m5   'eeeeeeee-0000-0000-0000-000000000005'
 \set m6   'eeeeeeee-0000-0000-0000-000000000006'
+\set m7   'eeeeeeee-0000-0000-0000-000000000007'
 
 insert into auth.users (id, email) values (:'nk', 'nk@test.cd'), (:'dm', 'dm@test.cd'), (:'zoe', 'zoe@test.cd');
 update profiles set name = 'Neriah' where id = :'nk';
@@ -159,6 +160,45 @@ update debt_moves set deleted_at = now() where id = :'m6';
 select pg_temp.check((select deleted_at is null from debt_moves where id = :'m6'), 'confirmé sans réponse : Neriah ne le supprime pas seul');
 select pg_temp.login(:'dm', 'dm@test.cd');
 
+-- ---------- Refuser sans effacer : DM corrige, renvoie, ou Neriah change d'avis ----------
+insert into debt_moves (id, share_id, kind, amount, currency, refused_at) values (:'m7', :'sh', 'repay', 9000, 'CDF', now());
+select pg_temp.check((select refused_at is null from debt_moves where id = :'m7'), 'un mouvement noté n''arrive jamais refusé');
+update debt_moves set refused_at = now() where id = :'m7';
+select pg_temp.check((select refused_at is null from debt_moves where id = :'m7'), 'DM ne refuse pas son propre mouvement');
+select pg_temp.login(:'nk', 'nk@test.cd');
+reset role;
+delete from push_queue;
+set role authenticated;
+update debt_moves set refused_at = '2000-01-01' where id = :'m7';
+select pg_temp.check((select pending and deleted_at is null and refused_at > now() - interval '1 minute' from debt_moves where id = :'m7'),
+  'Neriah refuse : le mouvement reste, en attente, marqué refusé (date du serveur)');
+reset role;
+select pg_temp.check((select count(*) from push_queue where user_id = :'dm' and body like '%n''a pas reconnu un remboursement%') = 1, 'DM est prévenu du refus');
+select set_config('request.jwt.claims', '', false);
+update debt_moves set pending_since = now() - interval '8 days' where id = :'m7';
+select pg_temp.check(debt_moves_follow_up() = 0 and (select pending from debt_moves where id = :'m7'), 'refusé : ni relancé ni confirmé tout seul');
+set role authenticated;
+select pg_temp.login(:'dm', 'dm@test.cd');
+-- La synchro de DM renvoie sa ligne (sans refus) : le refus reste
+insert into debt_moves (id, share_id, kind, amount, currency, pending) values (:'m7', :'sh', 'repay', 9000, 'CDF', true)
+on conflict (id) do update set refused_at = null, pending = excluded.pending, amount = excluded.amount;
+select pg_temp.check((select refused_at is not null from debt_moves where id = :'m7'), 'la synchro de DM n''efface pas le refus');
+select resend_debt_move(:'m7');
+select pg_temp.check((select pending and refused_at is null and pending_since > now() - interval '1 minute' and reminders = 0 from debt_moves where id = :'m7'),
+  'DM renvoie tel quel : nouvelle demande, 7 jours de nouveau');
+select pg_temp.must_fail(format($$select resend_debt_move(%L)$$, :'m7'), 'renvoyer un mouvement qui n''est pas refusé');
+select pg_temp.login(:'nk', 'nk@test.cd');
+select pg_temp.must_fail(format($$select resend_debt_move(%L)$$, :'m7'), 'Neriah renvoie le mouvement de DM');
+update debt_moves set refused_at = now() where id = :'m7';
+select pg_temp.login(:'dm', 'dm@test.cd');
+update debt_moves set amount = 10000 where id = :'m7';
+select pg_temp.check((select refused_at is null and amount = 10000 from debt_moves where id = :'m7'), 'DM corrige le montant : nouvelle demande');
+select pg_temp.login(:'nk', 'nk@test.cd');
+update debt_moves set refused_at = now() where id = :'m7';
+update debt_moves set pending = false where id = :'m7';
+select pg_temp.check((select not pending and refused_at is null from debt_moves where id = :'m7'), 'Neriah change d''avis : confirmé, le refus s''efface');
+select pg_temp.login(:'dm', 'dm@test.cd');
+
 -- ---------- DM arrête de suivre la dette ----------
 select pg_temp.login(:'dm', 'dm@test.cd');
 select leave_debt_share(:'sh');
@@ -167,7 +207,7 @@ select pg_temp.must_fail(format($$insert into debt_moves (share_id, kind, amount
 
 select pg_temp.login(:'nk', 'nk@test.cd');
 select pg_temp.check((select guest_left_at is not null from debt_shares where id = :'sh'), 'Neriah voit que DM ne suit plus');
-select pg_temp.check((select count(*) from debt_moves where share_id = :'sh' and deleted_at is null) = 3, 'chez Neriah, tout l''historique reste');
+select pg_temp.check((select count(*) from debt_moves where share_id = :'sh' and deleted_at is null) = 4, 'chez Neriah, tout l''historique reste');
 update debt_moves set amount = 160000 where id = :'m1';
 update debt_moves set deleted_at = now() where id = :'m3';
 select pg_temp.check((select amount from debt_moves where id = :'m1') = 160000 and (select deleted_at is not null from debt_moves where id = :'m3'), 'seul à suivre : Neriah corrige librement');

@@ -174,6 +174,7 @@ export interface DebtMove {
   deleteRequestedBy?: string; // compte qui demande sa suppression
   pendingSince?: string; // ISO : en attente depuis (confirmé tout seul AUTO_CONFIRM_DAYS jours plus tard)
   autoConfirmed?: boolean; // confirmé sans réponse de l'autre
+  refusedAt?: string; // ISO : refusé par l'autre (ne compte pas ; celui qui l'a noté corrige, renvoie ou retire)
   txId?: string; // MON opération liée dans un portefeuille
 }
 

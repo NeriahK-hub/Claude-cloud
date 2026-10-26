@@ -386,6 +386,8 @@ export const debtMoveRow = (s: DebtShare, m: DebtMove): Row => ({
   pending: m.pending,
   delete_requested_by: m.deleteRequestedBy ?? null,
   [s.ownerId ? 'guest_tx_id' : 'owner_tx_id']: m.txId ?? null,
+  // Refus : envoyé seulement quand il y en a un (la base ne garde que celui de l'autre, voir …_debt_refuse.sql)
+  ...(m.refusedAt ? { refused_at: iso(m.refusedAt) } : {}),
 });
 
 const flip = (side: unknown): DebtShare['side'] => (side === 'receivable' ? 'payable' : 'receivable');
@@ -417,6 +419,7 @@ export const debtMoveFromRow = (row: Row, iAmOwner: boolean): DebtMove => ({
   // (lus seulement : c'est le serveur qui les tient, voir …_debt_auto_confirm.sql)
   pendingSince: row.pending === true && row.pending_since ? iso(row.pending_since) : undefined,
   autoConfirmed: row.auto_confirmed === true ? true : undefined,
+  refusedAt: row.pending === true && row.refused_at ? iso(row.refused_at) : undefined,
   txId: (iAmOwner ? row.owner_tx_id : row.guest_tx_id) ? String(iAmOwner ? row.owner_tx_id : row.guest_tx_id) : undefined,
 });
 

@@ -719,6 +719,10 @@ export default function App() {
       removeMoveAndTx(shareId, moveId);
       showToast(message);
     },
+    onRefuse: (shareId: string, moveId: string) => {
+      updateShare(shareId, (x) => ({ ...x, moves: x.moves.map((y) => (y.id === moveId ? { ...y, refusedAt: new Date().toISOString() } : y)) }));
+      showToast(`Refusé : ${shareOf(shareId)?.person ?? "l'autre personne"} sera prévenu`);
+    },
     onRequestDelete: (shareId: string, moveId: string) => {
       updateShare(shareId, (x) => ({ ...x, moves: x.moves.map((y) => (y.id === moveId ? { ...y, deleteRequestedBy: me } : y)) }));
       showToast(`Demande envoyée à ${shareOf(shareId)?.person ?? "l'autre personne"}`);
@@ -753,7 +757,12 @@ export default function App() {
     onEditMove: (shareId: string, moveId: string, changes: { amount: number; note?: string }) => {
       const m = shareOf(shareId)?.moves.find((x) => x.id === moveId);
       if (!m) return;
-      updateShare(shareId, (x) => ({ ...x, moves: x.moves.map((y) => (y.id === moveId ? { ...y, amount: changes.amount, note: changes.note } : y)) }));
+      // Corrigé après un refus : la base en fait une nouvelle demande
+      const changed = changes.amount !== m.amount || (changes.note ?? '') !== (m.note ?? '');
+      updateShare(shareId, (x) => ({
+        ...x,
+        moves: x.moves.map((y) => (y.id === moveId ? { ...y, amount: changes.amount, note: changes.note, refusedAt: changed ? undefined : y.refusedAt } : y)),
+      }));
       // Son opération dans mon portefeuille prend le nouveau montant
       if (m.txId)
         setTransactions((prev) =>

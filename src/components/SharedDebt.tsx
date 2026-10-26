@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { QrButton } from './QrInvite';
-import { X, Plus, Undo2, Link2, Share2, Copy, Loader2, Check, Clock, Trash2, Wallet as WalletIcon, LogOut, CircleAlert, Percent, Pencil, ChevronDown, Send } from 'lucide-react';
+import { X, Plus, Undo2, Link2, Share2, Copy, Loader2, Check, Clock, Trash2, Wallet as WalletIcon, LogOut, CircleAlert, Percent, Pencil, ChevronDown, Send, RotateCw, CircleX } from 'lucide-react';
 import { DebtMove, DebtShare, Settings, Wallet } from '../types';
 import type { DebtEntry } from '../lib/debts';
 import type { SharedDebts } from './DebtsView';
@@ -85,8 +85,20 @@ export const SharedDebtDetail: React.FC<{
   const t = shareTotals(sh, settings);
   // Tout dans la devise de la dette : les deux personnes voient les mêmes chiffres
   const money = (v: number) => formatMoney(v, t.currency);
-  const toAnswer = live ? sh.moves.filter((m) => (m.pending && m.recordedBy !== me) || (!!m.deleteRequestedBy && m.deleteRequestedBy !== me)) : [];
-  const mineWaiting = live ? sh.moves.filter((m) => m.pending && m.recordedBy === me) : [];
+  const toAnswer = live ? sh.moves.filter((m) => (m.pending && !m.refusedAt && m.recordedBy !== me) || (!!m.deleteRequestedBy && m.deleteRequestedBy !== me)) : [];
+  const mineWaiting = live ? sh.moves.filter((m) => m.pending && !m.refusedAt && m.recordedBy === me) : [];
+  // Mes mouvements que l'autre a refusés : à corriger, renvoyer ou retirer
+  const mineRefused = live ? sh.moves.filter((m) => m.pending && m.refusedAt && m.recordedBy === me) : [];
+  const [resending, setResending] = useState<string | null>(null);
+  const resend = async (m: DebtMove) => {
+    setResending(m.id);
+    try {
+      await shared.cloud.resendDebtMove(m.id);
+    } catch {
+      /* hors ligne : le mouvement reste refusé, on peut réessayer */
+    }
+    setResending(null);
+  };
   const by = (m: DebtMove) => (m.recordedBy === me ? 'toi' : e.name);
   const signed = (m: DebtMove) => `${m.kind === 'repay' ? '−' : '+'}${formatMoney(m.amount, m.currency)}`;
   const [showPast, setShowPast] = useState(false);
@@ -109,7 +121,12 @@ export const SharedDebtDetail: React.FC<{
                       {day(m.date)} · noté par {by(m)}
                       {m.txId && ' · dans ton portefeuille'}
                     </span>
-                    {live && m.pending && (
+                    {live && m.pending && m.refusedAt && (
+                      <span className="flex items-center gap-1 mt-0.5 text-[11px] font-bold text-red-600">
+                        <CircleX className="w-3 h-3 shrink-0" /> {m.recordedBy === me ? `Refusé par ${e.name}` : 'Refusé par toi'}
+                      </span>
+                    )}
+                    {live && m.pending && !m.refusedAt && (
                       <span className="flex items-center gap-1 mt-0.5 text-[11px] font-bold text-amber-700">
                         <Clock className="w-3 h-3 shrink-0" />
                         <span className="truncate">
@@ -201,6 +218,39 @@ export const SharedDebtDetail: React.FC<{
             </div>
           )}
 
+          {/* Mes mouvements refusés par l'autre */}
+          {mineRefused.length > 0 && (
+            <div className="mb-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-3 space-y-3">
+              <div className="text-xs font-bold text-red-600">Refusé par {e.name}</div>
+              {mineRefused.map((m) => (
+                <div key={m.id}>
+                  <p className="text-sm text-slate-800">
+                    {e.name} ne reconnaît pas : <b>{moveLabel(sh.side, m.kind).toLowerCase()} de {formatMoney(m.amount, m.currency)}</b> du {day(m.date)}.
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Il ne compte pas. Corrige-le, renvoie-le tel quel ou retire-le.</p>
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => setEditingMove(m)} className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer">
+                      Corriger
+                    </button>
+                    <button
+                      onClick={() => resend(m)}
+                      disabled={resending === m.id}
+                      className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                    >
+                      {resending === m.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />} Renvoyer
+                    </button>
+                    <button
+                      onClick={() => shared.onRemove(sh.id, m.id, 'Mouvement retiré')}
+                      className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-red-600 cursor-pointer"
+                    >
+                      Retirer
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Ce que l'autre a noté et qui attend ma réponse */}
           {toAnswer.length > 0 && (
             <div className="mb-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
@@ -227,7 +277,7 @@ export const SharedDebtDetail: React.FC<{
                     <div className="flex gap-2 mt-2">
                       <button
                         onClick={() =>
-                          del ? shared.onAnswerDelete(sh.id, m.id, false) : shared.onRemove(sh.id, m.id, m.kind === 'repay' ? 'Remboursement refusé' : 'Mouvement refusé')
+                          del ? shared.onAnswerDelete(sh.id, m.id, false) : shared.onRefuse(sh.id, m.id)
                         }
                         className="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer"
                       >
@@ -466,7 +516,12 @@ const MoveActions: React.FC<{
       <p className="text-sm text-slate-500 mb-4">
         {day(m.date)} · noté par {mine ? 'toi' : person}
         {m.note ? ` · « ${m.note} »` : ''}
-        {live && (m.pending ? (mine ? ` · en attente de ${person}` : ' · à confirmer') : m.autoConfirmed ? ' · confirmé sans réponse' : ' · confirmé')}
+        {live &&
+          (m.pending
+            ? m.refusedAt
+              ? mine ? ` · refusé par ${person}` : ' · refusé par toi'
+              : mine ? ` · en attente de ${person}` : ' · à confirmer'
+            : m.autoConfirmed ? ' · confirmé sans réponse' : ' · confirmé')}
       </p>
       {live && autoConfirmDate(m) && (
         <p className="text-[12px] text-slate-500 -mt-2 mb-4">
@@ -482,17 +537,26 @@ const MoveActions: React.FC<{
         )}
         {live && m.pending && !mine && (
           <>
+            {/* Refusé : on peut encore changer d'avis et le confirmer */}
             <button onClick={onConfirm} className={`${btn} bg-accent text-slate-900 font-bold`}>
-              <Check className="w-4 h-4" /> Confirmer
+              <Check className="w-4 h-4" /> {m.refusedAt ? 'Finalement, confirmer' : 'Confirmer'}
             </button>
-            <button onClick={done(() => shared.onRemove(sh.id, m.id, 'Mouvement refusé'))} className={`${btn} bg-slate-100 text-red-600`}>
-              Refuser
-            </button>
+            {!m.refusedAt && (
+              <button onClick={done(() => shared.onRefuse(sh.id, m.id))} className={`${btn} bg-slate-100 text-red-600`}>
+                Refuser
+              </button>
+            )}
           </>
         )}
         {live && m.pending && mine && (
           <>
-            <NudgeButton moves={[m]} person={person} className={`${btn} bg-slate-100`} />
+            {m.refusedAt ? (
+              <button onClick={done(() => void shared.cloud.resendDebtMove(m.id).catch(() => {}))} className={`${btn} bg-slate-100`}>
+                <RotateCw className="w-4 h-4" /> Renvoyer tel quel
+              </button>
+            ) : (
+              <NudgeButton moves={[m]} person={person} className={`${btn} bg-slate-100`} />
+            )}
             <button onClick={done(() => shared.onRemove(sh.id, m.id, 'Mouvement annulé'))} className={`${btn} bg-slate-100 text-red-600`}>
               <Trash2 className="w-4 h-4" /> Annuler ce mouvement
             </button>
