@@ -1,5 +1,5 @@
 -- Wallo : dettes partagées — rappels et confirmation tacite après 7 jours
--- À exécuter dans Supabase › SQL Editor après 20261018000000_scale.sql, puis l'étape 8 de supabase/push_cron.sql.
+-- À exécuter dans Supabase › SQL Editor après 20261027000000_recurring_until.sql, puis l'étape 8 de supabase/push_cron.sql.
 --
 -- Principe
 -- • Un mouvement noté par l'un attend la confirmation de l'autre (pending). Si l'autre n'ouvre

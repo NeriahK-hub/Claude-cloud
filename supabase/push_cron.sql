@@ -48,7 +48,7 @@ select cron.schedule('wallo-goal-reminders', '0 7 * * *', $$ select public.push_
 select cron.schedule('wallo-recurring-reminders', '0 7 * * *', $$ select public.push_recurring_reminders(); $$);
 
 -- 8) Toutes les heures de 8 h à 20 h (7 h à 19 h UTC) : dettes partagées sans réponse — relances après 1 et 3 jours,
---    confirmation toute seule après 7 jours (debt_moves_follow_up vient de la migration 20261019000000_debt_auto_confirm.sql ;
+--    confirmation toute seule après 7 jours (debt_moves_follow_up vient de la migration 20261028000000_debt_auto_confirm.sql ;
 --    lance seulement cette ligne si les étapes précédentes sont déjà faites). Pas la nuit : personne n'est réveillé par une relance.
 select cron.schedule('wallo-debt-follow-up', '17 7-19 * * *', $$ select public.debt_moves_follow_up(); $$);
 
