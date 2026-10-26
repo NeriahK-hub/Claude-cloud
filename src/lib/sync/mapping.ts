@@ -414,6 +414,9 @@ export const debtMoveFromRow = (row: Row, iAmOwner: boolean): DebtMove => ({
   pending: row.pending === true,
   recordedBy: row.recorded_by ? String(row.recorded_by) : '',
   deleteRequestedBy: row.delete_requested_by ? String(row.delete_requested_by) : undefined,
+  // (lus seulement : c'est le serveur qui les tient, voir …_debt_auto_confirm.sql)
+  pendingSince: row.pending === true && row.pending_since ? iso(row.pending_since) : undefined,
+  autoConfirmed: row.auto_confirmed === true ? true : undefined,
   txId: (iAmOwner ? row.owner_tx_id : row.guest_tx_id) ? String(iAmOwner ? row.owner_tx_id : row.guest_tx_id) : undefined,
 });
 

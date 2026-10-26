@@ -184,6 +184,20 @@ export async function shareDebtInvite(side: 'receivable' | 'payable', amount: st
   return (await copyText(text)) ? 'copied' : 'failed';
 }
 
+// Relancer l'autre (WhatsApp, SMS…) pour un mouvement qui attend sa confirmation
+export async function shareDebtNudge(text: string): Promise<'shared' | 'copied' | 'cancelled' | 'failed'> {
+  const full = `${text} ${APP_URL}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'Wallo', text: full });
+      return 'shared';
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return 'cancelled';
+    }
+  }
+  return (await copyText(full)) ? 'copied' : 'failed';
+}
+
 // ---------- Code QR scanné DANS l'app ----------
 // Un lien ouvert depuis WhatsApp part dans le navigateur, pas dans l'app installée (où la personne
 // est déjà connectée). Scanner le QR depuis Wallo évite ce détour : on lit le lien et on ouvre l'invitation ici.

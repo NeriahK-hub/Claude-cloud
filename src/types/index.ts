@@ -172,6 +172,8 @@ export interface DebtMove {
   pending: boolean; // à confirmer par celui qui ne l'a pas noté
   recordedBy: string; // compte qui l'a noté
   deleteRequestedBy?: string; // compte qui demande sa suppression
+  pendingSince?: string; // ISO : en attente depuis (confirmé tout seul AUTO_CONFIRM_DAYS jours plus tard)
+  autoConfirmed?: boolean; // confirmé sans réponse de l'autre
   txId?: string; // MON opération liée dans un portefeuille
 }
 
