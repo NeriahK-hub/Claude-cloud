@@ -47,5 +47,10 @@ select cron.schedule('wallo-goal-reminders', '0 7 * * *', $$ select public.push_
 --    si les étapes précédentes sont déjà faites)
 select cron.schedule('wallo-recurring-reminders', '0 7 * * *', $$ select public.push_recurring_reminders(); $$);
 
+-- 8) Chaque matin à 8 h (7 h UTC) : dettes partagées en attente de réponse (rappels à 2 et 7 jours,
+--    confirmation automatique à 14 jours). (push_debt_pending_reminders vient de la migration
+--    20261019000000_debt_followup.sql ; lance seulement cette ligne si les étapes précédentes sont déjà faites)
+select cron.schedule('wallo-debt-pending', '0 7 * * *', $$ select public.push_debt_pending_reminders(); $$);
+
 -- Pour vérifier : select * from cron.job;  Historique : select * from cron.job_run_details order by start_time desc limit 20;
--- Pour arrêter : select cron.unschedule('wallo-push-send'); select cron.unschedule('wallo-ristourne-reminders'); select cron.unschedule('wallo-daily-reminder'); select cron.unschedule('wallo-goal-reminders'); select cron.unschedule('wallo-recurring-reminders');
+-- Pour arrêter : select cron.unschedule('wallo-push-send'); select cron.unschedule('wallo-ristourne-reminders'); select cron.unschedule('wallo-daily-reminder'); select cron.unschedule('wallo-goal-reminders'); select cron.unschedule('wallo-recurring-reminders'); select cron.unschedule('wallo-debt-pending');

@@ -585,7 +585,7 @@ export default function App() {
     setHistoryTo(null);
     const links = new Map<string, string>();
     // Seulement le tour en cours : les tours déjà réglés sont finis (et souvent déjà notés à l'époque)
-    for (const m of shareTotals(sh, settings).current) {
+    for (const m of shareTotals(sh, settings, me).current) {
       if (m.kind === 'interest' || m.txId) continue;
       const txId = recordDebtTx(sh, m.kind, m.amount, m.currency, historyTo.walletId, m.date);
       if (txId) links.set(m.id, txId);
@@ -663,6 +663,10 @@ export default function App() {
     onRemove: (shareId: string, moveId: string, message: string) => {
       removeMoveAndTx(shareId, moveId);
       showToast(message);
+    },
+    onRefuse: (shareId: string, moveId: string) => {
+      updateShare(shareId, (x) => ({ ...x, moves: x.moves.map((y) => (y.id === moveId ? { ...y, refusedAt: new Date().toISOString() } : y)) }));
+      showToast(`Refusé : ${shareOf(shareId)?.person ?? "l'autre personne"} sera prévenu`);
     },
     onRequestDelete: (shareId: string, moveId: string) => {
       updateShare(shareId, (x) => ({ ...x, moves: x.moves.map((y) => (y.id === moveId ? { ...y, deleteRequestedBy: me } : y)) }));

@@ -14,10 +14,11 @@ interface IconPickerProps {
   color: string;
   onIcon: (name: string) => void;
   onImage: (dataUrl: string | undefined) => void;
+  logosFirst?: boolean; // portefeuilles : les logos (Mobile Money, banques…) avant les icônes simples
 }
 
 // Grille d'icônes lucide + option "Choisir une image" (partagée : catégories et portefeuilles)
-export const IconPicker: React.FC<IconPickerProps> = ({ choices, icon, image, color, onIcon, onImage }) => {
+export const IconPicker: React.FC<IconPickerProps> = ({ choices, icon, image, color, onIcon, onImage, logosFirst }) => {
   const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
@@ -28,11 +29,13 @@ export const IconPicker: React.FC<IconPickerProps> = ({ choices, icon, image, co
   const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const q = norm(query.trim());
   const match = (i: { name: string; folder?: string }) => !q || norm(i.name).includes(q) || norm(i.folder ?? '').includes(q);
-  // Les miennes d'abord (logos Orange, Airtel, banques…), puis celles de Wallo, puis les icônes simples
+  // Les miennes d'abord, puis les logos par dossier et les icônes simples
+  // (logos avant les simples pour un portefeuille, après pour une catégorie)
+  const logos = groupByFolder(global.filter(match)).map((g) => ({ title: g.folder, ids: g.items.map((i) => i.id) }));
+  const simple = { title: custom.length ? 'Simples' : null, ids: q ? [] : choices };
   const sections: { title: string | null; ids: string[] }[] = [
     { title: 'Mes icônes', ids: mine.filter(match).map((i) => i.id) },
-    ...groupByFolder(global.filter(match)).map((g) => ({ title: g.folder, ids: g.items.map((i) => i.id) })),
-    { title: custom.length ? 'Simples' : null, ids: q ? [] : choices },
+    ...(logosFirst ? [...logos, simple] : [simple, ...logos]),
   ].filter((s) => s.ids.length > 0);
 
   const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,7 +58,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({ choices, icon, image, co
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher (ex. Orange, Rawbank)"
+          placeholder="Rechercher (Orange, Rawbank…)"
           className="w-full mb-2 px-3.5 py-2 rounded-xl bg-slate-100 text-sm outline-none focus:ring-2 focus:ring-accent"
         />
       )}

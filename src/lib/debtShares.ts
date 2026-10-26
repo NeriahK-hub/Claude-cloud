@@ -6,25 +6,35 @@ import { currentRound, DEBT_CATEGORY, DebtSide } from './debts';
 // Les deux suivent la dette : un mouvement ne compte qu'une fois confirmé par l'autre
 export const isLive = (s: DebtShare) => s.status === 'active' && !s.otherLeft;
 
+// Sans réponse, un mouvement est confirmé tout seul après ce délai (voir 20261019000000_debt_followup.sql)
+export const AUTO_CONFIRM_DAYS = 14;
+export const autoConfirmDate = (m: DebtMove) => {
+  const d = new Date(m.askedAt ?? m.date);
+  d.setDate(d.getDate() + AUTO_CONFIRM_DAYS);
+  return d.toISOString();
+};
+
 // Mouvements qui comptent dans le reste. Seul à suivre (lien pas encore accepté, refusé, ou l'autre
-// est parti) : c'est un simple carnet, tout compte.
-export const countedMoves = (s: DebtShare) => s.moves.filter((m) => !isLive(s) || !m.pending);
+// est parti) : c'est un simple carnet, tout compte. À deux : ce qui est confirmé, et chez moi aussi
+// ce que j'ai noté et qui attend l'autre (sauf s'il l'a refusé) : l'argent est déjà parti ou arrivé.
+export const countedMoves = (s: DebtShare, me: string) =>
+  s.moves.filter((m) => !isLive(s) || !m.pending || (m.recordedBy === me && !m.refusedAt));
 
 // Mouvements notés par l'autre qui attendent ma réponse (confirmer, ou accepter une suppression)
 export const waitingForMe = (s: DebtShare, me: string) =>
-  isLive(s) ? s.moves.filter((m) => (m.pending && m.recordedBy !== me) || (!!m.deleteRequestedBy && m.deleteRequestedBy !== me)).length : 0;
+  isLive(s) ? s.moves.filter((m) => (m.pending && !m.refusedAt && m.recordedBy !== me) || (!!m.deleteRequestedBy && m.deleteRequestedBy !== me)).length : 0;
 
 // Devise de la dette partagée : celle du premier prêt. Les deux personnes voient les montants dans
 // cette devise, sans passer par leur taux (sinon chacun voyait un chiffre différent)
 export const shareCurrency = (s: DebtShare, fallback: string) =>
   (s.moves.find((m) => m.kind === 'more') ?? s.moves[0])?.currency ?? fallback;
 
-export function shareTotals(s: DebtShare, settings: Settings) {
+export function shareTotals(s: DebtShare, settings: Settings, me: string) {
   const currency = shareCurrency(s, settings.mainCurrency);
   // Même devise : montant exact ; autre devise (rare) : converti avec le taux de ce téléphone
   const inCur = (m: DebtMove) => Math.abs(m.currency === currency ? m.amount : (convertBetween(m.amount, m.currency, currency, settings) ?? m.amount));
   // Tour en cours (voir currentRound) : calculé sur les mouvements qui comptent, par date → le même chez les deux
-  const { current: counted } = currentRound(countedMoves(s), (m) => m.date, (m) => (m.kind === 'repay' ? -inCur(m) : inCur(m)));
+  const { current: counted } = currentRound(countedMoves(s, me), (m) => m.date, (m) => (m.kind === 'repay' ? -inCur(m) : inCur(m)));
   const since = counted[0]?.date ?? '';
   // Le tour en cours, plus les mouvements en attente arrivés depuis
   const current = s.moves.filter((m) => m.date >= since || !counted.length);
@@ -37,6 +47,7 @@ export function shareTotals(s: DebtShare, settings: Settings) {
     else if (m.kind === 'interest') interest += v;
     else paid += v;
   }
+  // En attente (les miens comptent déjà chez moi, voir countedMoves)
   const pending = isLive(s) ? s.moves.filter((m) => m.pending) : [];
   return { currency, total, interest, paid, left: Math.round((total + interest - paid) * 100) / 100, pending, current };
 }

@@ -386,6 +386,8 @@ export const debtMoveRow = (s: DebtShare, m: DebtMove): Row => ({
   pending: m.pending,
   delete_requested_by: m.deleteRequestedBy ?? null,
   [s.ownerId ? 'guest_tx_id' : 'owner_tx_id']: m.txId ?? null,
+  // Refus : envoyé seulement quand il y en a un (la base n'accepte que celui de l'autre personne)
+  ...(m.refusedAt ? { refused_at: iso(m.refusedAt) } : {}),
 });
 
 const flip = (side: unknown): DebtShare['side'] => (side === 'receivable' ? 'payable' : 'receivable');
@@ -415,6 +417,9 @@ export const debtMoveFromRow = (row: Row, iAmOwner: boolean): DebtMove => ({
   recordedBy: row.recorded_by ? String(row.recorded_by) : '',
   deleteRequestedBy: row.delete_requested_by ? String(row.delete_requested_by) : undefined,
   txId: (iAmOwner ? row.owner_tx_id : row.guest_tx_id) ? String(iAmOwner ? row.owner_tx_id : row.guest_tx_id) : undefined,
+  askedAt: row.asked_at ? iso(row.asked_at) : undefined,
+  refusedAt: row.refused_at ? iso(row.refused_at) : undefined,
+  autoConfirmed: row.auto_confirmed === true ? true : undefined,
 });
 
 // ---------- Opérations qui reviennent / factures ----------

@@ -1068,7 +1068,7 @@ const WalletSheet: React.FC<{
 
               {showLook && (
                 <div className="mb-5 p-3 rounded-2xl bg-slate-100 animate-fade-in">
-                  <IconPicker choices={WALLET_ICON_CHOICES} icon={icon} image={image} color={color} onIcon={setIcon} onImage={setImage} />
+                  <IconPicker logosFirst choices={WALLET_ICON_CHOICES} icon={icon} image={image} color={color} onIcon={setIcon} onImage={setImage} />
                   <div className="text-xs font-semibold text-slate-500 mb-1">Couleur</div>
                   <ColorPicker value={color} onChange={setColor} />
                   <button type="button" onClick={() => setShowLook(false)} className="w-full py-2 rounded-xl text-[13px] font-bold text-blue-600 cursor-pointer">

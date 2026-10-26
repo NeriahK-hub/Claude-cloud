@@ -169,6 +169,9 @@ export interface DebtMove {
   recordedBy: string; // compte qui l'a noté
   deleteRequestedBy?: string; // compte qui demande sa suppression
   txId?: string; // MON opération liée dans un portefeuille
+  askedAt?: string; // depuis quand on attend la réponse (confirmé tout seul après AUTO_CONFIRM_DAYS)
+  refusedAt?: string; // refusé par l'autre : reste visible chez celui qui l'a noté, ne compte pas
+  autoConfirmed?: boolean; // confirmé faute de réponse
 }
 
 // Budget : pour une catégorie (sous-catégories comprises) ou pour toutes les dépenses.

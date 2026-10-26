@@ -140,7 +140,7 @@ export function debtsSummary(transactions: Transaction[], settings: Settings, sh
   // Dette partagée : le carnet commun remplace les opérations de mes portefeuilles pour cette personne
   for (const sh of shares) {
     const key = debtKey(sh.side, sh.person);
-    const t = shareTotals(sh, settings);
+    const t = shareTotals(sh, settings, me);
     const last = t.current.reduce((m, x) => (x.date > m ? x.date : m), '');
     map.set(key, { key, name: sh.person, side: sh.side, total: t.total, interest: t.interest, paid: t.paid, left: t.left, currency: t.currency, txs: [], last, share: sh, waiting: waitingForMe(sh, me) });
   }

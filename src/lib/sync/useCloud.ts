@@ -455,6 +455,14 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
     return info;
   };
   const declineDebt = (code: string) => rpc<DebtInviteInfo>('decline_debt', { invite_code: code });
+  // Relancer l'autre (ou renvoyer un mouvement refusé) : on synchronise avant (mouvement tout juste noté)
+  // et après (la relance change la ligne)
+  const nudgeDebtMove = async (moveId: string) => {
+    await sync();
+    const res = await rpc<{ status: 'nudged' | 'resent' }>('nudge_debt_move', { p_move: moveId });
+    await sync();
+    return res.status;
+  };
   const joinWallet = async (code: string, name: string) => {
     const info = await rpc<InviteInfo>('join_wallet', { invite_code: code, member_name: name });
     if (info.status === 'joined') {
@@ -495,6 +503,7 @@ export function useCloud({ getLocal, replaceLocal, applyPatch, clearLocal, chang
     checkDebtInvite,
     joinDebt,
     declineDebt,
+    nudgeDebtMove,
   };
 }
 
