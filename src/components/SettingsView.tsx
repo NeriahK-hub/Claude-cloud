@@ -482,6 +482,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, wallets, t
         </button>
       )}
       <p className="text-center text-[12px] text-slate-400 mt-5">Wallo · Ton argent, en clair</p>
+      <p className="text-center text-[11px] text-slate-400 mt-1 tabular-nums">
+        Version {__APP_VERSION__.version} · {formatDate(new Date(__APP_VERSION__.builtAt))}
+        {__APP_VERSION__.commit && ` · ${__APP_VERSION__.commit}${__APP_VERSION__.dirty ? '+' : ''}`}
+      </p>
     </div>
   );
 
