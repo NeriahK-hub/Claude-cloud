@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useDeferredValue } from 'react';
-import { ArrowLeft, Search, X, Loader2, Layers, ChevronDown, ChevronRight, BarChart2, CalendarClock } from 'lucide-react';
+import React, { useState, useMemo, useDeferredValue, useRef } from 'react';
+import { ArrowLeft, Search, X, Loader2, Layers, ChevronDown, ChevronRight, BarChart2, CalendarClock, ArrowUpLeft, History } from 'lucide-react';
 import { Recurring, Settings, Transaction, Wallet } from '../types';
 import type { Category } from '../data/categories';
 import { occurrencesBetween, ymd } from '../lib/recurring';
+import { clearSearches, readSearches, removeSearch, saveSearch } from '../lib/searchHistory';
 import { IconBadge, WalletChipIcon } from './AppIcon';
 import { TransactionItem } from './TransactionItem';
 import { SecretAmount, SecretMoney } from './MatrixSwap';
@@ -72,6 +73,8 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
   const [activeFilter, setActiveFilter] = useState<FilterType>('Toutes');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showSearch, setShowSearch] = useState<boolean>(false);
+  const [recents, setRecents] = useState<string[]>(readSearches);
+  const searchField = useRef<HTMLInputElement>(null);
   const [localWalletId, setWalletId] = useState(initialWalletId);
   const walletId = isTab ? activeWallet?.id ?? 'all' : localWalletId;
   const { hideBalance } = useDisplayPrefs();
@@ -243,6 +246,17 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
         </div>
       </div>
   );
+  // Ouvrir une opération trouvée : la recherche rejoint les recherches récentes
+  const pick = (tx: Transaction) => {
+    if (query.trim()) setRecents(saveSearch(query));
+    onSelectTransaction(tx);
+  };
+  const closeSearch = () => {
+    if (searchQuery.trim()) setRecents(saveSearch(searchQuery));
+    setSearchQuery('');
+    setShowSearch(false);
+  };
+
   // Recherche : le nombre de résultats, puis revenus, dépenses et le total (comme Money Lover)
   const net = totalIn - totalOut;
   const searchSummary = searchOn && (
@@ -328,7 +342,7 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
               <TransactionItem
                 key={tx.id}
                 transaction={tx}
-                onClick={plannedOf(tx) ? () => onOpenUpcoming?.() : onSelectTransaction}
+                onClick={plannedOf(tx) ? () => onOpenUpcoming?.() : pick}
                 showDate={false}
                 badge={plannedOf(tx) ? 'Prévu' : undefined}
                 amountText={amountKnown(tx) ? undefined : 'À saisir'}
@@ -452,6 +466,124 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
     );
   }
 
+  // Téléphone : la recherche s'ouvre sur son propre écran (recherches récentes, puis résultats)
+  if (showSearch) {
+    return (
+      <div className="w-full min-h-screen bg-slate-50 pb-24 animate-screen">
+        <div className="px-4 pt-3 pb-2 flex items-center gap-2 sticky top-[env(safe-area-inset-top)] bg-slate-50 z-30">
+          <button
+            onClick={closeSearch}
+            aria-label="Fermer la recherche"
+            className="w-11 h-11 shrink-0 rounded-full bg-white border border-slate-100 flex items-center justify-center cursor-pointer active:scale-95 transition"
+          >
+            <ArrowLeft className="w-4 h-4 text-slate-800" />
+          </button>
+          <div className="relative flex-1 flex items-center">
+            {searching ? (
+              <Loader2 className="w-4 h-4 text-slate-500 absolute left-3.5 animate-spin" />
+            ) : (
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5" />
+            )}
+            <input
+              ref={searchField}
+              type="text"
+              enterKeyHint="search"
+              placeholder="Rechercher une opération"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setRecents(saveSearch(searchQuery));
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-white border border-slate-200 text-[15px] focus:outline-none focus:ring-2 focus:ring-accent text-slate-800 placeholder-slate-400"
+              autoFocus
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  searchField.current?.focus();
+                }}
+                aria-label="Effacer la recherche"
+                className="absolute right-2.5 p-1 rounded-full cursor-pointer"
+              >
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {!searchOn ? (
+          recents.length > 0 ? (
+            <div className="px-5 pt-3 animate-fade-in">
+              <div className="flex items-center justify-between mb-1.5 px-1">
+                <span className="text-[12px] font-bold text-slate-400 tracking-wider uppercase">Recherches récentes</span>
+                <button onClick={() => setRecents(clearSearches())} className="text-[12px] font-bold text-slate-500 cursor-pointer">
+                  Tout effacer
+                </button>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+                {recents.map((r) => (
+                  <div key={r} className="flex items-center">
+                    <button onClick={() => setSearchQuery(r)} className="flex-1 min-w-0 flex items-center gap-3 pl-4 py-3.5 text-left cursor-pointer active:bg-slate-100">
+                      <History className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="text-[15px] text-slate-900 truncate">{r}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSearchQuery(r);
+                        searchField.current?.focus();
+                      }}
+                      aria-label={`Modifier « ${r} »`}
+                      className="w-11 h-11 shrink-0 flex items-center justify-center text-slate-400 cursor-pointer"
+                    >
+                      <ArrowUpLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setRecents(removeSearch(r))}
+                      aria-label={`Retirer « ${r} » de l'historique`}
+                      className="w-11 h-11 mr-1 shrink-0 flex items-center justify-center text-slate-400 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="py-16 px-8 text-center text-slate-400 animate-fade-in">
+              <Search className="w-6 h-6 mx-auto mb-2" />
+              <p className="text-sm font-medium">Cherche dans toutes tes opérations</p>
+              <p className="text-xs mt-1">Un titre, une catégorie, une personne ou un montant. Tes recherches récentes s'afficheront ici.</p>
+            </div>
+          )
+        ) : (
+          <>
+            <div className="px-5">{searchSummary}</div>
+            <div className="px-5 pt-3 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
+              {filters.map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => { haptic(); setActiveFilter(filter); }}
+                  className={`px-5 py-2 rounded-full text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                    activeFilter === filter ? 'bg-accent text-slate-900 shadow-2xs' : 'bg-white border border-slate-200 text-slate-700'
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+            <div key={`${query}|${activeFilter}`} className={`px-5 pt-2 space-y-5 animate-list-in transition-opacity ${searching ? 'opacity-60' : ''}`}>
+              {dayList}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="w-full min-h-screen bg-slate-50 pb-24">
       {/* Top Bar */}
@@ -482,47 +614,13 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
         )}
 
         <button
-          onClick={() => setShowSearch(!showSearch)}
+          onClick={() => setShowSearch(true)}
           aria-label="Rechercher"
-          className={`w-11 h-11 shrink-0 rounded-full shadow-xs border flex items-center justify-center active:scale-95 transition cursor-pointer ${
-            showSearch
-              ? 'bg-accent border-transparent text-slate-900'
-              : 'bg-white border-slate-100 text-slate-800 hover:bg-slate-50'
-          }`}
+          className="w-11 h-11 shrink-0 rounded-full shadow-xs border bg-white border-slate-100 text-slate-800 hover:bg-slate-50 flex items-center justify-center active:scale-95 transition cursor-pointer"
         >
           <Search className="w-4 h-4" />
         </button>
       </div>
-
-      {/* Expandable Search Input */}
-      {showSearch && (
-        <div className="px-5 pt-2 pb-1 animate-search-in">
-          <div className="relative flex items-center">
-            {searching ? (
-              <Loader2 className="w-4 h-4 text-slate-500 absolute left-3.5 animate-spin" />
-            ) : (
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5" />
-            )}
-            <input
-              type="text"
-              placeholder="Rechercher un titre, une catégorie, un montant"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-white border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-accent text-slate-800 placeholder-slate-400"
-              autoFocus
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                aria-label="Effacer la recherche"
-                className="absolute right-3 p-1 rounded-full hover:bg-slate-100 animate-fade-in"
-              >
-                <X className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Portefeuille */}
       {/* Solde actuel (onglet) */}
