@@ -238,6 +238,9 @@ export const MobileApp: React.FC<MobileAppProps> = (p) => {
             activeWalletLabel={activeWalletLabel}
             onOpenAccountPicker={onOpenAccountPicker}
             onOpenReport={p.onOpenReport}
+            recurrings={p.recurrings}
+            categories={categories}
+            onOpenUpcoming={() => onNavigate('upcoming')}
           />
         )}
 

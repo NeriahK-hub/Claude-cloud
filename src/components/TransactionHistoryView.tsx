@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
-import { ArrowLeft, Search, X, Loader2, Layers, ChevronDown, ChevronRight, BarChart2 } from 'lucide-react';
-import { Settings, Transaction, Wallet } from '../types';
+import { ArrowLeft, Search, X, Loader2, Layers, ChevronDown, ChevronRight, BarChart2, CalendarClock } from 'lucide-react';
+import { Recurring, Settings, Transaction, Wallet } from '../types';
+import type { Category } from '../data/categories';
+import { occurrencesBetween, ymd } from '../lib/recurring';
 import { IconBadge, WalletChipIcon } from './AppIcon';
 import { TransactionItem } from './TransactionItem';
 import { SecretAmount, SecretMoney } from './MatrixSwap';
 import { PeriodBar } from './PeriodBar';
-import { countsInReport, dayLabel, fitAmount, formatMoney, toMain } from '../lib/money';
+import { countsInReport, fitAmount, formatMoney, toMain } from '../lib/money';
 import { inPeriod, Period, periodRange } from '../lib/periods';
 import { haptic } from '../lib/haptics';
 import { periodBalances, reportScope } from '../lib/report';
@@ -25,6 +27,26 @@ interface TransactionHistoryViewProps {
   activeWalletLabel?: string;
   onOpenAccountPicker?: () => void;
   onOpenReport?: (period: Period) => void;
+  // Onglet « Futur » : échéances prévues (factures, abonnements…) en plus des opérations datées plus tard
+  recurrings?: Recurring[];
+  categories?: Category[];
+  onOpenUpcoming?: () => void;
+}
+
+// Jours à venir montrés dans « Futur » pour les échéances qui reviennent
+const FUTURE_DAYS = 90;
+const REC_PREFIX = 'prevu:';
+
+// Titre d'un jour : « Aujourd'hui », « Hier », « Demain », sinon « jeudi 24 septembre » (+ l'année si ce n'est pas celle-ci)
+function dayTitle(iso: string): string {
+  const d = new Date(iso);
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((start(new Date()) - start(d)) / 86400000);
+  if (diff === 0) return "Aujourd'hui";
+  if (diff === 1) return 'Hier';
+  if (diff === -1) return 'Demain';
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }) });
 }
 
 type FilterType = 'Toutes' | 'Revenus' | 'Dépenses';
@@ -40,6 +62,9 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
   activeWalletLabel,
   onOpenAccountPicker,
   onOpenReport,
+  recurrings = [],
+  categories = [],
+  onOpenUpcoming,
 }) => {
   const isTab = !!onOpenAccountPicker;
   const desktop = useIsDesktop(); // ordinateur : filtres à gauche, liste à droite
@@ -60,8 +85,15 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
   // Filter & search logic
   // Onglet, « Tous » : les portefeuilles comptés dans le total (comme le solde affiché)
   const scope = useMemo(() => reportScope(wallets, isTab ? activeWallet ?? null : null), [wallets, isTab, activeWallet]);
+  const future = period.offset > 0;
+  const searchOn = !!query.trim();
+  const tomorrow = useMemo(() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1);
+  }, []);
   const filteredTransactions = useMemo(() => {
-    const range = periodRange(period);
+    // Recherche : dans toutes les dates ; « Futur » : à partir de demain
+    const range = searchOn ? { start: null, end: null } : future ? { start: tomorrow, end: null } : periodRange(period);
     const inScope = new Set(scope.map((w) => w.id));
     return transactions.filter((tx) => {
       if (walletId !== 'all' && tx.walletId !== walletId) return false;
@@ -77,23 +109,62 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
         const matchesTitle = tx.title.toLowerCase().includes(q);
         const matchesCat = tx.category.toLowerCase().includes(q);
         const matchesAmount = tx.amount.toString().includes(q);
-        return matchesTitle || matchesCat || matchesAmount;
+        const matchesPerson = !!tx.withPerson?.toLowerCase().includes(q);
+        return matchesTitle || matchesCat || matchesAmount || matchesPerson;
       }
 
       return true;
     });
-  }, [transactions, activeFilter, query, period, walletId, isTab, scope]);
+  }, [transactions, activeFilter, query, period, walletId, isTab, scope, searchOn, future, tomorrow]);
+
+  // « Futur » : les prochaines échéances des opérations qui reviennent (pas encore des opérations)
+  const planned = useMemo(() => {
+    if (!future || searchOn) return [];
+    const inScope = new Set(scope.map((w) => w.id));
+    const from = ymd(tomorrow);
+    const to = ymd(new Date(tomorrow.getTime() + FUTURE_DAYS * 86400000));
+    const out: Transaction[] = [];
+    for (const r of recurrings) {
+      if (!r.active) continue;
+      if (walletId !== 'all' && r.walletId !== walletId) continue;
+      if (isTab && !inScope.has(r.walletId)) continue;
+      if (activeFilter === 'Revenus' && r.direction !== 'in') continue;
+      if (activeFilter === 'Dépenses' && r.direction !== 'out') continue;
+      const cat = categories.find((c) => c.id === r.categoryId);
+      for (const day of occurrencesBetween(r, from, to)) {
+        out.push({
+          id: `${REC_PREFIX}${r.id}:${day}`,
+          title: r.title,
+          createdAt: `${day}T12:00:00`,
+          amount: (r.direction === 'out' ? -1 : 1) * (r.amount ?? 0),
+          currency: r.currency,
+          walletId: r.walletId,
+          type: r.direction === 'out' ? 'send' : 'receive',
+          category: cat?.name ?? (r.direction === 'out' ? 'Dépense' : 'Revenu'),
+          categoryId: r.categoryId,
+          avatarType: cat?.image ? 'image' : 'icon',
+          avatarValue: cat?.image ?? cat?.icon ?? 'CalendarClock',
+          color: cat?.color ?? '#64748B',
+        });
+      }
+    }
+    return out;
+  }, [future, searchOn, tomorrow, recurrings, categories, walletId, isTab, scope, activeFilter]);
+  const plannedOf = (t: Transaction) => t.id.startsWith(REC_PREFIX);
+  const amountKnown = (t: Transaction) => !plannedOf(t) || t.amount !== 0;
 
   // Group by date
   const groupedTransactions = useMemo(() => {
     const groups: { [key: string]: Transaction[] } = {};
-    [...filteredTransactions].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).forEach((tx) => {
-      const key = dayLabel(tx.createdAt);
+    // Futur : le plus proche d'abord ; sinon le plus récent d'abord
+    const all = [...filteredTransactions, ...planned].sort((a, b) => (future && !searchOn ? a.createdAt.localeCompare(b.createdAt) : b.createdAt.localeCompare(a.createdAt)));
+    all.forEach((tx) => {
+      const key = dayTitle(tx.createdAt);
       if (!groups[key]) groups[key] = [];
       groups[key].push(tx);
     });
     return groups;
-  }, [filteredTransactions]);
+  }, [filteredTransactions, planned, future, searchOn]);
 
   // Vue du total : un transfert vers un portefeuille exclu du total est une vraie sortie
   const totalIds = useMemo(() => {
@@ -104,10 +175,21 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
 
   // Totaux de la période (hors transferts internes et ajustements), en devise principale
   const main = settings.mainCurrency;
-  const counted = filteredTransactions.filter(counts);
+  const counted = [...filteredTransactions, ...planned].filter(counts);
   const totalIn = counted.filter((t) => t.amount > 0).reduce((s, t) => s + toMain(t.amount, t.currency, settings), 0);
   const totalOut = counted.filter((t) => t.amount < 0).reduce((s, t) => s - toMain(t.amount, t.currency, settings), 0);
-  const balances = useMemo(() => (isTab ? periodBalances(transactions, scope, period, settings) : null), [isTab, transactions, scope, period, settings]);
+  const balances = useMemo(
+    () => (isTab && !future && !searchOn ? periodBalances(transactions, scope, period, settings) : null),
+    [isTab, transactions, scope, period, settings, future, searchOn]
+  );
+  const currentBalance = useMemo(() => (isTab ? periodBalances(transactions, scope, { kind: 'all', offset: 0 }, settings).current : null), [isTab, transactions, scope, settings]);
+  // Solde à la fin d'aujourd'hui (sans les opérations datées plus tard) : point de départ du « Solde prévu »
+  const todayBalance = useMemo(() => {
+    if (!isTab) return null;
+    const ids = new Set(scope.map((w) => w.id));
+    const initial = scope.reduce((s, w) => s + toMain(w.initialBalance, w.currency, settings), 0);
+    return transactions.reduce((s, t) => (ids.has(t.walletId) && new Date(t.createdAt) < tomorrow ? s + toMain(t.amount, t.currency, settings) : s), initial);
+  }, [isTab, scope, transactions, settings, tomorrow]);
   // Total d'un jour (hors transferts entre portefeuilles du total), en devise principale
   const dayTotal = (items: Transaction[]) => items.filter((t) => t.type !== 'transfer' || counts(t)).reduce((s, t) => s + toMain(t.amount, t.currency, settings), 0);
   const signed = (v: number) => `${v >= 0 ? '+' : '−'}${formatMoney(Math.abs(v), main)}`;
@@ -161,23 +243,73 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
         </div>
       </div>
   );
-  const resultCount = query.trim() && (
-      <p className={`${desktop ? 'mb-3' : 'px-5 pt-1'} text-xs font-semibold text-slate-500 animate-fade-in`} key={`n-${query}`}>
-        {filteredTransactions.length} résultat{filteredTransactions.length > 1 ? 's' : ''} pour « {query.trim()} »
-        {period.kind !== 'all' && (
-          <>
-            {' · '}
-            <button onClick={() => setPeriod({ kind: 'all', offset: 0 })} className="font-bold text-emerald-700 cursor-pointer">
-              Chercher dans toutes les périodes
+  // Recherche : le nombre de résultats, puis revenus, dépenses et le total (comme Money Lover)
+  const net = totalIn - totalOut;
+  const searchSummary = searchOn && (
+    <div className={`${desktop ? '' : 'mt-3'} rounded-2xl bg-white border border-slate-100 px-4 py-3 animate-fade-in`} key={`s-${query}`}>
+      <div className="text-[14px] font-bold text-slate-900">
+        {filteredTransactions.length} résultat{filteredTransactions.length > 1 ? 's' : ''}
+      </div>
+      <div className="mt-2 space-y-1 text-[13px] tabular-nums">
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-500">Revenus</span>
+          <span className="font-semibold text-emerald-600 whitespace-nowrap"><SecretAmount text={`+${formatMoney(totalIn, main)}`} /></span>
+        </div>
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-500">Dépenses</span>
+          <span className="font-semibold text-red-500 whitespace-nowrap"><SecretAmount text={`−${formatMoney(totalOut, main)}`} /></span>
+        </div>
+      </div>
+      <div className="flex justify-end mt-2 pt-2 border-t border-slate-100">
+        <span className={`text-[15px] font-extrabold tabular-nums whitespace-nowrap ${net >= 0 ? 'text-slate-900' : 'text-red-500'}`}><SecretAmount text={signed(net)} /></span>
+      </div>
+    </div>
+  );
+  // Futur : ce qui est prévu, et le solde si tout se passe comme prévu
+  const plannedCount = planned.length;
+  const futureBox = future && !searchOn && (
+    <div className="mt-3 rounded-2xl bg-white border border-slate-100 overflow-hidden">
+      <div className="px-4 pt-3.5 pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[13px] font-semibold text-slate-500">{todayBalance !== null ? 'Solde prévu' : 'Prévu'}</span>
+          {onOpenUpcoming && (
+            <button
+              onClick={onOpenUpcoming}
+              className="h-8 pl-2.5 pr-2 rounded-full bg-emerald-500/10 flex items-center gap-1 text-[13px] font-bold text-emerald-600 cursor-pointer active:scale-95 transition"
+            >
+              <CalendarClock className="w-3.5 h-3.5" /> À venir <ChevronRight className="w-3.5 h-3.5" />
             </button>
-          </>
+          )}
+        </div>
+        {todayBalance !== null && (
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 mt-0.5">
+            <span className="text-[24px] font-extrabold tabular-nums tracking-tight text-slate-900 whitespace-nowrap">
+              <SecretMoney text={formatMoney(todayBalance + net, main)} />
+            </span>
+            <span className={`text-[15px] font-bold tabular-nums whitespace-nowrap ${net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}><SecretMoney text={signed(net)} /></span>
+          </div>
         )}
-      </p>
-    );
+        <div className="text-[12px] text-slate-400 mt-0.5">
+          {plannedCount > 0 ? `Avec les factures et opérations qui reviennent (${FUTURE_DAYS} prochains jours).` : 'Les opérations datées après aujourd\'hui.'}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 border-t border-slate-100 divide-x divide-slate-100">
+        <div className="min-w-0 px-4 py-2.5">
+          <div className="text-[12px] font-semibold text-slate-500">Entrées prévues</div>
+          <div className="text-[15px] font-bold tabular-nums whitespace-nowrap text-emerald-600"><SecretAmount text={`+${formatMoney(totalIn, main)}`} /></div>
+        </div>
+        <div className="min-w-0 px-4 py-2.5">
+          <div className="text-[12px] font-semibold text-slate-500">Sorties prévues</div>
+          <div className="text-[15px] font-bold tabular-nums whitespace-nowrap text-red-500"><SecretAmount text={`−${formatMoney(totalOut, main)}`} /></div>
+        </div>
+      </div>
+    </div>
+  );
+  const summaryBox = searchSummary || futureBox || balanceBox || totalsRow;
   const dayList = Object.keys(groupedTransactions).length === 0 ? (
       <div className="py-16 text-center text-slate-400">
-        <p className="text-sm font-medium">Aucune transaction sur cette période</p>
-        <p className="text-xs mt-1">Change la période, le filtre ou la recherche</p>
+        <p className="text-sm font-medium">{searchOn ? `Rien trouvé pour « ${query.trim()} »` : future ? 'Rien de prévu pour l\'instant' : 'Aucune transaction sur cette période'}</p>
+        <p className="text-xs mt-1">{searchOn ? 'Essaie un autre mot, une catégorie ou un montant' : future ? 'Ajoute une facture ou un abonnement dans « À venir »' : 'Change la période, le filtre ou la recherche'}</p>
       </div>
     ) : (
       Object.entries(groupedTransactions).map(([dateGroup, items]) => (
@@ -185,7 +317,9 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
           {/* Date Group Heading */}
           <div className="flex items-baseline justify-between gap-2 mb-2 px-1">
             <span className="text-[12px] font-bold text-slate-400 tracking-wider uppercase">{dateGroup}</span>
-            <span className={`text-xs font-bold tabular-nums ${dayTotal(items) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}><SecretAmount text={signed(dayTotal(items))} /></span>
+            {!searchOn && (
+              <span className={`text-xs font-bold tabular-nums ${dayTotal(items) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}><SecretAmount text={signed(dayTotal(items))} /></span>
+            )}
           </div>
 
           {/* Transactions in this date group */}
@@ -194,8 +328,10 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
               <TransactionItem
                 key={tx.id}
                 transaction={tx}
-                onClick={onSelectTransaction}
+                onClick={plannedOf(tx) ? () => onOpenUpcoming?.() : onSelectTransaction}
                 showDate={false}
+                badge={plannedOf(tx) ? 'Prévu' : undefined}
+                amountText={amountKnown(tx) ? undefined : 'À saisir'}
               />
             ))}
           </div>
@@ -272,15 +408,15 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
           {/* Filtres, collés en haut pendant qu'on fait défiler la liste */}
           <aside className="sticky top-6 space-y-4">
             {searchInput}
-            {balances && (
+            {currentBalance !== null && (
               <div className="px-4 py-3 rounded-2xl bg-white border border-slate-100">
                 <div className="text-xs font-medium text-slate-500">Solde</div>
-                <div className="text-2xl font-extrabold tabular-nums text-slate-900"><MatrixSwap hidden={hideBalance} text={formatMoney(balances.current, main)} /></div>
+                <div className="text-2xl font-extrabold tabular-nums text-slate-900"><MatrixSwap hidden={hideBalance} text={formatMoney(currentBalance, main)} /></div>
               </div>
             )}
             <div>
-              <PeriodBar value={period} onChange={setPeriod} />
-              {balanceBox ?? totalsRow}
+              {!searchOn && <PeriodBar value={period} onChange={setPeriod} future />}
+              {summaryBox}
             </div>
             <div className="flex gap-2">
               {filters.map((filter) => (
@@ -307,7 +443,6 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
 
           {/* Liste */}
           <div className="min-w-0">
-            {resultCount}
             <div key={`${query}|${walletId}|${activeFilter}|${period.kind}${period.offset}`} className={`space-y-5 animate-list-in transition-opacity ${searching ? 'opacity-60' : ''}`}>
               {dayList}
             </div>
@@ -391,10 +526,10 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
 
       {/* Portefeuille */}
       {/* Solde actuel (onglet) */}
-      {balances && (
+      {currentBalance !== null && !searchOn && (
         <div className="text-center pt-2">
           <div className="text-xs font-medium text-slate-500">Solde</div>
-          <div className="text-2xl font-extrabold tabular-nums text-slate-900"><MatrixSwap hidden={hideBalance} text={formatMoney(balances.current, main)} /></div>
+          <div className="text-2xl font-extrabold tabular-nums text-slate-900"><MatrixSwap hidden={hideBalance} text={formatMoney(currentBalance, main)} /></div>
         </div>
       )}
 
@@ -427,9 +562,9 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
 
       {/* Période */}
       <div className="px-5 pt-3">
-        <PeriodBar value={period} onChange={setPeriod} />
-        {/* Ouverture, fin, différence + lien vers le Rapport de la même période (comme Money Lover) */}
-        {balanceBox ?? totalsRow}
+        {!searchOn && <PeriodBar value={period} onChange={setPeriod} future />}
+        {/* Ouverture, fin, différence + lien vers le Rapport (recherche : résultats et totaux ; Futur : ce qui est prévu) */}
+        {summaryBox}
       </div>
 
       {/* Filter Tabs */}
@@ -451,8 +586,6 @@ export const TransactionHistoryView: React.FC<TransactionHistoryViewProps> = ({
           );
         })}
       </div>
-
-      {resultCount}
 
       {/* Liste par jour : fondu léger à chaque nouvelle recherche ou filtre */}
       <div key={`${query}|${walletId}|${activeFilter}|${period.kind}${period.offset}`} className={`px-5 pt-2 space-y-5 animate-list-in transition-opacity ${searching ? 'opacity-60' : ''}`}>

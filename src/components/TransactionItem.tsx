@@ -8,6 +8,8 @@ interface TransactionItemProps {
   transaction: Transaction;
   onClick: (tx: Transaction) => void;
   showDate?: boolean; // false dans les listes déjà groupées par jour (le jour est dans le titre du groupe)
+  badge?: string; // petite étiquette sous le titre (ex. « Prévu » pour une échéance à venir)
+  amountText?: string; // à la place du montant (ex. échéance dont le montant reste à saisir)
 }
 
 // Date courte sous le titre : « Aujourd'hui », « Hier », « 28 sept. » (l'heure n'est plus affichée)
@@ -34,6 +36,8 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
   transaction,
   onClick,
   showDate = true,
+  badge,
+  amountText,
 }) => {
   const isPositive = transaction.amount > 0;
   const formattedAmount = `${isPositive ? '+' : '−'}${formatMoney(Math.abs(transaction.amount), transaction.currency)}`;
@@ -63,6 +67,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
             {transaction.title}
           </span>
           {showDate && <span className="text-xs text-slate-400 font-medium block mt-0.5">{shortDay(transaction.createdAt)}</span>}
+          {badge && <span className="inline-block mt-1 px-1.5 py-px rounded-md bg-slate-100 text-[10.5px] font-bold text-slate-500">{badge}</span>}
         </div>
       </div>
 
@@ -70,10 +75,10 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
       <div className="text-right shrink-0 pl-2">
         <span
           className={`text-sm font-bold tracking-tight block tabular-nums ${
-            isPositive ? 'text-emerald-600' : 'text-red-500'
+            amountText ? 'text-slate-400' : isPositive ? 'text-emerald-600' : 'text-red-500'
           }`}
         >
-          <SecretAmount text={formattedAmount} />
+          {amountText ?? <SecretAmount text={formattedAmount} />}
         </span>
         <span className="text-xs text-slate-400 font-medium block mt-0.5 max-w-[120px] truncate">
           {typeLabel}

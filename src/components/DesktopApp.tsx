@@ -334,6 +334,9 @@ export const DesktopApp: React.FC<DesktopAppProps> = (p) => {
                 initialWalletId={p.activeWallet?.id ?? 'all'}
                 settings={settings}
                 onSelectTransaction={onSelectTransaction}
+                recurrings={p.recurrings}
+                categories={categories}
+                onOpenUpcoming={() => onNavigate('upcoming')}
               />
             )}
             {page === 'debts' && (
