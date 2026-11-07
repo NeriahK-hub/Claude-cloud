@@ -6,12 +6,13 @@ import { DateField } from './DatePicker';
 
 // Onglets de périodes (les plus récentes à droite, glisser vers la gauche pour remonter le temps)
 // + bouton calendrier pour choisir l'intervalle : jour, semaine, mois…
-export const PeriodBar: React.FC<{ value: Period; onChange: (p: Period) => void }> = ({ value, onChange }) => {
+// `future` : un dernier onglet « Futur » (offset 1) pour ce qui est daté plus tard ou prévu
+export const PeriodBar: React.FC<{ value: Period; onChange: (p: Period) => void; future?: boolean }> = ({ value, onChange, future }) => {
   const [picking, setPicking] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const kindLabel = PERIOD_KINDS.find((k) => k.id === value.kind)?.label;
   const hasTabs = value.kind !== 'all' && value.kind !== 'custom';
-  const offsets = Array.from({ length: 12 }, (_, i) => i - 11); // -11 … 0
+  const offsets = [...Array.from({ length: 12 }, (_, i) => i - 11), ...(future ? [1] : [])]; // -11 … 0 (+ Futur)
 
   // Toujours afficher la période en cours (à droite) quand on change d'intervalle
   useEffect(() => {
@@ -43,7 +44,7 @@ export const PeriodBar: React.FC<{ value: Period; onChange: (p: Period) => void 
                     active ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'
                   }`}
                 >
-                  {periodLabel({ kind: value.kind, offset: o })}
+                  {o > 0 ? 'Futur' : periodLabel({ kind: value.kind, offset: o })}
                 </button>
               );
             })}
